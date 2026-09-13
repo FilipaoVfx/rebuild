@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import uuid
 from contextlib import asynccontextmanager
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated
 
@@ -62,15 +63,28 @@ Conn = Annotated[object, Depends(conn_dep)]
 
 
 def build_provenance(conn, *, include_constraints: bool = False) -> Provenance:
-    """Construye la estructura de procedencia desde el registro de fuentes."""
+    """Procedencia del RESULTADO, no inventario de lo cargado.
+
+    FR-API-02 pide la procedencia de lo que se esta devolviendo. Listar toda
+    version de dataset que exista en la base incluye cosas que no contribuyen
+    a ninguna fila —residuo de pruebas, cargas abandonadas— y convierte el
+    panel de procedencia en un catalogo en lugar de una declaracion.
+    """
     rows = fetch_all(
         conn,
         """
+        WITH contributing AS (
+            SELECT DISTINCT source FROM core.damage_evidence
+            UNION SELECT DISTINCT original_source FROM core.damage_evidence
+            UNION SELECT 'osm' WHERE EXISTS (SELECT 1 FROM osm_raw.road)
+            UNION SELECT 'synthetic' WHERE EXISTS (SELECT 1 FROM core.population_cell)
+        )
         SELECT DISTINCT ON (sr.source_id)
                sr.source_id, sr.display_name, sr.license_class, sr.attribution_text,
                dv.data_version, dv.is_synthetic, dv.retrieved_at
         FROM core.dataset_version dv
         JOIN core.source_register sr USING (source_id)
+        WHERE sr.source_id IN (SELECT source FROM contributing)
         ORDER BY sr.source_id, dv.data_version DESC
         """,
     )
@@ -605,28 +619,104 @@ def site_tiles(conn: Conn, z: int, x: int, y: int) -> Response:
 
 @app.get(f"{API_PREFIX}/geojson/{{layer}}")
 def layer_geojson(conn: Conn, layer: str) -> Response:
-    """Capas ligeras para el visor. Las pesadas van por tiles (FR-API-03)."""
+    """Capas ligeras para el visor. Las pesadas van por tiles (FR-API-03).
+
+    La capa `sites` lleva las propiedades que el mapa necesita para colorear y
+    para el tooltip. Se calculan aqui, no en el navegador: ADR-13 — el cliente
+    no puede discrepar del servidor porque no computa ningun numero.
+    """
+    if layer == "sites":
+        rows = fetch_all(
+            conn,
+            """
+            SELECT s.site_id, s.state::text AS state, s.area_m2, s.evidence_count,
+                   fu.damage_class::text AS damage_class, f.confidence,
+                   ST_AsGeoJSON(s.geometry) AS g,
+                   f.risk_score, f.land_use_compatibility, f.site_area,
+                   f.population_10min, f.park_deficit, f.social_vulnerability,
+                   f.pedestrian_accessibility, f.school_access, f.health_access,
+                   f.community_access
+            FROM core.site s
+            JOIN analytics.site_feature f USING (site_id)
+            LEFT JOIN core.site_damage_fusion fu USING (site_id)
+            WHERE f.feature_version = %s
+            """,
+            (pipeline.FEATURE_VERSION,),
+        )
+        features = []
+        for row in rows:
+            score = label = None
+            if row["state"] == "CANDIDATE":
+                recommendations = pipeline.score_candidates([row])[row["site_id"]]
+                buildable = [
+                    r for r in recommendations if r.intervention is not InterventionType.NO_BUILD
+                ]
+                if buildable:
+                    score = buildable[0].score
+                    label = INTERVENTION_CATALOG[buildable[0].intervention]["display_name"]
+            features.append(
+                {
+                    "type": "Feature",
+                    "id": row["site_id"],
+                    "properties": {
+                        "site_id": row["site_id"],
+                        "state": row["state"],
+                        "area_m2": float(row["area_m2"]),
+                        "evidence_count": row["evidence_count"],
+                        "damage_class": row["damage_class"],
+                        "confidence": float(row["confidence"]),
+                        "score": score,
+                        "intervention_label": label,
+                    },
+                    "geometry": json.loads(row["g"]),
+                }
+            )
+        return Response(
+            content=json.dumps({"type": "FeatureCollection", "features": features}),
+            media_type="application/geo+json",
+        )
+
     queries = {
-        "sites": "SELECT site_id AS id, state::text AS label, ST_AsGeoJSON(geometry) AS g "
-        "FROM core.site",
-        "evidence": "SELECT evidence_id::text AS id, damage_class::text AS label, "
-        "ST_AsGeoJSON(geometry) AS g FROM core.damage_evidence",
-        "green": "SELECT osm_id::text AS id, leisure AS label, ST_AsGeoJSON(geometry) AS g "
-        "FROM osm_raw.green_space",
-        "risk": "SELECT zone_id::text AS id, risk_level AS label, ST_AsGeoJSON(geometry) AS g "
-        "FROM core.risk_zone WHERE risk_level IN ('high','prohibited')",
-        "catchments": "SELECT site_id AS id, minutes::text AS label, ST_AsGeoJSON(geometry) AS g "
-        "FROM analytics.site_catchment WHERE minutes = 10 "
-        f"AND feature_version = '{pipeline.FEATURE_VERSION}'",
+        "evidence": (
+            "SELECT evidence_id::text AS id, damage_class::text AS label, "
+            "ST_AsGeoJSON(geometry) AS g FROM core.damage_evidence"
+        ),
+        "green": (
+            "SELECT osm_id::text AS id, leisure AS label, ST_AsGeoJSON(geometry) AS g "
+            "FROM osm_raw.green_space"
+        ),
+        "facilities": (
+            "SELECT osm_id::text AS id, category AS label, ST_AsGeoJSON(geometry) AS g "
+            "FROM osm_raw.facility"
+        ),
+        "risk": (
+            "SELECT zone_id::text AS id, risk_level AS label, ST_AsGeoJSON(geometry) AS g "
+            "FROM core.risk_zone WHERE risk_level IN ('high','prohibited')"
+        ),
+        "population": (
+            "SELECT cell_id::text AS id, round(population)::text AS label, "
+            "population, ST_AsGeoJSON(geometry) AS g FROM core.population_cell"
+        ),
+        "catchments": (
+            "SELECT site_id AS id, minutes::text AS label, ST_AsGeoJSON(geometry) AS g "
+            "FROM analytics.site_catchment WHERE minutes = 10 AND feature_version = %s"
+        ),
     }
     if layer not in queries:
         raise HTTPException(404, f"capa {layer} desconocida")
-    rows = fetch_all(conn, queries[layer])
+
+    params = (pipeline.FEATURE_VERSION,) if layer == "catchments" else None
+    rows = fetch_all(conn, queries[layer], params)
     features = [
         {
             "type": "Feature",
             "id": row["id"],
-            "properties": {"id": row["id"], "label": row["label"]},
+            "properties": {
+                # psycopg devuelve `numeric` como Decimal, que json no serializa.
+                key: (float(value) if isinstance(value, Decimal) else value)
+                for key, value in row.items()
+                if key != "g"
+            },
             "geometry": json.loads(row["g"]),
         }
         for row in rows

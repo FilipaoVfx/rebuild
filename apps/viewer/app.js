@@ -1,11 +1,13 @@
-/* Visor de decisión.
+/* Visor de decisión — enfoque cartográfico.
  *
  * ADR-13: cero cómputo espacial en el navegador. Cada número que se muestra
- * viene de la API con su procedencia. El cliente no puede discrepar del
- * servidor porque no calcula nada.
+ * viene del backend con su procedencia; el cliente no puede discrepar del
+ * servidor porque no calcula nada. En modo estático (GitHub Pages) filtra
+ * filas ya calculadas, que es seleccionar, no computar.
  */
 
-const API = "/api/v1";
+const STATIC_BASE = window.URI_STATIC_BASE || null;
+const API = STATIC_BASE ? null : "/api/v1";
 
 const DEFAULT_WEIGHTS = {
   need: 0.28,
@@ -39,6 +41,19 @@ const STATE_LABEL = {
   ENDORSED: "Avalado",
 };
 
+/* Cada capa declara de dónde sale. Es lo que separa "dónde se observó daño"
+ * de "dónde el modelo cree que hay que intervenir" — y hoy esa diferencia lo
+ * es todo (ver el diagnóstico de señal). */
+const LAYERS = [
+  { id: "sites", label: "Sitios de oportunidad", origin: "real", on: true },
+  { id: "evidence", label: "Observaciones de daño", origin: "real", on: true },
+  { id: "green", label: "Espacio verde (OSM)", origin: "real", on: true },
+  { id: "facilities", label: "Equipamientos (OSM)", origin: "real", on: false },
+  { id: "catchments", label: "Catchment 10 min del sitio", origin: "real", on: false },
+  { id: "risk", label: "Zonas de riesgo alto", origin: "simulada", on: false },
+  { id: "population", label: "Malla de población", origin: "simulada", on: false },
+];
+
 const state = {
   sites: [],
   weights: { ...DEFAULT_WEIGHTS },
@@ -46,37 +61,110 @@ const state = {
   selected: null,
   scenario: null,
   map: null,
+  mapReady: false,
+  colorBy: "score",
+  layers: Object.fromEntries(LAYERS.map((l) => [l.id, l.on])),
 };
 
 const $ = (sel) => document.querySelector(sel);
 const fmt = (n, d = 0) =>
-  n === null || n === undefined ? "—" : Number(n).toLocaleString("es-CO", {
-    minimumFractionDigits: d, maximumFractionDigits: d,
-  });
+  n === null || n === undefined
+    ? "—"
+    : Number(n).toLocaleString("es-CO", { minimumFractionDigits: d, maximumFractionDigits: d });
 const cop = (n) => (n >= 1e9 ? `${(n / 1e9).toFixed(2)} MM` : `${(n / 1e6).toFixed(0)} M`);
 
-async function api(path, options) {
-  const response = await fetch(API + path, options);
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail || `${response.status} ${response.statusText}`);
+/* ── Acceso a datos ───────────────────────────────────────────────────
+ * Un solo punto de entrada para los dos modos, para que el resto del
+ * visor no sepa si hay backend detrás. */
+
+const staticCache = new Map();
+
+async function loadStatic(file) {
+  if (!staticCache.has(file)) {
+    staticCache.set(
+      file,
+      fetch(`${STATIC_BASE}/${file}`).then((r) => {
+        if (!r.ok) throw new Error(`${file}: ${r.status}`);
+        return r.json();
+      })
+    );
   }
+  return staticCache.get(file);
+}
+
+async function api(path, options) {
+  if (!STATIC_BASE) {
+    const response = await fetch(API + path, options);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `${response.status} ${response.statusText}`);
+    }
+    return response.json();
+  }
+  return staticApi(path, options);
+}
+
+/* En modo estático los escenarios están precalculados a presupuestos fijos:
+ * sin backend no hay optimizador que correr. Se elige el más cercano y se
+ * dice cuál se usó, en lugar de fingir que se optimizó lo que se pidió. */
+async function staticApi(path, options) {
+  if (path.startsWith("/sites/")) {
+    const id = path.split("/")[2];
+    const details = await loadStatic("details.json");
+    if (!details[id]) throw new Error(`sitio ${id} no incluido en el paquete estático`);
+    return details[id];
+  }
+  if (path.startsWith("/sites")) {
+    const all = await loadStatic("sites.json");
+    const params = new URLSearchParams(path.split("?")[1] || "");
+    let sites = all.sites;
+    if (params.get("state")) sites = sites.filter((s) => s.state === params.get("state"));
+    if (params.get("max_risk")) {
+      const max = Number(params.get("max_risk"));
+      sites = sites.filter((s) => (s.risk_score ?? 0) <= max);
+    }
+    if (params.get("min_score")) {
+      const min = Number(params.get("min_score"));
+      sites = sites.filter((s) => (s.top_score ?? -1) >= min);
+    }
+    if (params.get("intervention")) {
+      sites = sites.filter((s) => s.top_intervention === params.get("intervention"));
+    }
+    return { ...all, sites, total: sites.length };
+  }
+  if (path === "/data-sources") return loadStatic("sources.json");
+  if (path === "/quality/alerts") return loadStatic("alerts.json");
+  if (path === "/scenarios" && options?.method === "POST") {
+    const request = JSON.parse(options.body);
+    const bundle = await loadStatic("scenarios.json");
+    const budgets = bundle.map((s) => s.budget_cop);
+    const nearest = budgets.reduce((a, b) =>
+      Math.abs(b - request.budget_cop) < Math.abs(a - request.budget_cop) ? b : a
+    );
+    const chosen = bundle.find((s) => s.budget_cop === nearest);
+    return { ...chosen, static_note: nearest !== request.budget_cop ? nearest : null };
+  }
+  throw new Error(`ruta ${path} no disponible en el paquete estático`);
+}
+
+async function geojson(layer) {
+  if (STATIC_BASE) return loadStatic(`geojson/${layer}.json`);
+  const response = await fetch(`${API}/geojson/${layer}`);
   return response.json();
 }
 
-/* ── Procedencia ──────────────────────────────────────────────────────
- * FR-SYN-05: cada capa declara la suya. Una etiqueta global diría
- * "sintético" sobre un escenario cuya evidencia de daño es real. */
+/* ── Procedencia ─────────────────────────────────────────────────────── */
 
 function renderProvenance(provenance, sources) {
   const blocked = (sources || []).filter((s) => !s.usable);
   const chips = provenance.layers
-    .map((layer) => {
-      const cls = layer.is_synthetic ? "synthetic" : "real";
-      const mark = layer.is_synthetic ? "simulada" : "real";
-      return `<span class="chip ${cls}" title="${layer.source_id} · ${layer.license_class}">
-        <span class="dot"></span>${layer.layer} <code>${mark}</code></span>`;
-    })
+    .map(
+      (layer) => `
+      <span class="chip ${layer.is_synthetic ? "synthetic" : "real"}"
+            title="${layer.source_id} · ${layer.license_class}">
+        <span class="dot"></span>${layer.layer}
+        <code>${layer.is_synthetic ? "simulada" : "real"}</code></span>`
+    )
     .join("");
 
   $("#provenance").innerHTML = `
@@ -84,11 +172,324 @@ function renderProvenance(provenance, sources) {
     ${chips}
     <span class="chip"><code>data v${provenance.data_version} ·
       ${provenance.feature_version} · ${provenance.scoring_version}</code></span>
-    ${blocked.length
-      ? `<span class="chip blocked" title="fuentes.md §6 control C1"><span class="dot"></span>
-         ${blocked.length} fuentes bloqueadas por licencia sin verificar</span>`
-      : ""}
-  `;
+    ${
+      blocked.length
+        ? `<span class="chip blocked" title="fuentes.md §6 control C1"><span class="dot"></span>
+           ${blocked.length} fuentes bloqueadas por licencia sin verificar</span>`
+        : ""
+    }`;
+}
+
+/* ── Mapa ─────────────────────────────────────────────────────────────
+ * Es la superficie primaria: el territorio es el modelo de datos. */
+
+const SCORE_RAMP = [
+  [0, "#cde2fb"],
+  [20, "#9ec5f4"],
+  [30, "#6da7ec"],
+  [40, "#3987e5"],
+  [50, "#1c5cab"],
+];
+
+function sitePaint() {
+  if (state.colorBy === "state") {
+    return [
+      "match",
+      ["get", "state"],
+      "CANDIDATE", "#2a78d6",
+      "EXCLUDED", "#d03b3b",
+      "#898781",
+    ];
+  }
+  if (state.colorBy === "damage") {
+    return [
+      "match",
+      ["get", "damage_class"],
+      "DESTROYED", "#0d366b",
+      "DAMAGED", "#1c5cab",
+      "POSSIBLY_DAMAGED", "#3987e5",
+      "#86b6ef",
+    ];
+  }
+  if (state.colorBy === "confidence") {
+    return [
+      "interpolate", ["linear"], ["coalesce", ["get", "confidence"], 0],
+      0, "#cde2fb", 0.3, "#6da7ec", 0.6, "#1c5cab",
+    ];
+  }
+  return [
+    "case",
+    ["==", ["get", "state"], "EXCLUDED"], "#c3c2b7",
+    [
+      "interpolate",
+      ["linear"],
+      ["coalesce", ["get", "score"], 0],
+      ...SCORE_RAMP.flat(),
+    ],
+  ];
+}
+
+async function initMap() {
+  if (state.map) return;
+
+  state.map = new maplibregl.Map({
+    container: "map",
+    // Sin basemap de terceros: un tile servido por otro no tiene data_version
+    // y rompe la reproducibilidad (fuentes.md §11).
+    style: {
+      version: 8,
+      sources: {},
+      layers: [{ id: "bg", type: "background", paint: { "background-color": "#f2f1ee" } }],
+    },
+    center: [-75.6935, 4.8085],
+    zoom: 15.2,
+    attributionControl: false,
+  });
+  state.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
+  state.map.addControl(
+    new maplibregl.AttributionControl({
+      customAttribution: "© OpenStreetMap contributors (ODbL) · © ICube-SERTIT 2026",
+    }),
+    "bottom-right"
+  );
+
+  await new Promise((resolve) => state.map.on("load", resolve));
+
+  const [sites, evidence, green, risk, catchments, facilities, population] = await Promise.all([
+    geojson("sites"),
+    geojson("evidence"),
+    geojson("green"),
+    geojson("risk"),
+    geojson("catchments"),
+    geojson("facilities").catch(() => ({ type: "FeatureCollection", features: [] })),
+    geojson("population").catch(() => ({ type: "FeatureCollection", features: [] })),
+  ]);
+
+  // Las capas simuladas van debajo de todo: son contexto provisional, no
+  // evidencia, y no deberían competir visualmente con lo que sí se observó.
+  state.map.addSource("population", { type: "geojson", data: population });
+  state.map.addLayer({
+    id: "population",
+    type: "fill",
+    source: "population",
+    layout: { visibility: "none" },
+    paint: {
+      "fill-color": [
+        "interpolate", ["linear"], ["coalesce", ["get", "population"], 0],
+        0, "#f0efec", 200, "#9ec5f4", 600, "#1c5cab",
+      ],
+      "fill-opacity": 0.45,
+    },
+  });
+
+  state.map.addSource("risk", { type: "geojson", data: risk });
+  state.map.addLayer({
+    id: "risk",
+    type: "fill",
+    source: "risk",
+    layout: { visibility: "none" },
+    paint: { "fill-color": "#d03b3b", "fill-opacity": 0.07 },
+  });
+  state.map.addLayer({
+    id: "risk-outline",
+    type: "line",
+    source: "risk",
+    layout: { visibility: "none" },
+    paint: { "line-color": "#d03b3b", "line-width": 1, "line-dasharray": [3, 2], "line-opacity": 0.6 },
+  });
+
+  state.map.addSource("catchments", { type: "geojson", data: catchments });
+  state.map.addLayer({
+    id: "catchments",
+    type: "line",
+    source: "catchments",
+    layout: { visibility: "none" },
+    paint: { "line-color": "#1baf7a", "line-width": 1, "line-opacity": 0.5 },
+  });
+
+  state.map.addSource("green", { type: "geojson", data: green });
+  state.map.addLayer({
+    id: "green",
+    type: "fill",
+    source: "green",
+    paint: { "fill-color": "#1baf7a", "fill-opacity": 0.3 },
+  });
+
+  state.map.addSource("facilities", { type: "geojson", data: facilities });
+  state.map.addLayer({
+    id: "facilities",
+    type: "circle",
+    source: "facilities",
+    layout: { visibility: "none" },
+    paint: {
+      "circle-radius": 4,
+      "circle-color": "#eda100",
+      "circle-stroke-width": 1,
+      "circle-stroke-color": "#fcfcfb",
+    },
+  });
+
+  state.map.addSource("sites", { type: "geojson", data: sites });
+  state.map.addLayer({
+    id: "sites",
+    type: "fill",
+    source: "sites",
+    paint: { "fill-color": sitePaint(), "fill-opacity": 0.82 },
+  });
+  state.map.addLayer({
+    id: "sites-outline",
+    type: "line",
+    source: "sites",
+    paint: { "line-color": "#0b0b0b", "line-width": 0.6, "line-opacity": 0.35 },
+  });
+  // Contorno de selección, para que el sitio elegido siga siendo visible
+  // cuando el panel de detalle tapa parte del mapa.
+  state.map.addLayer({
+    id: "sites-selected",
+    type: "line",
+    source: "sites",
+    filter: ["==", ["get", "site_id"], ""],
+    paint: { "line-color": "#0b0b0b", "line-width": 2.5 },
+  });
+
+  state.map.addSource("evidence", { type: "geojson", data: evidence });
+  state.map.addLayer({
+    id: "evidence",
+    type: "circle",
+    source: "evidence",
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 13, 1.6, 18, 4],
+      "circle-color": [
+        "match", ["get", "label"],
+        "DESTROYED", "#0d366b",
+        "DAMAGED", "#1c5cab",
+        "#6da7ec",
+      ],
+      "circle-opacity": 0.85,
+    },
+  });
+
+  wireMapInteraction();
+  state.mapReady = true;
+  applyLayerVisibility();
+  if (sites.features.length) {
+    const bounds = sites.features.reduce((b, f) => {
+      const coords = f.geometry.type === "Polygon" ? f.geometry.coordinates[0] : [];
+      coords.forEach((c) => b.extend(c));
+      return b;
+    }, new maplibregl.LngLatBounds(
+      sites.features[0].geometry.coordinates[0][0],
+      sites.features[0].geometry.coordinates[0][0]
+    ));
+    state.map.fitBounds(bounds, { padding: 60, duration: 0 });
+  }
+}
+
+function wireMapInteraction() {
+  const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
+
+  state.map.on("mousemove", "sites", (event) => {
+    state.map.getCanvas().style.cursor = "pointer";
+    const p = event.features[0].properties;
+    const score = p.score === undefined || p.score === "" ? null : Number(p.score);
+    popup
+      .setLngLat(event.lngLat)
+      .setHTML(
+        `<strong>${p.site_id}</strong><br>
+         ${STATE_LABEL[p.state] || p.state} · ${fmt(Number(p.area_m2))} m²<br>
+         ${p.damage_class ? DAMAGE_LABEL[p.damage_class] : "sin fusión"} ·
+         ${p.evidence_count} obs.<br>
+         ${score === null ? "sin score (excluido)" : `score ${score.toFixed(1)} · ${p.intervention_label || ""}`}`
+      )
+      .addTo(state.map);
+  });
+  state.map.on("mouseleave", "sites", () => {
+    state.map.getCanvas().style.cursor = "";
+    popup.remove();
+  });
+  state.map.on("click", "sites", (event) => selectSite(event.features[0].properties.site_id));
+}
+
+function applyLayerVisibility() {
+  if (!state.mapReady) return;
+  const pairs = {
+    sites: ["sites", "sites-outline", "sites-selected"],
+    evidence: ["evidence"],
+    green: ["green"],
+    facilities: ["facilities"],
+    catchments: ["catchments"],
+    risk: ["risk", "risk-outline"],
+    population: ["population"],
+  };
+  for (const [key, ids] of Object.entries(pairs)) {
+    for (const id of ids) {
+      if (state.map.getLayer(id)) {
+        state.map.setLayoutProperty(id, "visibility", state.layers[key] ? "visible" : "none");
+      }
+    }
+  }
+}
+
+function renderMapControls() {
+  $("#layer-control").innerHTML = `
+    <div class="control-group">
+      <h3>Colorear sitios por</h3>
+      <select id="color-by">
+        <option value="score">Score (provisional)</option>
+        <option value="state">Estado</option>
+        <option value="damage">Clase de daño</option>
+        <option value="confidence">Confianza</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <h3>Capas</h3>
+      ${LAYERS.map(
+        (layer) => `
+        <label class="layer-row">
+          <input type="checkbox" data-layer="${layer.id}" ${state.layers[layer.id] ? "checked" : ""}>
+          <span>${layer.label}</span>
+          <span class="origin ${layer.origin}">${layer.origin}</span>
+        </label>`
+      ).join("")}
+    </div>`;
+
+  $("#color-by").value = state.colorBy;
+  $("#color-by").addEventListener("change", (event) => {
+    state.colorBy = event.target.value;
+    if (state.mapReady) state.map.setPaintProperty("sites", "fill-color", sitePaint());
+    renderMapLegend();
+  });
+  $("#layer-control")
+    .querySelectorAll("input[data-layer]")
+    .forEach((input) =>
+      input.addEventListener("change", () => {
+        state.layers[input.dataset.layer] = input.checked;
+        applyLayerVisibility();
+      })
+    );
+}
+
+function renderMapLegend() {
+  const legends = {
+    score: SCORE_RAMP.map(([v, c]) => `<span class="item"><span class="swatch" style="background:${c}"></span>${v}</span>`).join("") +
+      `<span class="item"><span class="swatch" style="background:#c3c2b7"></span>excluido</span>`,
+    state: `
+      <span class="item"><span class="swatch" style="background:#2a78d6"></span>Candidato</span>
+      <span class="item"><span class="swatch" style="background:#d03b3b"></span>Excluido</span>`,
+    damage: `
+      <span class="item"><span class="swatch" style="background:#0d366b"></span>Destruido</span>
+      <span class="item"><span class="swatch" style="background:#1c5cab"></span>Dañado</span>
+      <span class="item"><span class="swatch" style="background:#3987e5"></span>Posible daño</span>`,
+    confidence: `
+      <span class="item"><span class="swatch" style="background:#cde2fb"></span>baja</span>
+      <span class="item"><span class="swatch" style="background:#1c5cab"></span>alta</span>`,
+  };
+  $("#map-legend").innerHTML = `
+    <div class="legend">${legends[state.colorBy]}</div>
+    <div class="legend" style="margin-top:6px">
+      <span class="item"><span class="swatch dot-swatch" style="background:#0d366b"></span>Observación de daño</span>
+      <span class="item"><span class="swatch" style="background:#1baf7a"></span>Espacio verde</span>
+    </div>`;
 }
 
 /* ── Tabla densa ─────────────────────────────────────────────────────── */
@@ -118,9 +519,11 @@ function cell(column, row) {
       return `<td><span class="tag state-${value}"><span class="dot"></span>${
         STATE_LABEL[value] || value}</span></td>`;
     case "damage":
-      return `<td>${value
-        ? `<span class="dmg dmg-${value}"><span class="sq"></span>${DAMAGE_LABEL[value]}</span>`
-        : "—"}</td>`;
+      return `<td>${
+        value
+          ? `<span class="dmg dmg-${value}"><span class="sq"></span>${DAMAGE_LABEL[value]}</span>`
+          : "—"
+      }</td>`;
     case "method":
       return `<td><span class="tag method-${value}"><span class="dot"></span>${
         value === "BUFFER" ? "buffer (degradado)" : "red"}</span></td>`;
@@ -151,15 +554,18 @@ function renderTable() {
   $("#count-sites").textContent = rows.length;
   $("#p-sites").innerHTML = `
     <table>
-      <thead><tr>${COLUMNS.map((c) => `
-        <th class="${c.type === "num" || c.type === "bar" ? "num" : ""}" data-key="${c.key}">
-          ${c.label}${state.sort.key === c.key
-            ? ` <span class="arrow">${dir === 1 ? "▲" : "▼"}</span>` : ""}
-        </th>`).join("")}</tr></thead>
-      <tbody>${rows.map((row) => `
-        <tr data-site="${row.site_id}" aria-selected="${state.selected === row.site_id}">
-          ${COLUMNS.map((c) => cell(c, row)).join("")}
-        </tr>`).join("")}</tbody>
+      <thead><tr>${COLUMNS.map(
+        (c) => `<th class="${c.type === "num" || c.type === "bar" ? "num" : ""}" data-key="${c.key}">
+          ${c.label}${
+            state.sort.key === c.key ? ` <span class="arrow">${dir === 1 ? "▲" : "▼"}</span>` : ""
+          }</th>`
+      ).join("")}</tr></thead>
+      <tbody>${rows
+        .map(
+          (row) => `<tr data-site="${row.site_id}" aria-selected="${state.selected === row.site_id}">
+            ${COLUMNS.map((c) => cell(c, row)).join("")}</tr>`
+        )
+        .join("")}</tbody>
     </table>`;
 
   $("#p-sites").querySelectorAll("th").forEach((th) =>
@@ -169,32 +575,38 @@ function renderTable() {
       renderTable();
     })
   );
-  $("#p-sites").querySelectorAll("tbody tr").forEach((tr) =>
-    tr.addEventListener("click", () => selectSite(tr.dataset.site))
-  );
+  $("#p-sites")
+    .querySelectorAll("tbody tr")
+    .forEach((tr) => tr.addEventListener("click", () => selectSite(tr.dataset.site)));
 }
 
-/* ── Detalle: evidencia, features y descomposición exacta ────────────── */
+/* ── Detalle ─────────────────────────────────────────────────────────── */
 
 function decomposition(explanation) {
   const positives = explanation.contributions.filter((c) => c.contribution > 0);
   const total = positives.reduce((s, c) => s + c.contribution, 0) + explanation.penalty_total;
-  const segments = positives.map((c) =>
-    `<span class="seg seg-${c.factor}" style="width:${(c.contribution / total) * 100}%"
-       title="${FACTOR_LABEL[c.factor]}: ${c.contribution.toFixed(2)}"></span>`
-  ).join("");
-  const penalty = explanation.penalty_total > 0
-    ? `<span class="seg seg-penalty" style="width:${(explanation.penalty_total / total) * 100}%"
-         title="Penalizaciones: −${explanation.penalty_total.toFixed(2)}"></span>`
-    : "";
-
-  const legend = positives.map((c) =>
-    `<span class="item"><span class="swatch seg-${c.factor}"></span>
-      ${FACTOR_LABEL[c.factor]} <span class="n">${c.contribution.toFixed(1)}</span></span>`
-  ).join("") + (explanation.penalty_total > 0
-    ? `<span class="item"><span class="swatch seg-penalty"></span>
-        Penalizaciones <span class="n">−${explanation.penalty_total.toFixed(1)}</span></span>`
-    : "");
+  const segments = positives
+    .map(
+      (c) => `<span class="seg seg-${c.factor}" style="width:${(c.contribution / total) * 100}%"
+        title="${FACTOR_LABEL[c.factor]}: ${c.contribution.toFixed(2)}"></span>`
+    )
+    .join("");
+  const penalty =
+    explanation.penalty_total > 0
+      ? `<span class="seg seg-penalty" style="width:${(explanation.penalty_total / total) * 100}%"
+           title="Penalizaciones: −${explanation.penalty_total.toFixed(2)}"></span>`
+      : "";
+  const legend =
+    positives
+      .map(
+        (c) => `<span class="item"><span class="swatch seg-${c.factor}"></span>
+          ${FACTOR_LABEL[c.factor]} <span class="n">${c.contribution.toFixed(1)}</span></span>`
+      )
+      .join("") +
+    (explanation.penalty_total > 0
+      ? `<span class="item"><span class="swatch seg-penalty"></span>
+          Penalizaciones <span class="n">−${explanation.penalty_total.toFixed(1)}</span></span>`
+      : "");
 
   return `
     <div class="decomp">
@@ -211,17 +623,19 @@ function decomposition(explanation) {
 function renderDetail(detail) {
   const { site, features, evidence, fusion, exclusions, recommendations, confidence_drivers } = detail;
 
-  const evidenceRows = evidence.map((e) => `
-    <div class="evidence-row">
-      <span class="src">${e.original_source}</span>
-      <span class="meta">
-        ${DAMAGE_LABEL[e.damage_class]} · ${e.raw_damage_label} ·
-        obs. ${e.observation_date} ·
-        ${e.field_validated ? "validado en campo" : "sin validación de campo"} ·
-        ${e.license_class}
-      </span>
-      <span class="conf">${Number(e.confidence).toFixed(2)}</span>
-    </div>`).join("");
+  const evidenceRows = evidence
+    .map(
+      (e) => `
+      <div class="evidence-row">
+        <span class="src">${e.original_source}</span>
+        <span class="meta">
+          ${DAMAGE_LABEL[e.damage_class]} · ${e.raw_damage_label} · obs. ${e.observation_date} ·
+          ${e.field_validated ? "validado en campo" : "sin validación de campo"} · ${e.license_class}
+        </span>
+        <span class="conf">${Number(e.confidence).toFixed(2)}</span>
+      </div>`
+    )
+    .join("");
 
   const drivers = Object.entries(confidence_drivers || {})
     .map(([k, v]) => `<dt>${k}</dt><dd>${Number(v) > 0 ? "+" : ""}${Number(v).toFixed(2)}</dd>`)
@@ -233,29 +647,43 @@ function renderDetail(detail) {
 
   const exclusionBlock = exclusions.length
     ? `<p class="note crit"><strong>Excluido por ${exclusions.length} restricción(es) dura(s).</strong>
-        ${exclusions.map((x) => `${x.reason}${x.is_prohibited_risk
-          ? " — riesgo prohibido: no admite override (FR-LIFE-03)" : ""}`).join(" · ")}
+        ${exclusions
+          .map(
+            (x) =>
+              `${x.reason}${
+                x.is_prohibited_risk ? " — riesgo prohibido: no admite override (FR-LIFE-03)" : ""
+              }`
+          )
+          .join(" · ")}
         <br>Un sitio excluido no llega al motor de scoring: no aparece con un score bajo,
         no aparece en absoluto.</p>`
     : "";
 
-  const recBlocks = recommendations.map((r, i) => `
-    <div class="rec ${i === 0 ? "top" : ""}">
-      <div class="rec-head">
-        <span class="name">${r.display_name}</span>
-        <span class="score">${r.score.toFixed(1)}</span>
-      </div>
-      <div class="cost">Costo estimado ${cop(r.cost_cop)} COP${
-        r.cost_is_estimated ? " · estimación, sin fuente oficial (OI-05)" : ""}</div>
-      ${i === 0 ? decomposition(r.explanation) : ""}
-      ${i === 0 && r.explanation.counterfactual
-        ? `<p class="note"><strong>Contrafactual.</strong> ${r.explanation.counterfactual.note}
-           (Δ ${r.explanation.counterfactual.delta.toFixed(3)}).</p>`
-        : ""}
-      ${i === 0 && !r.explanation.counterfactual
-        ? `<p class="note">Sin contrafactual: no se encontró un cambio de una sola
-           variable que altere la recomendación.</p>` : ""}
-    </div>`).join("");
+  const recBlocks = recommendations
+    .map(
+      (r, i) => `
+      <div class="rec ${i === 0 ? "top" : ""}">
+        <div class="rec-head">
+          <span class="name">${r.display_name}</span>
+          <span class="score">${r.score.toFixed(1)}</span>
+        </div>
+        <div class="cost">Costo estimado ${cop(r.cost_cop)} COP · estimación, sin fuente oficial (OI-05)</div>
+        ${i === 0 ? decomposition(r.explanation) : ""}
+        ${
+          i === 0 && r.explanation.counterfactual
+            ? `<p class="note"><strong>Contrafactual.</strong> ${r.explanation.counterfactual.note}
+               (Δ ${r.explanation.counterfactual.delta.toFixed(3)}).</p>`
+            : ""
+        }
+        ${
+          i === 0 && !r.explanation.counterfactual
+            ? `<p class="note">Sin contrafactual: no se encontró un cambio de una sola
+               variable que altere la recomendación.</p>`
+            : ""
+        }
+      </div>`
+    )
+    .join("");
 
   $("#detail").innerHTML = `
     <div class="section">
@@ -269,26 +697,38 @@ function renderDetail(detail) {
     </div>
 
     <div class="section">
-      <h2>Evidencia de daño</h2>
-      ${fusion ? `
-        <p class="note ${fusion.independent_sources < 2 ? "warn" : ""}">
-          Fusión: <strong>${DAMAGE_LABEL[fusion.damage_class]}</strong>,
-          confianza ${Number(fusion.damage_confidence).toFixed(2)}.
-          ${fusion.independent_sources} fuente(s) independiente(s) de
-          ${fusion.contributing_sources.length} contribuyente(s) —
-          acuerdo ${(Number(fusion.agreement_ratio) * 100).toFixed(0)}%.
-          ${fusion.independent_sources < 2
-            ? "Fuentes que comparten insumo satelital no son confirmaciones independientes (R9)."
-            : ""}
-        </p>` : ""}
+      <h2>Evidencia de daño <span class="origin real">real</span></h2>
+      ${
+        fusion
+          ? `<p class="note ${fusion.independent_sources < 2 ? "warn" : ""}">
+              Fusión: <strong>${DAMAGE_LABEL[fusion.damage_class]}</strong>,
+              confianza ${Number(fusion.damage_confidence).toFixed(2)}.
+              ${fusion.independent_sources} fuente(s) independiente(s) de
+              ${fusion.contributing_sources.length} contribuyente(s) —
+              acuerdo ${(Number(fusion.agreement_ratio) * 100).toFixed(0)}%.
+              ${
+                fusion.independent_sources < 2
+                  ? "Fuentes que comparten insumo satelital no son confirmaciones independientes (R9)."
+                  : ""
+              }</p>`
+          : ""
+      }
       ${evidenceRows || '<p class="sub">Sin evidencia asociada.</p>'}
     </div>
 
-    ${recommendations.length ? `
-      <div class="section">
-        <h2>Recomendaciones (sitio × intervención)</h2>
-        ${recBlocks}
-      </div>` : ""}
+    ${
+      recommendations.length
+        ? `<div class="section">
+             <h2>Recomendaciones <span class="origin simulada">provisional</span></h2>
+             <p class="note warn">
+               El orden entre sitios depende de capas simuladas: al cambiar la semilla
+               del generador, el top-20 conserva 3 de 20. Léase como estructura del
+               modelo, no como prioridad de inversión.
+             </p>
+             ${recBlocks}
+           </div>`
+        : ""
+    }
 
     <div class="section">
       <h2>Vector de features</h2>
@@ -298,47 +738,51 @@ function renderDetail(detail) {
     <div class="section">
       <h2>Drivers de confianza</h2>
       <dl class="kv">${drivers}</dl>
-      <p class="note warn">
-        Las capas de contexto (población, riesgo, uso de suelo) son simuladas en
-        esta versión. La confianza lo refleja y no puede subir por encima de ese techo.
-      </p>
     </div>`;
 }
 
 async function selectSite(siteId) {
   state.selected = siteId;
-  document.querySelectorAll("tbody tr").forEach((tr) =>
-    tr.setAttribute("aria-selected", tr.dataset.site === siteId)
-  );
+  document
+    .querySelectorAll("tbody tr")
+    .forEach((tr) => tr.setAttribute("aria-selected", tr.dataset.site === siteId));
+  if (state.mapReady && state.map.getLayer("sites-selected")) {
+    state.map.setFilter("sites-selected", ["==", ["get", "site_id"], siteId]);
+  }
   $("#detail").innerHTML = '<div class="loading">Cargando…</div>';
   try {
     renderDetail(await api(`/sites/${siteId}`));
   } catch (error) {
     $("#detail").innerHTML = `<div class="empty">Error: ${error.message}</div>`;
   }
-  if (state.map) {
-    const site = state.sites.find((s) => s.site_id === siteId);
-    if (site) state.map.flyTo({ center: [site.lon, site.lat], zoom: 17 });
+  const site = state.sites.find((s) => s.site_id === siteId);
+  if (site && state.mapReady) {
+    state.map.easeTo({ center: [site.lon, site.lat], zoom: Math.max(state.map.getZoom(), 16.5) });
   }
 }
 
 /* ── Escenario y portafolio ──────────────────────────────────────────── */
 
 function renderWeights() {
-  $("#weights").innerHTML = Object.entries(state.weights).map(([factor, value]) => `
-    <div class="weight-row">
-      <span>${FACTOR_LABEL[factor]}</span>
-      <span class="value" id="w-out-${factor}">${value.toFixed(2)}</span>
-    </div>
-    <input type="range" data-factor="${factor}" min="0" max="0.6" step="0.01" value="${value}">
-  `).join("");
+  $("#weights").innerHTML = Object.entries(state.weights)
+    .map(
+      ([factor, value]) => `
+      <div class="weight-row">
+        <span>${FACTOR_LABEL[factor]}</span>
+        <span class="value" id="w-out-${factor}">${value.toFixed(2)}</span>
+      </div>
+      <input type="range" data-factor="${factor}" min="0" max="0.6" step="0.01" value="${value}">`
+    )
+    .join("");
 
-  $("#weights").querySelectorAll("input").forEach((input) =>
-    input.addEventListener("input", () => {
-      state.weights[input.dataset.factor] = Number(input.value);
-      $(`#w-out-${input.dataset.factor}`).textContent = Number(input.value).toFixed(2);
-    })
-  );
+  $("#weights")
+    .querySelectorAll("input")
+    .forEach((input) =>
+      input.addEventListener("input", () => {
+        state.weights[input.dataset.factor] = Number(input.value);
+        $(`#w-out-${input.dataset.factor}`).textContent = Number(input.value).toFixed(2);
+      })
+    );
 }
 
 function renderPortfolio(scenario) {
@@ -346,6 +790,12 @@ function renderPortfolio(scenario) {
   $("#count-portfolio").textContent = scenario.items.length;
   $("#p-portfolio").innerHTML = `
     <div class="portfolio">
+      ${
+        scenario.static_note
+          ? `<p class="note warn">Paquete estático: los escenarios están precalculados.
+             Se muestra el de ${cop(scenario.static_note)} COP, el más cercano al pedido.</p>`
+          : ""
+      }
       <div class="stat-row">
         <div class="stat"><div class="k">Proyectos</div>
           <div class="v">${scenario.items.length}</div>
@@ -355,20 +805,21 @@ function renderPortfolio(scenario) {
           <div class="u">COP · estimada (OI-05)</div></div>
         <div class="stat"><div class="k">Población servida</div>
           <div class="v">${fmt(scenario.total_population)}</div>
-          <div class="u">catchment de 10 min</div></div>
+          <div class="u">simulada · catchment 10 min</div></div>
         <div class="stat"><div class="k">Gini de acceso</div>
           <div class="v">${scenario.equity_after.gini_access.toFixed(4)}</div>
           <div class="u">antes ${scenario.equity_before.gini_access.toFixed(4)} ·
             Δ ${equityDelta > 0 ? "+" : ""}${equityDelta.toFixed(4)}</div></div>
       </div>
 
-      ${Math.abs(equityDelta) < 0.01 ? `
-        <p class="note warn">
-          El portafolio apenas mueve la equidad territorial (Δ ${equityDelta.toFixed(4)}).
-          Con el presupuesto y los pesos actuales, la inversión redistribuye poco:
-          es un resultado del modelo, no un error de cálculo, y merece discutirse
-          antes de presentarlo como mejora.
-        </p>` : ""}
+      ${
+        Math.abs(equityDelta) < 0.01
+          ? `<p class="note warn">
+              El portafolio apenas mueve la equidad territorial (Δ ${equityDelta.toFixed(4)}).
+              Con el presupuesto y los pesos actuales, la inversión redistribuye poco: es un
+              resultado del modelo, no un error de cálculo.</p>`
+          : ""
+      }
 
       <table>
         <thead><tr>
@@ -377,168 +828,82 @@ function renderPortfolio(scenario) {
           <th class="num">Población marginal</th><th class="num">Redundancia</th>
           <th class="num">Acumulado</th>
         </tr></thead>
-        <tbody>${scenario.items.map((item) => `
-          <tr data-site="${item.site_id}">
-            <td class="num">${item.rank}</td>
-            <td>${item.site_id}</td>
-            <td>${item.intervention_label}</td>
-            <td class="num">${item.score.toFixed(1)}</td>
-            <td class="num">${cop(item.cost_cop)}</td>
-            <td class="num">${fmt(item.marginal_population)}</td>
-            <td class="num">${(item.redundancy_ratio * 100).toFixed(1)}%</td>
-            <td class="num">${fmt(item.cumulative_population)}</td>
-          </tr>`).join("")}</tbody>
+        <tbody>${scenario.items
+          .map(
+            (item) => `<tr data-site="${item.site_id}">
+              <td class="num">${item.rank}</td>
+              <td>${item.site_id}</td>
+              <td>${item.intervention_label}</td>
+              <td class="num">${item.score.toFixed(1)}</td>
+              <td class="num">${cop(item.cost_cop)}</td>
+              <td class="num">${fmt(item.marginal_population)}</td>
+              <td class="num">${(item.redundancy_ratio * 100).toFixed(1)}%</td>
+              <td class="num">${fmt(item.cumulative_population)}</td>
+            </tr>`
+          )
+          .join("")}</tbody>
       </table>
 
       <p class="note">
-        La redundancia crece conforme el portafolio satura: cada sitio nuevo sirve
-        a población que los anteriores ya alcanzaban. Cae de la forma del objetivo
-        de cobertura, no de una penalización añadida (ADR-08).
+        La redundancia crece conforme el portafolio satura: cada sitio nuevo sirve a población
+        que los anteriores ya alcanzaban. Cae de la forma del objetivo de cobertura, no de una
+        penalización añadida (ADR-08).
       </p>
       <p class="note">
         Reproducibilidad — candidatos <code>${scenario.candidate_set_hash.slice(0, 16)}…</code> ·
         matriz <code>${scenario.feature_matrix_hash.slice(0, 16)}…</code>
       </p>
-      <div class="stat-row" style="margin-top:12px">
-        <a href="/api/v1/exports/${scenario.scenario_id}?format=geojson&profile=INTERNAL"
-           download>GeoJSON</a>
-        <a href="/api/v1/exports/${scenario.scenario_id}?format=csv&profile=INTERNAL"
-           download>CSV</a>
-        <a href="/api/v1/exports/${scenario.scenario_id}?format=json&profile=INTERNAL"
-           download>Scenario JSON</a>
-        <a href="/api/v1/exports/${scenario.scenario_id}?format=geojson&profile=COMMERCIAL">
-           GeoJSON perfil comercial (debe fallar)</a>
-      </div>
+      ${
+        STATIC_BASE
+          ? ""
+          : `<div class="export-row">
+              <a href="/api/v1/exports/${scenario.scenario_id}?format=geojson&profile=INTERNAL" download>GeoJSON</a>
+              <a href="/api/v1/exports/${scenario.scenario_id}?format=csv&profile=INTERNAL" download>CSV</a>
+              <a href="/api/v1/exports/${scenario.scenario_id}?format=json&profile=INTERNAL" download>Scenario JSON</a>
+            </div>`
+      }
     </div>`;
 
-  $("#p-portfolio").querySelectorAll("tbody tr").forEach((tr) =>
-    tr.addEventListener("click", () => selectSite(tr.dataset.site))
-  );
+  $("#p-portfolio")
+    .querySelectorAll("tbody tr")
+    .forEach((tr) => tr.addEventListener("click", () => selectSite(tr.dataset.site)));
+
+  if (state.mapReady && state.map.getSource("sites")) {
+    const ids = scenario.items.map((i) => i.site_id);
+    state.map.setFilter("sites-selected", ["in", ["get", "site_id"], ["literal", ids]]);
+  }
 }
 
-/* ── Mapa ────────────────────────────────────────────────────────────── */
-
-async function initMap() {
-  if (state.map) return;
-  state.map = new maplibregl.Map({
-    container: "map",
-    // Sin basemap de terceros: un tile servido por otro no tiene data_version
-    // y rompe la reproducibilidad (fuentes.md §11, regla 2).
-    style: {
-      version: 8,
-      sources: {},
-      layers: [{ id: "bg", type: "background", paint: { "background-color": "#f2f1ee" } }],
-    },
-    center: [-75.694, 4.808],
-    zoom: 15,
-  });
-
-  state.map.on("load", async () => {
-    const [sites, evidence, green, risk] = await Promise.all([
-      fetch(`${API}/geojson/sites`).then((r) => r.json()),
-      fetch(`${API}/geojson/evidence`).then((r) => r.json()),
-      fetch(`${API}/geojson/green`).then((r) => r.json()),
-      fetch(`${API}/geojson/risk`).then((r) => r.json()),
-    ]);
-
-    state.map.addSource("green", { type: "geojson", data: green });
-    state.map.addLayer({
-      id: "green", type: "fill", source: "green",
-      paint: { "fill-color": "#1baf7a", "fill-opacity": 0.25 },
-    });
-
-    // El rojo sólido está reservado para "sitio excluido". El riesgo se
-    // dibuja como contorno punteado sobre un velo tenue, para que dos
-    // significados distintos no compartan el mismo tono.
-    state.map.addSource("risk", { type: "geojson", data: risk });
-    state.map.addLayer({
-      id: "risk", type: "fill", source: "risk",
-      paint: { "fill-color": "#d03b3b", "fill-opacity": 0.07 },
-    });
-    state.map.addLayer({
-      id: "risk-outline", type: "line", source: "risk",
-      paint: {
-        "line-color": "#d03b3b",
-        "line-width": 1,
-        "line-dasharray": [3, 2],
-        "line-opacity": 0.65,
-      },
-    });
-
-    state.map.addSource("sites", { type: "geojson", data: sites });
-    state.map.addLayer({
-      id: "sites", type: "fill", source: "sites",
-      paint: {
-        "fill-color": [
-          "match", ["get", "label"],
-          "CANDIDATE", "#2a78d6",
-          "EXCLUDED", "#d03b3b",
-          "#898781",
-        ],
-        "fill-opacity": 0.75,
-      },
-    });
-    state.map.addLayer({
-      id: "sites-outline", type: "line", source: "sites",
-      paint: { "line-color": "#0b0b0b", "line-width": 0.5, "line-opacity": 0.4 },
-    });
-
-    state.map.addSource("evidence", { type: "geojson", data: evidence });
-    state.map.addLayer({
-      id: "evidence", type: "circle", source: "evidence",
-      paint: {
-        "circle-radius": 2.5,
-        "circle-color": "#0d366b",
-        "circle-opacity": 0.7,
-      },
-    });
-
-    state.map.on("click", "sites", (event) =>
-      selectSite(event.features[0].properties.id)
-    );
-    state.map.on("mouseenter", "sites", () => (state.map.getCanvas().style.cursor = "pointer"));
-    state.map.on("mouseleave", "sites", () => (state.map.getCanvas().style.cursor = ""));
-
-    document.querySelector(".map-wrap").insertAdjacentHTML("beforeend", `
-      <div class="map-legend">
-        <div class="legend" style="flex-direction:column;gap:4px">
-          <span class="item"><span class="swatch" style="background:#2a78d6"></span>Sitio candidato</span>
-          <span class="item"><span class="swatch" style="background:#d03b3b"></span>Sitio excluido</span>
-          <span class="item"><span class="swatch" style="background:#1baf7a"></span>Espacio verde (OSM)</span>
-          <span class="item"><span class="swatch" style="background:rgba(208,59,59,.12);border:1px dashed #d03b3b"></span>Zona de riesgo alto (simulada)</span>
-          <span class="item"><span class="swatch" style="background:#0d366b;border-radius:50%"></span>Observación de daño</span>
-        </div>
-      </div>`);
-  });
-}
-
-/* ── Fuentes y alertas ───────────────────────────────────────────────── */
+/* ── Fuentes, alertas y diagnóstico ──────────────────────────────────── */
 
 function renderSources(sources) {
   $("#p-sources").innerHTML = `
     <div class="portfolio">
       <p class="note">
-        Una fuente en <code>UNCLEAR</code> no alimenta ninguna feature ni llega a un
-        export: bloquea por diseño (fuentes.md §6, control C1).
+        Una fuente en <code>UNCLEAR</code> no alimenta ninguna feature ni llega a un export:
+        bloquea por diseño (fuentes.md §6, control C1).
       </p>
       <table class="sources-table">
         <thead><tr>
           <th>Fuente</th><th>Tier</th><th>Clase de licencia</th><th>Licencia</th>
           <th>Redistribución</th><th>Share-alike</th><th>Verificada</th><th>Notas</th>
         </tr></thead>
-        <tbody>${sources.map((s) => `
-          <tr>
-            <td>${s.display_name}</td>
-            <td>${s.tier}</td>
-            <td><span class="tag ${s.usable ? "" : "state-EXCLUDED"}">
-              <span class="dot" style="background:${s.usable ? "var(--good)" : "var(--critical)"}"></span>
-              ${s.license_class}</span></td>
-            <td>${s.license_name || "—"}</td>
-            <td>${s.redistribution_allowed === null ? "—" : s.redistribution_allowed ? "sí" : "no"}</td>
-            <td>${s.share_alike ? "sí" : "no"}</td>
-            <td>${s.terms_verified_at || "—"}</td>
-            <td class="notes">${s.verification_notes || ""}</td>
-          </tr>`).join("")}</tbody>
+        <tbody>${sources
+          .map(
+            (s) => `<tr>
+              <td>${s.display_name}</td>
+              <td>${s.tier}</td>
+              <td><span class="tag">
+                <span class="dot" style="background:${s.usable ? "var(--good)" : "var(--critical)"}"></span>
+                ${s.license_class}</span></td>
+              <td>${s.license_name || "—"}</td>
+              <td>${s.redistribution_allowed === null ? "—" : s.redistribution_allowed ? "sí" : "no"}</td>
+              <td>${s.share_alike ? "sí" : "no"}</td>
+              <td>${s.terms_verified_at || "—"}</td>
+              <td class="notes">${s.verification_notes || ""}</td>
+            </tr>`
+          )
+          .join("")}</tbody>
       </table>
     </div>`;
 }
@@ -547,10 +912,12 @@ function renderAlerts(alerts) {
   $("#count-alerts").textContent = alerts.length;
   $("#p-alerts").innerHTML = `
     <div class="portfolio">
-      ${alerts.map((a) => `
-        <p class="note ${a.severity === "error" ? "crit" : "warn"}">
-          <strong>${a.code}</strong> · ${a.raised_at.slice(0, 16)}<br>${a.message}
-        </p>`).join("")}
+      ${alerts
+        .map(
+          (a) => `<p class="note ${a.severity === "error" ? "crit" : "warn"}">
+            <strong>${a.code}</strong> · ${a.raised_at.slice(0, 16)}<br>${a.message}</p>`
+        )
+        .join("")}
     </div>`;
 }
 
@@ -567,24 +934,29 @@ async function loadSites() {
   const intervention = $("#f-intervention").value;
   if (intervention) params.set("intervention", intervention);
 
-  $("#p-sites").innerHTML = '<div class="loading">Cargando sitios…</div>';
   const data = await api(`/sites?${params}`);
   state.sites = data.sites;
   renderTable();
+
+  if (state.mapReady) {
+    const visible = new Set(state.sites.map((s) => s.site_id));
+    state.map.setFilter("sites", ["in", ["get", "site_id"], ["literal", [...visible]]]);
+    state.map.setFilter("sites-outline", ["in", ["get", "site_id"], ["literal", [...visible]]]);
+  }
   return data.provenance;
 }
 
 function wireTabs() {
   document.querySelectorAll('[role="tab"]').forEach((tab) =>
     tab.addEventListener("click", () => {
-      document.querySelectorAll('[role="tab"]').forEach((t) =>
-        t.setAttribute("aria-selected", t === tab)
-      );
+      document
+        .querySelectorAll('[role="tab"]')
+        .forEach((t) => t.setAttribute("aria-selected", t === tab));
       document.querySelectorAll(".panel").forEach((panel) => {
         panel.hidden = panel.id !== tab.dataset.panel;
       });
-      if (tab.dataset.panel === "p-map") {
-        initMap().then(() => setTimeout(() => state.map?.resize(), 50));
+      if (tab.dataset.panel === "p-map" && state.mapReady) {
+        setTimeout(() => state.map.resize(), 50);
       }
     })
   );
@@ -593,8 +965,13 @@ function wireTabs() {
 async function main() {
   wireTabs();
   renderWeights();
+  renderMapControls();
+  renderMapLegend();
 
-  $("#f-risk").addEventListener("input", (e) => ($("#f-risk-out").value = Number(e.target.value).toFixed(2)));
+  $("#f-risk").addEventListener(
+    "input",
+    (e) => ($("#f-risk-out").value = Number(e.target.value).toFixed(2))
+  );
   $("#f-score").addEventListener("input", (e) => ($("#f-score-out").value = e.target.value));
   ["#f-state", "#f-risk", "#f-score", "#f-intervention"].forEach((sel) =>
     $(sel).addEventListener("change", loadSites)
@@ -604,10 +981,14 @@ async function main() {
     renderWeights();
   });
 
+  if (STATIC_BASE) {
+    $("#optimize").textContent = "Ver portafolio precalculado";
+  }
   $("#optimize").addEventListener("click", async () => {
     const button = $("#optimize");
     button.disabled = true;
-    button.textContent = "Optimizando…";
+    const label = button.textContent;
+    button.textContent = "Calculando…";
     try {
       const maxProjects = $("#scn-max").value;
       state.scenario = await api("/scenarios", {
@@ -623,12 +1004,14 @@ async function main() {
       renderPortfolio(state.scenario);
       document.querySelector('[data-panel="p-portfolio"]').click();
     } catch (error) {
-      alert(`No se pudo optimizar: ${error.message}`);
+      alert(`No se pudo calcular: ${error.message}`);
     } finally {
       button.disabled = false;
-      button.textContent = "Optimizar portafolio";
+      button.textContent = label;
     }
   });
+
+  await initMap();
 
   const [provenance, sources, alerts] = await Promise.all([
     loadSites(),
@@ -641,6 +1024,8 @@ async function main() {
 }
 
 main().catch((error) => {
-  document.body.insertAdjacentHTML("afterbegin",
-    `<p class="note crit" style="margin:16px">Error al iniciar: ${error.message}</p>`);
+  document.body.insertAdjacentHTML(
+    "afterbegin",
+    `<p class="note crit" style="margin:16px">Error al iniciar: ${error.message}</p>`
+  );
 });

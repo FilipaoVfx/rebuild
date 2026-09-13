@@ -93,10 +93,10 @@
   <!-- Centro: la tabla es la superficie primaria -->
   <section class="center">
     <nav class="tabs" role="tablist">
-      <button role="tab" aria-selected="true" data-panel="p-sites">
+      <button role="tab" aria-selected="true" data-panel="p-map">Mapa</button>
+      <button role="tab" aria-selected="false" data-panel="p-sites">
         Sitios <span class="count" id="count-sites"></span>
       </button>
-      <button role="tab" aria-selected="false" data-panel="p-map">Mapa</button>
       <button role="tab" aria-selected="false" data-panel="p-portfolio">
         Portafolio <span class="count" id="count-portfolio"></span>
       </button>
@@ -106,8 +106,19 @@
       </button>
     </nav>
 
-    <div class="panel" id="p-sites"><div class="loading">Cargando sitios…</div></div>
-    <div class="panel" id="p-map" hidden><div class="map-wrap"><div id="map"></div></div></div>
+    <div class="panel" id="p-map">
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-panel" id="layer-control"></div>
+        <div class="map-legend" id="map-legend"></div>
+        <p class="map-caveat">
+          El <strong>dónde se observó daño</strong> es real. El <strong>orden de
+          prioridad</strong> es provisional: depende de capas simuladas y cambia al
+          cambiar la semilla del generador.
+        </p>
+      </div>
+    </div>
+    <div class="panel" id="p-sites" hidden><div class="loading">Cargando sitios…</div></div>
     <div class="panel" id="p-portfolio" hidden>
       <div class="portfolio"><p class="loading">Ejecute una optimización para ver el portafolio.</p></div>
     </div>

@@ -177,6 +177,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 .tabs .count { color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .panel { overflow: auto; min-height: 0; background: var(--page); }
+.panel#p-map { overflow: hidden; }
 .panel[hidden] { display: none; }
 
 /* ── Tabla densa ───────────────────────────────────────────────────── */
@@ -239,6 +240,7 @@ tbody tr[aria-selected="true"] td:first-child { box-shadow: inset 2px 0 0 var(--
 
 .detail .empty { padding: 28px 16px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .detail h3 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+.detail h2 .origin { margin-left: 6px; }
 .detail .sub { color: var(--ink-2); font-size: 11px; margin-bottom: 10px; }
 
 .kv { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 11px; }
@@ -291,11 +293,48 @@ tbody tr[aria-selected="true"] td:first-child { box-shadow: inset 2px 0 0 var(--
 /* ── Mapa y portafolio ─────────────────────────────────────────────── */
 
 #map { width: 100%; height: 100%; background: var(--page); }
+
+/* Panel de capas. Cada fila declara si la capa es observada o simulada:
+   en este sistema esa distincion no es metadato, es la diferencia entre
+   evidencia y suposicion. */
+.map-panel {
+  position: absolute; top: 12px; right: 12px; z-index: 5; width: 232px;
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 4px;
+  padding: 10px 12px; font-size: 11px;
+}
+.control-group + .control-group { margin-top: 12px; }
+.control-group h3 {
+  margin: 0 0 6px; font-size: 10px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.layer-row {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 6px;
+  align-items: center; padding: 2px 0; cursor: pointer;
+}
+.layer-row input { margin: 0; accent-color: var(--s1); }
+.origin {
+  font-size: 9px; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border);
+  text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
+}
+.origin.real { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.origin.simulada,
+.origin.provisional { color: #8a6200; border-color: var(--warning); }
+
+.map-caveat {
+  position: absolute; top: 12px; left: 52px; z-index: 5; max-width: 330px; margin: 0;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-left: 2px solid var(--warning); border-radius: 4px;
+  padding: 7px 10px; font-size: 11px; line-height: 1.45; color: var(--ink-2);
+}
+
+.export-row { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; }
 .map-legend {
-  position: absolute; bottom: 12px; left: 12px; z-index: 5;
+  position: absolute; bottom: 24px; left: 12px; z-index: 5;
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 4px;
   padding: 8px 10px; font-size: 11px;
 }
+.map-legend .legend { gap: 3px 10px; }
+.map-legend .swatch.dot-swatch { border-radius: 50%; }
 .map-wrap { position: relative; height: 100%; }
 
 .portfolio { padding: 14px 16px; }

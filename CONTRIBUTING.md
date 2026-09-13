@@ -36,7 +36,24 @@ curl -X POST --data-urlencode "data@db/seed/pereira.overpass" \
 .venv/bin/lint-imports                       # fronteras de ADR-01
 .venv/bin/python -m pytest -q                # 98 pruebas
 .venv/bin/python scripts/checks/browser_check.py   # el visor, en un navegador real
+.venv/bin/python scripts/checks/signal_check.py    # ¿señal o ruido? cinco mediciones
 ```
+
+`signal_check.py` es el semáforo del proyecto. Su prueba 4 regenera las capas
+simuladas con otra semilla y recalcula todo: si el top-20 cambia, el ranking
+describe el generador y no el territorio. Hoy conserva 3 de 20.
+
+## Paquete estático (GitHub Pages)
+
+```bash
+.venv/bin/python scripts/build_static.py   # vuelca dist/
+(cd dist && python3 -m http.server 8100)
+.venv/bin/python scripts/checks/browser_check.py http://127.0.0.1:8100/ static
+```
+
+Los escenarios van precalculados a presupuestos fijos y los exportes no se
+publican: la puerta de licencia por perfil es lógica de servidor, y servirla
+como descarga estática la eliminaría.
 
 Las pruebas que necesitan PostGIS se saltan solas si no hay base, en vez de
 fallar con un error de conexión que no dice nada.
