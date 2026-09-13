@@ -82,7 +82,13 @@ jobs:
       - name: Construir paquete estático (con puerta de licencia)
         run: python scripts/build_static.py --profile PUBLIC
 
+      # `enablement: true` activa Pages por API en la primera ejecución, en
+      # lugar de exigir que alguien lo active a mano en Settings. Requiere que
+      # el repositorio sea elegible: público, o privado con un plan que
+      # incluya Pages privadas.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
