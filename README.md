@@ -33,12 +33,14 @@ La V1 **no entrega una aplicación web de propósito general**: entrega una API 
 | [Plan de MVP](docs/plan/mvp-plan.md) | Recorte de alcance, hitos con puertas verificables, decisiones abiertas y sus defectos |
 | [Backlog](docs/plan/backlog.md) | Épicas y unidades de trabajo, trazadas a requisitos del SRS |
 | [Inventario de datos](docs/plan/data-inventory.md) | Disponibilidad real por capa — entregable de Fase 0 |
+| [Fuentes](docs/plan/fuentes.md) | Consumo técnico y régimen de licencia de cada fuente, con los controles que lo hacen cumplible |
 
 **Decisiones posteriores al ARD**
 
 | ADR | Decisión |
 |---|---|
 | [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md) | La V1 no entrega una aplicación web de propósito general |
+| [ADR-16](docs/adr/ADR-16-evidencia-de-dano-multifuente.md) | El daño es evidencia multifuente, no un atributo del sitio |
 
 ## Principios que gobiernan el diseño
 
@@ -48,6 +50,7 @@ La V1 **no entrega una aplicación web de propósito general**: entrega una API 
 - **La incertidumbre es una feature.** Confianza y calidad de datos se comunican explícitamente, nunca se ocultan.
 - **Todo se explica.** Ningún score se expone sin su descomposición.
 - **Humano en el bucle.** La plataforma soporta decisiones públicas; no las reemplaza.
+- **La procedencia manda.** Cada dato lleva su fuente, su versión y su licencia hasta el último export.
 
 ## Arquitectura en una línea
 

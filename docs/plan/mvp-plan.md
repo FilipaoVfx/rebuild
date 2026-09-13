@@ -49,6 +49,8 @@ El SRS es el contrato del piloto completo. El MVP es un subconjunto de él. Esta
 | Autenticación, roles, niveles de sensibilidad, auditoría | `FR-AUTH-01..03`, `FR-AUDIT-01` |
 | Exclusión de PII y umbral mínimo de agregación | `FR-PII-01..03`, `FR-LIC-01` |
 | Contrato de daño congelado + adaptador | `FR-DC-01..02` |
+| Evidencia de daño multifuente y fusión (ADR-16) | `FR-DC-01`, `FR-QUAL-01`, `FR-SYN-05` |
+| Registro de licencias y puerta de export por perfil | `FR-LIC-01`, `FR-ING-01` |
 | Generador sintético de daño | `FR-SYN-01..06` |
 | Ingesta versionada e inmutable | `FR-ING-01..05` |
 | Motor de features (vector recortado, §1.3) | `FR-FEAT-01..06` |
@@ -132,6 +134,9 @@ Los puntos abiertos del SRS §13 y ARD §7 no pueden bloquear el arranque. Cada 
 | OI-03 / OI-A4 | Medida de equidad institucionalmente aceptable | M5 | Reportar **dos**: Gini sobre acceso per cápita a espacio público, y brecha de déficit entre comunas. Que la institución elija sobre resultados reales, no en abstracto | Bajo — es reporte, no objetivo |
 | OI-05 / OI-A5 | Costos unitarios de intervención y su fuente oficial | M5 | Costos paramétricos por m² con rango, marcados `is_estimate=true`; el optimizador reporta sensibilidad al costo (`FR-SCEN-08`) | Bajo — es configuración de escenario |
 | OI-08 | Retención del log de auditoría | M6 | 5 años tras el cierre del piloto | Bajo |
+| OI-F1 | ODbL *share-alike* sobre base derivada servida por API | Comercialización, **no** el piloto | OSM aislado en esquema propio; atribución siempre; `share_alike = true` | Alto si se descubre tarde |
+| OI-F2 | Licencia de SGC, IDEAM, AMCO, CARDER, Megabús | M0 (puerta) | `UNCLEAR` — que es bloqueante por diseño | Bajo |
+| OI-F7 | Independencia entre fuentes de evidencia de daño | M2 | Penalizar concordancia entre fuentes que comparten insumo satelital | Medio |
 | OI-06 | Quién tiene autoridad para `ENDORSE` | — | **No bloquea la V1.** `FR-SYN-06` prohíbe endosar mientras exista daño sintético, y en la V1 todo el daño es sintético (CON-01). El estado `ENDORSED` es inalcanzable por construcción | — |
 
 > OI-07 y OI-A3 son los dos que de verdad duelen si cambian tarde: ambos invalidan el cálculo completo de catchments y población. Conviene forzar la respuesta durante M1, no esperar a M3.
@@ -149,13 +154,13 @@ Lo que se construye:
 - Repositorio, CI, estructura de paquetes con fronteras de importación forzadas por lint (ADR-01)
 - Proyecto Supabase: extensiones (`postgis`, `pgrouting`, `pg_cron`, `pgmq`, `pgaudit`, `pgtap`), migraciones del esquema `core`, roles y políticas RLS iniciales (ADR-05)
 - Diccionario de campos prohibidos + test de regresión de PII en CI (`FR-PII-02`)
-- Contrato de daño del SRS §6 congelado como esquema validable
-- Registro de fuentes con licencia y atribución (`FR-ING-01`, `FR-LIC-01`)
+- Contrato de daño del SRS §6 congelado como esquema validable, y modelo `damage_evidence` de [ADR-16](../adr/ADR-16-evidencia-de-dano-multifuente.md)
+- Registro de fuentes con clasificación de licencia y controles de export ([fuentes.md](./fuentes.md) §4-6)
 - `data_inventory.md` completado (PRD §53, Fase 0)
 
 **Spike S1 — el riesgo que hay que medir ahora, no en M3.** R1 del ARD dice que el cálculo de catchments con `pgRouting` puede exceder la ventana de batch. Medirlo al final del proyecto es descubrir tarde que ADR-02 no se sostiene. En M0 se construye el grafo peatonal de Pereira desde OSM y se cronometra `pgr_drivingDistance` sobre 1.500 orígenes sintéticos a 3 umbrales. Si excede la ventana de `NFR-PERF-04`, la mitigación (menos umbrales, precómputo por comuna, o revisar ADR-02) se decide con dos semanas de proyecto, no con dos meses.
 
-**Puerta:** CI en verde con el test de PII; contrato congelado y revisado; S1 medido y documentado con su número; OI-A1 y OI-A2 cerrados.
+**Puerta:** CI en verde con el test de PII; contrato congelado y revisado; S1 medido y documentado con su número; OI-A1 y OI-A2 cerrados; **ninguna fuente Tier A en `UNCLEAR`** ([fuentes.md](./fuentes.md) §10).
 
 ---
 
@@ -357,5 +362,7 @@ Los del ARD §6, con lo que este plan hace al respecto.
 | R5 | Calidad desigual de la red OSM sesga los catchments y puede invertir el análisis de equidad | Densidad de red por comuna como entregable de M3 y driver de confianza |
 | R6 | La institución rechaza el hosting offshore tarde en el piloto | La pregunta va en la primera sesión institucional, con el argumento de D3: la base analítica no contiene datos personales. Ruta de salida de ADR-14 preservada |
 | **R7** | **El planificador no reconoce el territorio en los resultados** | Riesgo nuevo, y el más probable. Sesión de validación con un planificador al cierre de M3 (features) y de M4 (recomendaciones), sobre exportes, antes de que exista visor |
+| **R8** | **Una fuente sin licencia verificada llega a un export comercial** | Clasificación obligatoria en `source_register`, `UNCLEAR` bloqueante, puerta de export por perfil y test en CI ([fuentes.md](./fuentes.md) §6) |
+| **R9** | **Fuentes de evidencia de daño no independientes inflan la confianza** | Copernicus y SERTIT pueden clasificar las mismas imágenes; la función de fusión modela independencia explícitamente (OI-F7) |
 
 R7 es la razón por la que este plan pone la API y el paquete de evidencia antes que la interfaz. Si las recomendaciones no resisten la revisión de alguien que conoce Pereira, ninguna pantalla lo arregla.
