@@ -160,3 +160,40 @@ puede correr sin ensuciar el estado.
 **La prueba 4 es el semáforo del proyecto.** Mientras esté por debajo de ~70 %,
 cualquier presentación del ranking como prioridad de inversión es una
 afirmación que el propio sistema puede desmentir.
+
+---
+
+## 6. Sobre publicar el sistema
+
+Publicar un sitio web **es redistribuir**. El registro de fuentes dice que
+ICube-SERTIT no lo permite (`redistribution_allowed = false`), y ese es
+exactamente el control que la puerta de export aplica a los archivos. Saltarlo
+al publicar sería construir la puerta y dejar la ventana abierta.
+
+Por eso `scripts/build_static.py --profile PUBLIC` **falla** si alguna fuente
+no redistribuible contribuyó, y nombra cuál:
+
+```
+BLOQUEADO
+El perfil PUBLIC no puede publicarse: contribuyen fuentes que no permiten
+redistribucion — sertit (NON_COMMERCIAL).
+```
+
+El demo publicable corre sobre **daño sintético**, generado por
+`uri.ingestion.synthetic.generate_damage` — determinista, con manifiesto, y
+con una distribución de clases que imita la observada sin copiar ni una sola
+geometría real. Todo lo que sale de ahí lleva `is_synthetic = true` y lo
+propaga.
+
+| | Local / institucional | Público (Pages) |
+|---|---|---|
+| Daño | ICube-SERTIT, 252 obs. reales | Sintético, 260 obs. generadas |
+| Contexto urbano | OSM real | OSM real |
+| Población, riesgo, uso de suelo | Simulados | Simulados |
+| Sitios derivados | 113 | 248 |
+| Exportes | Sí, con puerta por perfil | No — la puerta es lógica de servidor |
+| Escenarios | Optimizador en vivo | Precalculados a 10/25/50/100 MM COP |
+
+Lo que el demo público demuestra es **la maquinaria**: el pipeline, la
+trazabilidad, la explicabilidad, la propagación de procedencia. Lo que no
+demuestra, y no debe presentarse como tal, es un diagnóstico de Pereira.

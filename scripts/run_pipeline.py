@@ -17,7 +17,7 @@ from uri.settings import settings  # noqa: E402
 RAW = ROOT / "data" / "raw"
 
 
-def main() -> int:
+def main(synthetic_damage: bool = False) -> int:
     started = time.time()
     with worker_connection() as conn:
         print("== ingesta ==")
@@ -26,6 +26,7 @@ def main() -> int:
             sertit_path=RAW / "sertit_damage.geojson",
             osm_path=RAW / "osm_pereira.json",
             seed=settings.synthetic_seed,
+            synthetic_damage=synthetic_damage,
         )
         conn.commit()
         print(f"   versiones: {report.versions}")
@@ -85,4 +86,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # `--synthetic-damage` sustituye la evidencia satelital por la generada.
+    # Es el unico modo publicable: SERTIT no permite redistribucion.
+    raise SystemExit(main("--synthetic-damage" in sys.argv))

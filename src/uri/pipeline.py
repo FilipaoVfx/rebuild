@@ -39,12 +39,27 @@ class PipelineReport:
 
 
 def run_ingestion(
-    conn: psycopg.Connection, *, sertit_path: Path, osm_path: Path, seed: int
+    conn: psycopg.Connection,
+    *,
+    sertit_path: Path,
+    osm_path: Path,
+    seed: int,
+    synthetic_damage: bool = False,
 ) -> PipelineReport:
+    """Ejecuta la ingesta completa.
+
+    `synthetic_damage` sustituye la evidencia satelital por la generada. Es lo
+    que permite publicar un demo sin redistribuir un producto que su licencia
+    no deja redistribuir (fuentes.md §7.12).
+    """
     loader.register_sources(conn)
 
-    evidence = damage_adapter.load_sertit(sertit_path, municipality="Pereira")
-    damage_version = loader.load_damage_evidence(conn, evidence, source_id="monitor_terremoto")
+    if synthetic_damage:
+        damage_version, count = loader.load_synthetic_damage(conn, seed)
+        evidence = [None] * count
+    else:
+        evidence = damage_adapter.load_sertit(sertit_path, municipality="Pereira")
+        damage_version = loader.load_damage_evidence(conn, evidence, source_id="monitor_terremoto")
     osm_version, osm_counts = loader.load_osm(conn, osm_path)
     synth_version, synth_counts = loader.load_synthetic_layers(conn, seed)
 

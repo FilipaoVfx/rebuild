@@ -182,6 +182,59 @@ def load_damage_evidence(
     return version
 
 
+def load_synthetic_damage(conn: psycopg.Connection, seed: int) -> tuple[int, int]:
+    """Carga daño sintetico como evidencia (ADR-16) en lugar del satelital.
+
+    Es el camino publicable: la evidencia de SERTIT no se puede redistribuir,
+    y un sitio web publico es redistribucion. Todo lo que entra por aqui lleva
+    `is_synthetic = true` y lo propaga a cada artefacto derivado.
+    """
+    from uri.ingestion.synthetic import generate_damage
+
+    observations, manifest = generate_damage(PEREIRA_BBOX, seed)
+    version = _publish_version(
+        conn,
+        source_id="synthetic",
+        record_count=len(observations),
+        content_hash=manifest.content_hash(),
+        is_synthetic=True,
+        manifest=manifest.as_dict(),
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) AS n FROM core.damage_evidence WHERE data_version = %s", (version,)
+        )
+        if cur.fetchone()["n"]:
+            return version, len(observations)
+        for item in observations:
+            cur.execute(
+                """
+                INSERT INTO core.damage_evidence (
+                    source, original_source, geometry, positional_accuracy_m,
+                    observation_date, acquisition_date, damage_class, raw_damage_label,
+                    building_type, method, field_validated, confidence, is_synthetic,
+                    data_version, notes
+                ) VALUES (
+                    'synthetic', 'synthetic', ST_GeomFromText(%s, 4326), %s,
+                    %s, %s, %s, %s, %s, 'SYNTHETIC', false, %s, true, %s, %s
+                )
+                """,
+                (
+                    item.wkt,
+                    item.accuracy_m,
+                    date(2026, 8, 11),
+                    date(2026, 9, 12),
+                    item.damage_class,
+                    item.damage_class,
+                    item.building_type,
+                    0.5,
+                    version,
+                    "Capa simulada — no es una observacion de daño real",
+                ),
+            )
+    return version, len(observations)
+
+
 def load_osm(conn: psycopg.Connection, overpass_path: Path) -> tuple[int, dict[str, int]]:
     roads, greens, facilities = osm_adapter.load_overpass(overpass_path)
     content_hash = _hash_rows(

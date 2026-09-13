@@ -234,6 +234,82 @@ def generate_risk_zones(
     return zones, manifest
 
 
+@dataclass(frozen=True)
+class SyntheticDamage:
+    wkt: str
+    damage_class: str
+    building_type: str
+    accuracy_m: float
+
+
+#: Clases de daño con su peso relativo. La distribucion imita la observada en
+#: Pereira por ICube-SERTIT (121 dañados / 85 posibles / 46 destruidos) sin
+#: copiar ni una sola de sus geometrias.
+DAMAGE_MIX = (("DAMAGED", 48), ("POSSIBLY_DAMAGED", 34), ("DESTROYED", 18))
+
+BUILDING_TYPES = ("Residential", "Commercial", "Educational", "Industrial")
+
+
+def generate_damage(
+    bbox: tuple[float, float, float, float],
+    seed: int,
+    *,
+    count: int = 260,
+) -> tuple[list[SyntheticDamage], GenerationManifest]:
+    """Capa de daño sintetica (FR-SYN-01..03).
+
+    Existe por dos razones distintas. La primera es CON-01: el dataset
+    municipal no existe. La segunda apareció despues — es la unica capa de
+    daño que se puede PUBLICAR, porque la evidencia satelital real viene con
+    `redistribution_allowed = false` y un demo publico es redistribucion.
+
+    FR-SYN-02 pide estructura agrupada, no ruido uniforme: el daño se
+    concentra alrededor de focos, como en un sismo real.
+    """
+    rng = random.Random(seed + 3)
+    centres = _gaussian_field(rng, bbox, n_centres=5)
+    min_lon, min_lat, max_lon, max_lat = bbox
+
+    labels = [label for label, weight in DAMAGE_MIX for _ in range(weight)]
+    out: list[SyntheticDamage] = []
+    attempts = 0
+    while len(out) < count and attempts < count * 80:
+        attempts += 1
+        lon = rng.uniform(min_lon, max_lon)
+        lat = rng.uniform(min_lat, max_lat)
+        # Rechazo por intensidad: el punto entra con probabilidad proporcional
+        # a la intensidad local, que es lo que produce el agrupamiento.
+        if rng.random() > min(1.0, _intensity(lon, lat, centres) / 1.2):
+            continue
+        out.append(
+            SyntheticDamage(
+                wkt=f"POINT({lon} {lat})",
+                damage_class=rng.choice(labels),
+                building_type=rng.choices(BUILDING_TYPES, weights=[80, 10, 6, 4])[0],
+                accuracy_m=5.0,
+            )
+        )
+
+    counts: dict[str, int] = {}
+    for item in out:
+        counts[item.damage_class] = counts.get(item.damage_class, 0) + 1
+
+    manifest = GenerationManifest(
+        seed=seed + 3,
+        parameters={
+            "layer": "damage_evidence",
+            "bbox": list(bbox),
+            "target_count": count,
+            "n_centres": 5,
+            "damage_mix": dict(DAMAGE_MIX),
+        },
+        generated_at=datetime.now(UTC).isoformat(),
+        record_counts={"observations": len(out)},
+        distribution={f"class_{k}": v for k, v in counts.items()},
+    )
+    return out, manifest
+
+
 LAND_USE_CATEGORIES = ("residential", "mixed", "commercial", "institutional", "green")
 
 

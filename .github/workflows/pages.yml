@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Nota: mientras la rama por defecto del repositorio no sea `main`, el
+# disparador de push no se activa. `workflow_dispatch` sí funciona desde la
+# rama por defecto, sea cual sea.
+
 # Un solo despliegue a la vez; no cancela el que está en curso.
 concurrency:
   group: pages
@@ -52,17 +56,12 @@ jobs:
           docker exec $(docker ps -qf "ancestor=postgis/postgis:16-3.4") \
             sh -c "apt-get update -qq && apt-get install -y -qq postgresql-16-pgrouting"
 
-      # El paquete publicado se reconstruye desde las fuentes en cada
-      # despliegue. `data/raw/` no está versionado, así que se descarga aquí:
-      # lo que se publica es reproducible desde el repositorio, no un volcado
-      # que alguien generó en su máquina.
-      - name: Descargar datos de origen
+      # El contexto urbano de OSM se descarga aquí: lo publicado es
+      # reproducible desde el repositorio, no un volcado que alguien generó en
+      # su máquina. `data/raw/` no está versionado.
+      - name: Descargar contexto urbano (OSM)
         run: |
           mkdir -p data/raw
-          curl -sSf --retry 3 -o data/raw/sertit_damage.geojson \
-            https://datosdelterremoto.org/data/public/sertit_damage.geojson
-          curl -sSf --retry 3 -o data/raw/unosat_damage.geojson \
-            https://datosdelterremoto.org/data/public/unosat_damage.geojson
           for host in overpass.kumi.systems overpass-api.de; do
             curl -sSf --max-time 300 -X POST \
               --data-urlencode "data@db/seed/pereira.overpass" \
@@ -70,13 +69,18 @@ jobs:
           done
           ls -la data/raw/
 
-      - name: Migraciones y pipeline
+      # El sitio publicado corre sobre DAÑO SINTÉTICO, no sobre la evidencia
+      # satelital real. No es una simplificación: la evidencia de ICube-SERTIT
+      # está registrada con `redistribution_allowed = false`, y publicar un
+      # sitio web es redistribuir. El paso siguiente lo verifica y falla si
+      # alguna fuente no redistribuible llegó a contribuir.
+      - name: Migraciones y pipeline (daño sintético)
         run: |
           python scripts/migrate.py
-          python scripts/run_pipeline.py
+          python scripts/run_pipeline.py --synthetic-damage
 
-      - name: Construir paquete estático
-        run: python scripts/build_static.py
+      - name: Construir paquete estático (con puerta de licencia)
+        run: python scripts/build_static.py --profile PUBLIC
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
