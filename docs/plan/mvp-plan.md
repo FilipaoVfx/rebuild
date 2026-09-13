@@ -4,6 +4,7 @@
 **Caso:** Pereira, Colombia — recuperación tras el sismo del 10 de agosto de 2026
 **Versión:** 0.1 — borrador para revisión
 **Horizonte:** piloto institucional
+**Leer antes:** [antes-de-empezar.md](./antes-de-empezar.md) — contiene hallazgos que cambian premisas de este plan (escala real de Pereira, geometría del dato de daño, epicentro)
 
 ---
 

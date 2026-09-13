@@ -2,7 +2,8 @@
 
 **Documento operativo.** Lo consume el equipo que escribe los adaptadores de ingesta y quien audite el origen de un número en un export.
 **Traza:** `FR-ING-01` (fuentes registradas), `FR-LIC-01` (registro de licencias), `FR-EXT-01` (aislamiento de fallo), `FR-DEG-01` (modos degradados)
-**Versión:** 0.1 — el estado de verificación de licencia de la mayoría de filas es `POR VERIFICAR`
+**Versión:** 0.2 — el estado de verificación de licencia de la mayoría de filas es `POR VERIFICAR`
+**Complemento:** [conexiones.md](./conexiones.md) — endpoints verificados y recetas de conexión
 
 ---
 
