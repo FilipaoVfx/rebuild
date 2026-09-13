@@ -10,14 +10,48 @@ import psycopg
 import pytest
 
 
-def test_una_version_de_dataset_no_se_puede_mutar(db_conn):
-    """FR-ING-02 — publicar n+1 nunca toca n."""
+@pytest.fixture
+def throwaway_version(db_conn) -> int:
+    """Una fuente y una version de dataset propias de la prueba.
+
+    Estas pruebas verifican invariantes del esquema, no del contenido: hacerlas
+    depender de que alguien haya corrido el pipeline las convierte en pruebas
+    que se saltan en CI, y un invariante que solo se comprueba en la maquina de
+    quien lo escribio no esta comprobado.
+    """
     with db_conn.cursor() as cur:
-        cur.execute("SELECT data_version FROM core.dataset_version ORDER BY data_version LIMIT 1")
+        cur.execute(
+            """
+            INSERT INTO core.source_register
+                (source_id, display_name, tier, source_url, access_method, spatial_reference)
+            VALUES ('fixture_prueba', 'Fixture', 'A', 'urn:test', 'generated', 'EPSG:4326')
+            ON CONFLICT (source_id) DO NOTHING
+            """
+        )
+        cur.execute(
+            """
+            INSERT INTO core.dataset_version
+                (source_id, retrieved_at, record_count, content_hash, is_synthetic)
+            VALUES ('fixture_prueba', now(), 1, %s, true)
+            ON CONFLICT (source_id, content_hash) DO NOTHING
+            RETURNING data_version
+            """,
+            (f"fixture-{id(db_conn)}",),
+        )
         row = cur.fetchone()
         if row is None:
-            pytest.skip("sin datos cargados")
-        version = row["data_version"]
+            cur.execute(
+                "SELECT data_version FROM core.dataset_version "
+                "WHERE source_id = 'fixture_prueba' LIMIT 1"
+            )
+            row = cur.fetchone()
+    db_conn.commit()
+    return row["data_version"]
+
+
+def test_una_version_de_dataset_no_se_puede_mutar(db_conn, throwaway_version):
+    """FR-ING-02 — publicar n+1 nunca toca n."""
+    version = throwaway_version
 
     with pytest.raises(psycopg.errors.RaiseException, match="FR-ING-02"), db_conn.cursor() as cur:
         cur.execute(
@@ -102,7 +136,13 @@ def test_las_geometrias_de_sitio_son_validas(db_conn):
         assert cur.fetchone()["n"] == 0
 
 
-def test_la_evidencia_no_puede_observarse_despues_de_adquirirse(db_conn):
+def test_la_evidencia_no_puede_observarse_despues_de_adquirirse(db_conn, throwaway_version):
+    """Una observacion posterior a su propia adquisicion no es una observacion.
+
+    La version de dataset viene de la fixture y no de `min(...)` sobre la
+    tabla: con la base vacia ese `min` devuelve NULL, la insercion falla por
+    NOT NULL antes de llegar al CHECK, y la prueba pasa a comprobar otra cosa.
+    """
     with pytest.raises(psycopg.errors.CheckViolation), db_conn.cursor() as cur:
         cur.execute(
             """
@@ -110,10 +150,11 @@ def test_la_evidencia_no_puede_observarse_despues_de_adquirirse(db_conn):
                 (source, original_source, geometry, observation_date, acquisition_date,
                  damage_class, raw_damage_label, method, confidence, is_synthetic,
                  data_version)
-            SELECT 'sertit', 'sertit', ST_GeomFromText('POINT(-75.69 4.81)', 4326),
-                   '2026-09-30', '2026-08-11', 'DAMAGED', 'x', 'REMOTE_SENSING',
-                   0.5, false, min(data_version)
-            FROM core.dataset_version
-            """
+            VALUES ('fixture_prueba', 'fixture_prueba',
+                    ST_GeomFromText('POINT(-75.69 4.81)', 4326),
+                    '2026-09-30', '2026-08-11', 'DAMAGED', 'x', 'REMOTE_SENSING',
+                    0.5, false, %s)
+            """,
+            (throwaway_version,),
         )
     db_conn.rollback()
