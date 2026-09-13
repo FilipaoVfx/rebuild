@@ -14,9 +14,33 @@ No es una IA que decide qué debe construir una ciudad. Es una capa de soporte a
 
 ## Estado
 
-En planificación. No hay código todavía.
+Slice vertical funcionando sobre datos reales: de 252 observaciones de daño de
+ICube-SERTIT en Pereira a un portafolio de inversión explicado y exportable, en
+~12 s.
 
-Antes de escribirlo hay **ocho decisiones abiertas con dueño** en [antes de empezar](docs/plan/antes-de-empezar.md), varias de las cuales cambian premisas del PRD.
+```
+252 observaciones  →  113 sitios  →  72 candidatos  →  12 proyectos
+   (evidencia)        (agrupadas)    (41 excluidos)     (10,2 MM COP)
+```
+
+Lo que ya corre: ingesta versionada con registro de licencias · fusión de
+evidencia multifuente (ADR-16) · grafo peatonal con pgRouting y catchments de
+red · restricciones duras antes del scoring · modelo ponderado con
+descomposición exacta y contrafactuales · optimizador greedy con redundancia y
+equidad · API versionada con procedencia obligatoria · visor cartográfico
+denso en datos · exportes con puerta de licencia por perfil.
+
+98 pruebas, lint y fronteras de módulo verificadas en CI. Arranque en
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+Siguen abiertas **ocho decisiones con dueño** en
+[antes de empezar](docs/plan/antes-de-empezar.md), varias de las cuales cambian
+premisas del PRD.
+
+> Las capas de población, riesgo y uso de suelo son **simuladas**: no existen
+> como capa publicada para Pereira. La evidencia de daño y el contexto urbano
+> de OSM son reales. El sistema lo declara capa por capa en cada respuesta y
+> en cada export.
 
 La V1 **no entrega una aplicación web de propósito general**: entrega una API versionada, un paquete de evidencia exportable y un único visor cartográfico hecho a medida. El razonamiento está en [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md).
 
@@ -57,6 +81,17 @@ La V1 **no entrega una aplicación web de propósito general**: entrega una API 
 - **Todo se explica.** Ningún score se expone sin su descomposición.
 - **Humano en el bucle.** La plataforma soporta decisiones públicas; no las reemplaza.
 - **La procedencia manda.** Cada dato lleva su fuente, su versión y su licencia hasta el último export.
+
+## Estructura
+
+```
+src/uri/          contracts · ingestion · features · constraints · scoring
+                  optimizer · reporting · api   (fronteras forzadas por CI)
+apps/viewer/      visor de decisión: tabla densa, mapa, panel de detalle
+db/migrations/    esquema core · analytics · osm_raw · osm_derived
+scripts/          dev_db · migrate · run_pipeline · serve · checks
+docs/             producto (PRD/SRS/ARD) · planificación · ADR
+```
 
 ## Arquitectura en una línea
 

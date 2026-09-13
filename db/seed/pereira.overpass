@@ -1,0 +1,7 @@
+[out:json][timeout:180];
+(
+  nwr["leisure"~"^(park|garden|pitch|sports_centre|playground|recreation_ground)$"](4.7900,-75.7250,4.8300,-75.6700);
+  nwr["amenity"~"^(school|kindergarten|college|university|hospital|clinic|doctors|health_post|community_centre|social_facility)$"](4.7900,-75.7250,4.8300,-75.6700);
+  way["highway"~"^(footway|path|pedestrian|steps|living_street|residential|service|tertiary|secondary|primary|unclassified)$"](4.7900,-75.7250,4.8300,-75.6700);
+);
+out geom;
