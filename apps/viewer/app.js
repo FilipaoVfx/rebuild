@@ -229,7 +229,20 @@ function sitePaint() {
   ];
 }
 
-async function initMap() {
+/* FR-LIC-01 — la atribución se compone desde la procedencia que la página
+ * cargó, no desde una lista escrita a mano. Una cadena fija atribuye fuentes
+ * que quizá no estén en el despliegue: el paquete público corre sobre daño
+ * sintético y no contiene un solo dato de ICube-SERTIT, así que nombrarlos
+ * sería afirmar lo contrario de lo que la puerta de licencia garantiza. */
+function attributionFrom(provenance) {
+  const seen = new Set();
+  for (const layer of provenance?.layers || []) {
+    if (layer.attribution) seen.add(layer.attribution);
+  }
+  return [...seen].join(" · ") || "Urban Recovery Intelligence";
+}
+
+async function initMap(provenance) {
   if (state.map) return;
 
   state.map = new maplibregl.Map({
@@ -247,9 +260,7 @@ async function initMap() {
   });
   state.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
   state.map.addControl(
-    new maplibregl.AttributionControl({
-      customAttribution: "© OpenStreetMap contributors (ODbL) · © ICube-SERTIT 2026",
-    }),
+    new maplibregl.AttributionControl({ customAttribution: attributionFrom(provenance) }),
     "bottom-right"
   );
 
@@ -1011,13 +1022,18 @@ async function main() {
     }
   });
 
-  await initMap();
-
-  const [provenance, sources, alerts] = await Promise.all([
-    loadSites(),
+  // Los sitios primero: su respuesta trae la procedencia, y el mapa la
+  // necesita para componer su atribución antes de pintarse.
+  const [sitesData, sources, alerts] = await Promise.all([
+    api(`/sites?state=CANDIDATE`),
     api("/data-sources"),
     api("/quality/alerts"),
   ]);
+  const provenance = sitesData.provenance;
+
+  await initMap(provenance);
+  await loadSites();
+
   renderProvenance(provenance, sources);
   renderSources(sources);
   renderAlerts(alerts);
