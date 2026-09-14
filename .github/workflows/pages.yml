@@ -1,0 +1,104 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Nota: mientras la rama por defecto del repositorio no sea `main`, el
+# disparador de push no se activa. `workflow_dispatch` sí funciona desde la
+# rama por defecto, sea cual sea.
+
+# Un solo despliegue a la vez; no cancela el que está en curso.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: uri
+          POSTGRES_PASSWORD: uri
+          POSTGRES_DB: uri
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+
+    env:
+      URI_DATABASE_URL: postgresql://uri:uri@127.0.0.1:5433/uri
+      PYTHONPATH: src
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" httpx
+
+      - name: Instalar pgRouting
+        run: |
+          docker exec $(docker ps -qf "ancestor=postgis/postgis:16-3.4") \
+            sh -c "apt-get update -qq && apt-get install -y -qq postgresql-16-pgrouting"
+
+      # El contexto urbano de OSM se descarga aquí: lo publicado es
+      # reproducible desde el repositorio, no un volcado que alguien generó en
+      # su máquina. `data/raw/` no está versionado.
+      - name: Descargar contexto urbano (OSM)
+        run: |
+          mkdir -p data/raw
+          for host in overpass.kumi.systems overpass-api.de; do
+            curl -sSf --max-time 300 -X POST \
+              --data-urlencode "data@db/seed/pereira.overpass" \
+              "https://$host/api/interpreter" -o data/raw/osm_pereira.json && break
+          done
+          ls -la data/raw/
+
+      # El sitio publicado corre sobre DAÑO SINTÉTICO, no sobre la evidencia
+      # satelital real. No es una simplificación: la evidencia de ICube-SERTIT
+      # está registrada con `redistribution_allowed = false`, y publicar un
+      # sitio web es redistribuir. El paso siguiente lo verifica y falla si
+      # alguna fuente no redistribuible llegó a contribuir.
+      - name: Migraciones y pipeline (daño sintético)
+        run: |
+          python scripts/migrate.py
+          python scripts/run_pipeline.py --synthetic-damage
+
+      - name: Construir paquete estático (con puerta de licencia)
+        run: python scripts/build_static.py --profile PUBLIC
+
+      # `enablement: true` activa Pages por API en la primera ejecución, en
+      # lugar de exigir que alguien lo active a mano en Settings. Requiere que
+      # el repositorio sea elegible: público, o privado con un plan que
+      # incluya Pages privadas.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

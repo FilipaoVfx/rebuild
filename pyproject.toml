@@ -1,0 +1,68 @@
+[project]
+name = "uri"
+version = "0.1.0"
+description = "Urban Recovery Intelligence — plataforma de inteligencia espacial para decisiones de recuperación urbana"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "psycopg[binary,pool]>=3.2",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.27",
+    "ruff>=0.7",
+    "import-linter>=2.1",
+]
+
+[project.scripts]
+uri = "uri.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/uri"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error::DeprecationWarning"]
+
+# ADR-01 — fronteras de importación entre módulos del pipeline.
+# El orden del pipeline es el orden de las capas: cada capa sólo puede
+# importar de las que tiene por debajo.
+[tool.importlinter]
+root_package = "uri"
+
+[[tool.importlinter.contracts]]
+name = "El pipeline es una jerarquia estricta (D2)"
+type = "layers"
+layers = [
+    "uri.api",
+    "uri.reporting",
+    "uri.optimizer",
+    "uri.scoring",
+    "uri.constraints",
+    "uri.features",
+    "uri.ingestion",
+    "uri.contracts",
+]
+
+[[tool.importlinter.contracts]]
+name = "Nadie importa internos de ingestion"
+type = "forbidden"
+source_modules = ["uri.features", "uri.constraints", "uri.scoring", "uri.optimizer", "uri.reporting"]
+forbidden_modules = ["uri.ingestion.adapters"]

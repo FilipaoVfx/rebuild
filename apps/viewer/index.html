@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Urban Recovery Intelligence — Visor de decisión</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%232a78d6'/%3E%3C/svg%3E">
+<!-- MapLibre vendorizado: un piloto institucional no depende de un CDN
+     externo para renderizar, y un recurso de terceros en el camino critico
+     es una dependencia que nadie audito (fuentes.md §11). -->
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <h1>Urban Recovery Intelligence</h1>
+  <span class="case">Pereira, Risaralda · sismo M7,4 del 10-08-2026 (epicentro: San José del Palmar, Chocó)</span>
+  <span class="spacer"></span>
+  <p class="advisory">
+    Salida consultiva. No sustituye inspección estructural, licencias ni el POT,
+    y no constituye una decisión vinculante.
+  </p>
+</header>
+
+<div class="provenance" id="provenance">
+  <span class="label">Procedencia</span>
+  <span class="chip"><span class="dot"></span>cargando…</span>
+</div>
+
+<main>
+  <!-- Carril de control: filtros y definición de escenario -->
+  <aside class="rail">
+    <div class="section">
+      <h2>Filtros</h2>
+      <label class="field">
+        <span>Estado del sitio</span>
+        <select id="f-state">
+          <option value="CANDIDATE">Candidatos</option>
+          <option value="">Todos</option>
+          <option value="EXCLUDED">Excluidos</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Riesgo máximo <output id="f-risk-out">1.00</output></span>
+        <input type="range" id="f-risk" min="0" max="1" step="0.05" value="1">
+      </label>
+      <label class="field">
+        <span>Score mínimo <output id="f-score-out">0</output></span>
+        <input type="range" id="f-score" min="0" max="100" step="1" value="0">
+      </label>
+      <label class="field">
+        <span>Intervención</span>
+        <select id="f-intervention">
+          <option value="">Todas</option>
+          <option value="PARK">Parque</option>
+          <option value="SPORTS">Escenario deportivo</option>
+          <option value="PUBLIC_SQUARE">Plaza pública</option>
+          <option value="COMMUNITY_FACILITY">Equipamiento comunitario</option>
+          <option value="OPEN_SPACE">Espacio abierto</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="section">
+      <h2>Pesos del modelo</h2>
+      <p class="note warn">
+        Los pesos son política urbana, no un parámetro técnico. Estos valores son
+        provisionales hasta que exista un dueño institucional (D7).
+      </p>
+      <div id="weights"></div>
+      <button class="secondary" id="reset-weights" type="button">Restablecer pesos</button>
+    </div>
+
+    <div class="section">
+      <h2>Escenario</h2>
+      <label class="field">
+        <span>Nombre</span>
+        <input type="text" id="scn-name" value="Escenario base">
+      </label>
+      <label class="field">
+        <span>Presupuesto (miles de millones COP)</span>
+        <input type="number" id="scn-budget" value="25" min="1" step="1">
+      </label>
+      <label class="field">
+        <span>Máximo de proyectos (opcional)</span>
+        <input type="number" id="scn-max" placeholder="sin límite" min="1">
+      </label>
+      <button id="optimize" type="button">Optimizar portafolio</button>
+    </div>
+  </aside>
+
+  <!-- Centro: la tabla es la superficie primaria -->
+  <section class="center">
+    <nav class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-panel="p-map">Mapa</button>
+      <button role="tab" aria-selected="false" data-panel="p-sites">
+        Sitios <span class="count" id="count-sites"></span>
+      </button>
+      <button role="tab" aria-selected="false" data-panel="p-portfolio">
+        Portafolio <span class="count" id="count-portfolio"></span>
+      </button>
+      <button role="tab" aria-selected="false" data-panel="p-sources">Fuentes y licencias</button>
+      <button role="tab" aria-selected="false" data-panel="p-alerts">
+        Alertas <span class="count" id="count-alerts"></span>
+      </button>
+    </nav>
+
+    <div class="panel" id="p-map">
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-panel" id="layer-control"></div>
+        <div class="map-legend" id="map-legend"></div>
+        <p class="map-caveat">
+          El <strong>dónde se observó daño</strong> es real. El <strong>orden de
+          prioridad</strong> es provisional: depende de capas simuladas y cambia al
+          cambiar la semilla del generador.
+        </p>
+      </div>
+    </div>
+    <div class="panel" id="p-sites" hidden><div class="loading">Cargando sitios…</div></div>
+    <div class="panel" id="p-portfolio" hidden>
+      <div class="portfolio"><p class="loading">Ejecute una optimización para ver el portafolio.</p></div>
+    </div>
+    <div class="panel" id="p-sources" hidden><div class="loading">Cargando…</div></div>
+    <div class="panel" id="p-alerts" hidden><div class="loading">Cargando…</div></div>
+  </section>
+
+  <!-- Detalle del sitio seleccionado -->
+  <aside class="detail" id="detail">
+    <div class="empty">
+      Seleccione un sitio en la tabla para ver su evidencia de daño, su vector de
+      features y la descomposición exacta de su score.
+    </div>
+  </aside>
+</main>
+
+<script src="vendor/maplibre-gl.js"></script>
+<script src="app.js" type="module"></script>
+</body>
+</html>

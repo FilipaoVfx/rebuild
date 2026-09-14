@@ -1,0 +1,241 @@
+"""Calculo del vector de features por sitio (FR-FEAT-01..06).
+
+El vector es el del plan de MVP §1.3: 13 features en tres grupos. Los
+bloqueantes detienen el scoring si faltan (FR-DEG-01); los de nucleo penalizan
+la confianza; los de contexto solo se omiten.
+"""
+
+from __future__ import annotations
+
+import json
+
+import psycopg
+
+METRIC_SRID = 3116
+
+#: FR-FEAT-04 — estandar de espacio publico efectivo por habitante.
+#: OI-04 abierto: nadie en Pereira ha firmado esta cifra todavia. Viaja
+#: versionada con la feature para que cambiarla sea publicar una version.
+PUBLIC_SPACE_STANDARD_M2_PER_CAPITA = 10.0
+
+#: FR-DEG-01 — que pasa si una capa falta.
+BLOCKING_FEATURES = ("risk_score", "land_use_compatibility", "site_area")
+CORE_FEATURES = (
+    "population_10min",
+    "households_10min",
+    "park_deficit",
+    "park_area_per_capita",
+    "pedestrian_accessibility",
+    "social_vulnerability",
+    "building_density",
+)
+
+
+class BlockingLayerMissing(RuntimeError):
+    """FR-DEG-01. Puntuar sin riesgo no es puntuar con menos informacion:
+    es puntuar otra cosa."""
+
+
+def compute_features(conn: psycopg.Connection, *, feature_version: str, data_version: int) -> int:
+    with conn.cursor() as cur:
+        for layer, table in (
+            ("risk", "core.risk_zone"),
+            ("land_use", "core.land_use"),
+            ("population", "core.population_cell"),
+        ):
+            cur.execute(f"SELECT count(*) AS n FROM {table}")  # noqa: S608 - tabla de lista fija
+            if cur.fetchone()["n"] == 0:
+                raise BlockingLayerMissing(
+                    f"La capa '{layer}' esta vacia. FR-DEG-01: es dependencia "
+                    "bloqueante, el sistema se detiene en lugar de puntuar sin ella."
+                )
+
+        cur.execute(
+            "DELETE FROM analytics.site_feature WHERE feature_version = %s", (feature_version,)
+        )
+        cur.execute(
+            """
+            INSERT INTO analytics.site_feature (
+                site_id, feature_version, data_version,
+                risk_score, land_use_compatibility, site_area,
+                population_10min, households_10min, park_deficit, park_area_per_capita,
+                pedestrian_accessibility, social_vulnerability, building_density,
+                school_access, health_access, community_access,
+                catchment_method, catchment_area_m2, unavailable, confidence,
+                confidence_drivers, is_synthetic
+            )
+            SELECT
+                s.site_id,
+                %(fv)s,
+                %(dv)s,
+
+                -- Riesgo: el maximo que toca el sitio, no el promedio.
+                -- Promediar riesgo diluye exactamente la zona que hay que evitar.
+                COALESCE((
+                    SELECT max(rz.risk_score) FROM core.risk_zone rz
+                    WHERE ST_Intersects(rz.geometry, s.geometry)
+                ), 0),
+
+                -- Compatibilidad de uso de suelo: fraccion del sitio en
+                -- categorias donde una intervencion de espacio publico cabe.
+                COALESCE((
+                    SELECT sum(CASE WHEN lu.category IN ('green', 'institutional', 'mixed')
+                                    THEN 1.0
+                                    WHEN lu.category = 'residential' THEN 0.6
+                                    ELSE 0.2 END
+                               * ST_Area(ST_Intersection(lu.geometry, s.geometry)))
+                           / NULLIF(ST_Area(s.geometry), 0)
+                    FROM core.land_use lu
+                    WHERE ST_Intersects(lu.geometry, s.geometry)
+                ), 0),
+
+                s.area_m2,
+
+                COALESCE(c10.population, 0),
+                COALESCE(c10.households, 0),
+
+                -- Deficit de espacio publico: 1 = no hay nada; 0 = se cumple
+                -- el estandar. Se mide contra la poblacion que el sitio
+                -- realmente alcanza a pie, no contra un radio.
+                CASE
+                    WHEN COALESCE(c10.population, 0) < 1 THEN 1.0
+                    ELSE greatest(0.0, least(1.0,
+                        1.0 - (COALESCE(green.area_m2, 0) / c10.population)
+                              / %(standard)s))
+                END,
+                CASE WHEN COALESCE(c10.population, 0) < 1 THEN 0
+                     ELSE COALESCE(green.area_m2, 0) / c10.population END,
+
+                -- Accesibilidad peatonal: densidad de red en 400 m,
+                -- normalizada contra un techo de 12 km/km2 de via.
+                least(1.0, COALESCE(net.road_m, 0) / 12000.0),
+
+                COALESCE(vuln.value, 0.5),
+
+                least(1.0, COALESCE(net.segments, 0) / 60.0),
+
+                least(1.0, COALESCE(edu.n, 0) / 3.0),
+                least(1.0, COALESCE(hea.n, 0) / 2.0),
+                least(1.0, COALESCE(com.n, 0) / 2.0),
+
+                COALESCE(c10.method, 'BUFFER'),
+                COALESCE(ST_Area(ST_Transform(c10.geometry, %(srid)s)), 0),
+                '{}'::jsonb,
+                0.5,
+                '{}'::jsonb,
+                s.is_synthetic
+            FROM core.site s
+            LEFT JOIN analytics.site_catchment c10
+                   ON c10.site_id = s.site_id AND c10.minutes = 10
+                  AND c10.feature_version = %(fv)s
+            LEFT JOIN LATERAL (
+                SELECT sum(ST_Area(ST_Transform(g.geometry, %(srid)s))) AS area_m2
+                FROM osm_raw.green_space g
+                WHERE c10.geometry IS NOT NULL AND ST_Intersects(g.geometry, c10.geometry)
+            ) green ON true
+            LEFT JOIN LATERAL (
+                SELECT sum(ST_Length(ST_Transform(r.geometry, %(srid)s))) AS road_m,
+                       count(*) AS segments
+                FROM osm_raw.road r
+                WHERE ST_DWithin(ST_Transform(r.geometry, %(srid)s),
+                                 ST_Transform(s.centroid, %(srid)s), 400)
+            ) net ON true
+            LEFT JOIN LATERAL (
+                SELECT sum(p.vulnerability * p.population) / NULLIF(sum(p.population), 0) AS value
+                FROM core.population_cell p
+                WHERE c10.geometry IS NOT NULL AND ST_Intersects(p.geometry, c10.geometry)
+            ) vuln ON true
+            LEFT JOIN LATERAL (
+                SELECT count(*) AS n FROM osm_raw.facility f
+                WHERE f.category = 'education' AND c10.geometry IS NOT NULL
+                  AND ST_Intersects(f.geometry, c10.geometry)
+            ) edu ON true
+            LEFT JOIN LATERAL (
+                SELECT count(*) AS n FROM osm_raw.facility f
+                WHERE f.category = 'health' AND c10.geometry IS NOT NULL
+                  AND ST_Intersects(f.geometry, c10.geometry)
+            ) hea ON true
+            LEFT JOIN LATERAL (
+                SELECT count(*) AS n FROM osm_raw.facility f
+                WHERE f.category = 'community' AND c10.geometry IS NOT NULL
+                  AND ST_Intersects(f.geometry, c10.geometry)
+            ) com ON true
+            """,
+            {
+                "fv": feature_version,
+                "dv": data_version,
+                "srid": METRIC_SRID,
+                "standard": PUBLIC_SPACE_STANDARD_M2_PER_CAPITA,
+            },
+        )
+
+        cur.execute("UPDATE core.site SET state = 'EVALUATED' WHERE state = 'INGESTED'")
+        cur.execute(
+            "SELECT count(*) AS n FROM analytics.site_feature WHERE feature_version = %s",
+            (feature_version,),
+        )
+        count = cur.fetchone()["n"]
+
+    _compute_confidence(conn, feature_version=feature_version)
+    return count
+
+
+def _compute_confidence(conn: psycopg.Connection, *, feature_version: str) -> None:
+    """FR-QUAL-01 — confianza con sus drivers listados.
+
+    Un numero de confianza sin drivers no se puede discutir, y algo que no se
+    puede discutir no informa una decision publica.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT f.site_id, f.catchment_method, f.population_10min,
+                   fu.damage_confidence, fu.independent_sources, fu.observation_age_days,
+                   fu.any_field_validated
+            FROM analytics.site_feature f
+            LEFT JOIN core.site_damage_fusion fu USING (site_id)
+            WHERE f.feature_version = %s
+            """,
+            (feature_version,),
+        )
+        for row in cur.fetchall():
+            drivers: dict[str, float | str | bool] = {}
+            confidence = 1.0
+
+            # FR-FEAT-03 — un catchment por buffer no sabe donde hay un rio.
+            if row["catchment_method"] == "BUFFER":
+                confidence -= 0.25
+                drivers["catchment_buffer"] = -0.25
+
+            damage_confidence = float(row["damage_confidence"] or 0.4)
+            contribution = (damage_confidence - 0.7) * 0.5
+            confidence += contribution
+            drivers["damage_evidence"] = round(contribution, 4)
+
+            if not row["any_field_validated"]:
+                confidence -= 0.15
+                drivers["no_field_validation"] = -0.15
+
+            if (row["independent_sources"] or 1) < 2:
+                confidence -= 0.10
+                drivers["single_independent_source"] = -0.10
+
+            if float(row["population_10min"] or 0) < 1:
+                confidence -= 0.20
+                drivers["no_population_in_catchment"] = -0.20
+
+            # Toda la capa de contexto es sintetica en esta version. Una
+            # confianza alta sobre datos simulados seria una mentira comoda.
+            confidence -= 0.20
+            drivers["synthetic_context_layers"] = -0.20
+
+            cur.execute(
+                "UPDATE analytics.site_feature SET confidence = %s, confidence_drivers = %s::jsonb "
+                "WHERE site_id = %s AND feature_version = %s",
+                (
+                    round(max(0.05, min(0.95, confidence)), 4),
+                    json.dumps(drivers),
+                    row["site_id"],
+                    feature_version,
+                ),
+            )
