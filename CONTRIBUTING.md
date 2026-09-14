@@ -67,6 +67,20 @@ Los escenarios van precalculados a presupuestos fijos y los exportes no se
 publican: la puerta de licencia por perfil es lógica de servidor, y servirla
 como descarga estática la eliminaría.
 
+### Primer despliegue a GitHub Pages
+
+Hay **un paso manual que no se puede automatizar**: Settings → Pages →
+Source: **GitHub Actions**.
+
+Crear un sitio de Pages por API exige permisos de administrador del
+repositorio, y el `GITHUB_TOKEN` de un workflow no los tiene aunque se le
+conceda `pages: write` — ese permiso habilita desplegar en un sitio que ya
+existe, no crearlo. Intentarlo devuelve
+`Resource not accessible by integration`.
+
+Después de ese clic, `Actions → Pages → Run workflow` despliega, y los pushes
+a `main` lo hacen solos.
+
 Las pruebas que necesitan PostGIS se saltan solas si no hay base, en vez de
 fallar con un error de conexión que no dice nada.
 
