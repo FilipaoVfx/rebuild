@@ -19,14 +19,26 @@ El pipeline completo tarda ~12 s sobre el dataset de referencia de Pereira.
 
 ## Datos
 
-`data/raw/` no está versionado. Para poblarlo:
+**El contexto urbano de OSM está versionado** en `db/seed/osm_pereira.json.gz`
+y el pipeline lo usa por defecto. Es deliberado: OSM no versiona aguas arriba,
+así que el extracto archivado es lo único que permite reconstruir una
+`data_version` (`fuentes.md` §11, regla 3). También evita que cada ejecución
+dependa de que Overpass esté en pie.
+
+La evidencia de daño **real** no está versionada — ICube-SERTIT no permite
+redistribución. Para trabajar con ella:
 
 ```bash
+mkdir -p data/raw
 curl -o data/raw/sertit_damage.geojson https://datosdelterremoto.org/data/public/sertit_damage.geojson
 curl -o data/raw/unosat_damage.geojson https://datosdelterremoto.org/data/public/unosat_damage.geojson
-# Contexto urbano OSM del AOI (ver docs/plan/conexiones.md §7)
-curl -X POST --data-urlencode "data@db/seed/pereira.overpass" \
-  https://overpass-api.de/api/interpreter -o data/raw/osm_pereira.json
+.venv/bin/python scripts/run_pipeline.py
+```
+
+Sin esos archivos, use daño sintético — el único modo publicable:
+
+```bash
+.venv/bin/python scripts/run_pipeline.py --synthetic-damage
 ```
 
 ## Comprobaciones

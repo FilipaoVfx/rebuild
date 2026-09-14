@@ -7,6 +7,7 @@ obligacion de share-alike de ODbL.
 
 from __future__ import annotations
 
+import gzip
 import json
 import math
 from dataclasses import dataclass
@@ -109,7 +110,14 @@ def _shoelace_area_m2(geometry: list[dict]) -> float:
 
 
 def load_overpass(path: Path) -> tuple[list[OsmRoad], list[OsmGreenSpace], list[OsmFacility]]:
-    with path.open(encoding="utf-8") as handle:
+    """Lee una respuesta de Overpass, comprimida o no.
+
+    El extracto archivado en `db/seed/` va en gzip: 4 MB de JSON se quedan en
+    578 KB, y versionarlo es lo que hace el despliegue reproducible sin
+    depender de que Overpass esté en pie (fuentes.md §11, regla 3).
+    """
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8") as handle:
         elements = json.load(handle)["elements"]
 
     roads: list[OsmRoad] = []

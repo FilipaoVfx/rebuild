@@ -56,18 +56,15 @@ jobs:
           docker exec $(docker ps -qf "ancestor=postgis/postgis:16-3.4") \
             sh -c "apt-get update -qq && apt-get install -y -qq postgresql-16-pgrouting"
 
-      # El contexto urbano de OSM se descarga aquí: lo publicado es
-      # reproducible desde el repositorio, no un volcado que alguien generó en
-      # su máquina. `data/raw/` no está versionado.
-      - name: Descargar contexto urbano (OSM)
+      # El extracto de OSM está versionado en db/seed/ — no se descarga.
+      # Una descarga aquí ataría cada despliegue a que Overpass esté en pie
+      # ese día, y ya falló así una vez: el bucle de curl no abortaba el paso,
+      # así que el error reaparecía tres pasos después disfrazado de otra cosa.
+      - name: Verificar el extracto archivado
         run: |
-          mkdir -p data/raw
-          for host in overpass.kumi.systems overpass-api.de; do
-            curl -sSf --max-time 300 -X POST \
-              --data-urlencode "data@db/seed/pereira.overpass" \
-              "https://$host/api/interpreter" -o data/raw/osm_pereira.json && break
-          done
-          ls -la data/raw/
+          test -s db/seed/osm_pereira.json.gz \
+            || { echo "::error::falta db/seed/osm_pereira.json.gz"; exit 1; }
+          echo "extracto OSM: $(du -h db/seed/osm_pereira.json.gz | cut -f1)"
 
       # El sitio publicado corre sobre DAÑO SINTÉTICO, no sobre la evidencia
       # satelital real. No es una simplificación: la evidencia de ICube-SERTIT

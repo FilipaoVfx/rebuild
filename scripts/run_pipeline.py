@@ -15,6 +15,18 @@ from uri.db import worker_connection  # noqa: E402
 from uri.settings import settings  # noqa: E402
 
 RAW = ROOT / "data" / "raw"
+SEED = ROOT / "db" / "seed"
+
+
+def osm_extract() -> Path:
+    """El extracto archivado manda; `data/raw/` solo si alguien lo puso ahí."""
+    for candidate in (SEED / "osm_pereira.json.gz", RAW / "osm_pereira.json"):
+        if candidate.exists():
+            return candidate
+    raise SystemExit(
+        "No se encontró el extracto de OSM. Debería estar versionado en "
+        f"{SEED / 'osm_pereira.json.gz'} — ver db/seed/README.md"
+    )
 
 
 def main(synthetic_damage: bool = False) -> int:
@@ -24,7 +36,7 @@ def main(synthetic_damage: bool = False) -> int:
         report = pipeline.run_ingestion(
             conn,
             sertit_path=RAW / "sertit_damage.geojson",
-            osm_path=RAW / "osm_pereira.json",
+            osm_path=osm_extract(),
             seed=settings.synthetic_seed,
             synthetic_damage=synthetic_damage,
         )
