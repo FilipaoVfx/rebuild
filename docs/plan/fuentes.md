@@ -2,7 +2,7 @@
 
 **Documento operativo.** Lo consume el equipo que escribe los adaptadores de ingesta y quien audite el origen de un número en un export.
 **Traza:** `FR-ING-01` (fuentes registradas), `FR-LIC-01` (registro de licencias), `FR-EXT-01` (aislamiento de fallo), `FR-DEG-01` (modos degradados)
-**Versión:** 0.2 — el estado de verificación de licencia de la mayoría de filas es `POR VERIFICAR`
+**Versión:** 0.3 — el estado de verificación de licencia de la mayoría de filas es `POR VERIFICAR`
 **Complemento:** [conexiones.md](./conexiones.md) — endpoints verificados y recetas de conexión
 
 ---
@@ -66,9 +66,9 @@ Estado actual, con la distinción entre lo verificado y lo asumido marcada expl�
 | IDE AMCO | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** — por capa |
 | CARDER | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** — por dataset |
 | Megabús | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** |
-| Copernicus EMS | `UNCLEAR` | ⚠️ | ⚠️ | ⚠️ | **POR VERIFICAR por producto**, no por programa |
+| Copernicus EMS | `ATTRIBUTION` | ✅ | ✅ | ✅ | **Verificado 2026-09-15** — CC BY 4.0 según el manual de producto del JRC; falta abrir el paquete de EMSR916 |
 | International Charter | `UNCLEAR` | ⚠️ | ❌ probable | ⚠️ | **POR VERIFICAR** — ver §7.11, hay un problema anterior al de licencia |
-| SERTIT | `NON_COMMERCIAL` | ❌/⚠️ | ⚠️ | ⚠️ | Algunos productos con condición no comercial |
+| SERTIT | `NON_COMMERCIAL` | ❌ | ❌ | ⚠️ | **Verificado 2026-09-15** — "reproduction […] interdite, sauf autorisation écrite préalable" |
 | UNOSAT | `UNCLEAR` | ⚠️ | ⚠️ | ⚠️ | **POR VERIFICAR por producto** |
 | Generador sintético | `COMMERCIAL_SAFE` | ✅ | ✅ | ✅ | Producción propia |
 
@@ -318,10 +318,16 @@ C5 es el que convierte este documento en algo vivo. Sin él, la matriz de §2 en
 | | |
 |---|---|
 | **Aporta** | Evidencia de daño derivada de observación de la Tierra, por activación |
-| **Acceso** | Portal de Copernicus Emergency Management Service, por activación |
-| **Licencia** | `UNCLEAR` — **se verifica por producto, no por programa.** Los términos viajan en el paquete de entrega de cada activación; ahí es donde hay que mirar, no en la página institucional del servicio |
-| **Uso permitido en la V1** | Tier B: evidencia citada en `damage_evidence`, con atribución. **No redistribuible** hasta que el producto concreto se verifique |
-| **Trampa** | "Gratuito para gestión de desastres" y "libre para incorporar a un producto comercial" son afirmaciones distintas. La primera no implica la segunda |
+| **Acceso** | `https://mapping.emergency.copernicus.eu/activations/EMSR916` — vectores de descarga libre (shapefile, KMZ, GeoTIFF) |
+| **Licencia** | `ATTRIBUTION` — **CC BY 4.0** |
+| **Evidencia** | *Manual for CEMS-Rapid Mapping Products* (JRC121741) declara que los productos se publican bajo CC BY 4.0; el propio servicio autoriza la reutilización bajo esa licencia. Eso no es una página institucional genérica: es la documentación del producto |
+| **Atribución** | `© European Union, Copernicus Emergency Management Service (EMSR916)` |
+| **Pendiente** | Nadie ha abierto todavía el paquete de entrega de EMSR916 para confirmarlo en ese producto concreto. La clasificación refleja la licencia del programa documentada por su propio manual; confirmarla en el paquete es lo que queda |
+
+> **Es la vía más prometedora para tener una capa de daño real y publicable de
+> Pereira.** El cruce del monitor atribuye 182 edificios afectados en Pereira a
+> `EMSR916`. Si esos vectores están en el paquete, entran al pipeline sin
+> tropezar con la puerta de licencia — a diferencia de los de SERTIT.
 
 ---
 
@@ -338,11 +344,35 @@ C5 es el que convierte este documento en algo vivo. Sin él, la matriz de §2 en
 
 ### 7.12 SERTIT · Tier B
 
+**Verificado el 2026-09-15. El resultado es más restrictivo de lo que se
+asumía, no menos.**
+
 | | |
 |---|---|
-| **Licencia** | `NON_COMMERCIAL` por defecto — algunos productos tienen condiciones explícitamente no comerciales |
-| **Uso permitido** | Perfil `INSTITUTIONAL` únicamente. El control C3 aborta cualquier export `COMMERCIAL` en el que aparezca |
-| **Nota** | Es la corrección más importante frente a la lectura inicial de "todo esto es gratis": gratuito y no comercial son compatibles entre sí, y ese cruce es precisamente el que rompe un SaaS |
+| **Licencia** | `NON_COMMERCIAL`, sin redistribución |
+| **Términos publicados** | El aviso legal de `sertit.unistra.fr` dice: «*Toute reproduction, représentation, modification, publication, adaptation de tout ou partie des éléments du site, quel que soit le moyen ou le procédé utilisé, est interdite, sauf autorisation écrite préalable*» |
+| **Licencia abierta** | Ninguna. No hay Creative Commons ni equivalente en ningún punto de su sitio |
+| **Uso permitido** | Perfil `INSTITUTIONAL` únicamente. El control C3 aborta cualquier export `COMMERCIAL` o `PUBLIC` nombrando la fuente |
+
+Tres señales independientes apuntan en la misma dirección:
+
+1. **El aviso legal**, citado arriba: prohibido sin autorización escrita previa.
+2. **El propio dato afirma su autoría**: `© ICube-SERTIT 2026` en los 512
+   registros. Si fuera un producto CEMS bajo CC BY 4.0, la línea de copyright
+   diría `© European Union`. Dice lo contrario.
+3. **Los identificadores no son de CEMS**: `producto_id` 3244–3248, capa
+   `UrbanP`. Los productos de Copernicus se numeran bajo su código `EMSR###`.
+   Esto parece del International Charter, cuyos términos dicen lo mismo:
+   «*Users are not permitted to reproduce or distribute such content without
+   the explicit permission of the content owners*».
+
+**Hay una vía abierta, y es barata.** «*Sauf autorisation écrite préalable*»
+significa que la autorización existe como figura: pedirla es un correo. Si la
+conceden, esta fila cambia y la puerta se abre sola.
+
+**Y mientras tanto, citar no es redistribuir** (§3). Un sitio público puede
+afirmar «ICube-SERTIT clasificó 252 estructuras dañadas en Pereira el
+11/08/2026» con atribución. Lo que no puede es publicar sus geometrías.
 
 ---
 

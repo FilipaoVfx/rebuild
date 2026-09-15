@@ -57,8 +57,21 @@ SOURCES: list[SourceRegistration] = [
         terms_verified_by="equipo",
         terms_snapshot_path="storage://terms/sertit_20260913.pdf",
         verification_notes=(
-            "El copyright viaja por registro en el GeoJSON. Perfil COMMERCIAL "
-            "bloqueado: la puerta de export aborta nombrando la fuente."
+            "VERIFICADO 2026-09-15 contra los terminos publicados, y el resultado "
+            "es mas restrictivo de lo que se asumia, no menos. El aviso legal de "
+            "sertit.unistra.fr dice: «Toute reproduction, representation, "
+            "modification, publication, adaptation de tout ou partie des elements "
+            "du site, quel que soit le moyen ou le procede utilise, est interdite, "
+            "sauf autorisation ecrite prealable». No hay licencia abierta en ningun "
+            "sitio de SERTIT. Ademas el dato afirma su propia autoria por registro "
+            "(© ICube-SERTIT 2026), no la de la UE: si fuera un producto CEMS bajo "
+            "CC BY 4.0 la linea de copyright lo diria. Los terminos del "
+            "International Charter apuntan igual: «Users are not permitted to "
+            "reproduce or distribute such content without the explicit permission "
+            "of the content owners». "
+            "VIA ABIERTA: «sauf autorisation ecrite prealable» — pedirsela por "
+            "escrito es un correo, y si la conceden esta fila cambia y la puerta "
+            "se abre. Mientras tanto: citar no es redistribuir (fuentes.md §3)."
         ),
     ),
     SourceRegistration(
@@ -75,13 +88,32 @@ SOURCES: list[SourceRegistration] = [
         source_id="copernicus_ems",
         display_name="Copernicus EMS — activacion EMSR916",
         tier="B",
-        source_url="https://emergency.copernicus.eu/mapping/list-of-components/EMSR916",
+        source_url="https://mapping.emergency.copernicus.eu/activations/EMSR916",
         access_method="download",
         spatial_reference="EPSG:4326",
-        license_class=LicenseClass.UNCLEAR,
+        # Sube de UNCLEAR a ATTRIBUTION: el manual de producto del JRC para
+        # CEMS Rapid Mapping declara CC BY 4.0, y el propio servicio autoriza
+        # la reutilizacion bajo esa licencia. Eso no es una pagina
+        # institucional generica: es la documentacion del producto.
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="CC BY 4.0",
+        license_url="https://creativecommons.org/licenses/by/4.0/",
+        attribution_text="© European Union, Copernicus Emergency Management Service (EMSR916)",
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        quality_score=0.70,
+        terms_verified_at=date(2026, 9, 15),
+        terms_verified_by="equipo",
+        terms_snapshot_path="storage://terms/cems_rapid_mapping_jrc121741.pdf",
         verification_notes=(
-            "Los terminos viajan en el paquete de entrega de cada producto, "
-            "no en la pagina del servicio. Verificar por producto."
+            "Manual for CEMS-Rapid Mapping Products (JRC121741): los productos se "
+            "publican bajo CC BY 4.0, con vectores de descarga libre. "
+            "PENDIENTE: nadie ha abierto todavia el paquete de entrega de EMSR916 "
+            "para confirmarlo en ese producto concreto, que es el paso que "
+            "fuentes.md §10 exige. La clasificacion refleja la licencia del "
+            "programa documentada por su propio manual; confirmarla en el paquete "
+            "es lo que queda. Es la via mas prometedora para tener una capa de "
+            "daño REAL y publicable de Pereira."
         ),
     ),
     SourceRegistration(

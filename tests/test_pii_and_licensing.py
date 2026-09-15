@@ -129,4 +129,15 @@ def test_las_fuentes_sin_verificar_siguen_en_unclear():
     """Si alguna de estas cambia, es porque alguien hizo la auditoria de
     fuentes.md §10 — y entonces esta prueba debe actualizarse a mano."""
     sin_verificar = {s.source_id for s in SOURCES if s.license_class is LicenseClass.UNCLEAR}
-    assert sin_verificar == {"sgc", "unosat", "copernicus_ems"}
+    assert sin_verificar == {"sgc", "unosat"}
+
+
+def test_copernicus_es_redistribuible_y_sertit_no():
+    """El cruce que decide qué se puede publicar.
+
+    Ambos son teledetección del mismo evento y se parecen en todo menos en lo
+    único que importa aquí: Copernicus EMS publica bajo CC BY 4.0; SERTIT
+    prohíbe la reproducción sin autorización escrita previa.
+    """
+    assert SOURCES_BY_ID["copernicus_ems"].redistribution_allowed is True
+    assert SOURCES_BY_ID["sertit"].redistribution_allowed is False
