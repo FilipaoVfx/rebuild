@@ -363,6 +363,28 @@ async function initMap(provenance) {
     paint: { "line-color": "#0b0b0b", "line-width": 2.5 },
   });
 
+  // A escala de ciudad los polígonos de sitio miden menos de un píxel y el
+  // mapa se lee como si estuviera vacío. Esta capa los representa como puntos
+  // por debajo de z16. Las coordenadas vienen del servidor — el cliente no
+  // computa geometría (ADR-13).
+  state.map.addSource("site-points", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+  state.map.addLayer({
+    id: "site-points",
+    type: "circle",
+    source: "site-points",
+    maxzoom: 16,
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3, 16, 7],
+      "circle-color": sitePaint(),
+      "circle-stroke-width": 0.8,
+      "circle-stroke-color": "#fcfcfb",
+      "circle-opacity": 0.9,
+    },
+  });
+
   state.map.addSource("evidence", { type: "geojson", data: evidence });
   state.map.addLayer({
     id: "evidence",
@@ -392,7 +414,7 @@ async function initMap(provenance) {
       sites.features[0].geometry.coordinates[0][0],
       sites.features[0].geometry.coordinates[0][0]
     ));
-    state.map.fitBounds(bounds, { padding: 60, duration: 0 });
+    state.map.fitBounds(bounds, { padding: 60, duration: 0, maxZoom: 15.5 });
   }
 }
 
@@ -419,12 +441,52 @@ function wireMapInteraction() {
     popup.remove();
   });
   state.map.on("click", "sites", (event) => selectSite(event.features[0].properties.site_id));
+
+  state.map.on("mousemove", "site-points", (event) => {
+    state.map.getCanvas().style.cursor = "pointer";
+    const p = event.features[0].properties;
+    popup
+      .setLngLat(event.lngLat)
+      .setHTML(
+        `<strong>${p.site_id}</strong><br>
+         ${STATE_LABEL[p.state] || p.state} · ${fmt(Number(p.area_m2))} m²<br>
+         ${p.score === null || p.score === undefined ? "sin score" : `score ${Number(p.score).toFixed(1)}`}`
+      )
+      .addTo(state.map);
+  });
+  state.map.on("mouseleave", "site-points", () => {
+    state.map.getCanvas().style.cursor = "";
+    popup.remove();
+  });
+  state.map.on("click", "site-points", (event) =>
+    selectSite(event.features[0].properties.site_id)
+  );
+}
+
+/* Alimenta la capa de puntos con lo que el servidor ya devolvió. */
+function syncSitePoints() {
+  if (!state.mapReady || !state.map.getSource("site-points")) return;
+  state.map.getSource("site-points").setData({
+    type: "FeatureCollection",
+    features: state.sites.map((site) => ({
+      type: "Feature",
+      properties: {
+        site_id: site.site_id,
+        state: site.state,
+        area_m2: site.area_m2,
+        score: site.top_score,
+        damage_class: site.damage_class,
+        confidence: site.confidence,
+      },
+      geometry: { type: "Point", coordinates: [site.lon, site.lat] },
+    })),
+  });
 }
 
 function applyLayerVisibility() {
   if (!state.mapReady) return;
   const pairs = {
-    sites: ["sites", "sites-outline", "sites-selected"],
+    sites: ["sites", "sites-outline", "sites-selected", "site-points"],
     evidence: ["evidence"],
     green: ["green"],
     facilities: ["facilities"],
@@ -467,7 +529,10 @@ function renderMapControls() {
   $("#color-by").value = state.colorBy;
   $("#color-by").addEventListener("change", (event) => {
     state.colorBy = event.target.value;
-    if (state.mapReady) state.map.setPaintProperty("sites", "fill-color", sitePaint());
+    if (state.mapReady) {
+      state.map.setPaintProperty("sites", "fill-color", sitePaint());
+      state.map.setPaintProperty("site-points", "circle-color", sitePaint());
+    }
     renderMapLegend();
   });
   $("#layer-control")
@@ -953,6 +1018,7 @@ async function loadSites() {
     const visible = new Set(state.sites.map((s) => s.site_id));
     state.map.setFilter("sites", ["in", ["get", "site_id"], ["literal", [...visible]]]);
     state.map.setFilter("sites-outline", ["in", ["get", "site_id"], ["literal", [...visible]]]);
+    syncSitePoints();
   }
   return data.provenance;
 }
