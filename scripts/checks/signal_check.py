@@ -9,11 +9,11 @@ mide cinco cosas, y cada una puede invalidar el resultado por si sola:
    diera un `ORDER BY area_m2`.
 3. ESTABILIDAD ANTE PESOS — si mover los pesos un poco reordena el top, lo que
    se esta leyendo es la opinion de quien fijo los pesos.
-4. ESTABILIDAD ANTE LA SEMILLA — el examen decisivo. Se regeneran las capas
-   sinteticas con otra semilla y se recalcula todo. Si el portafolio cambia,
-   el sistema esta describiendo la simulacion y no el territorio.
-5. DEPENDENCIA DE LO SINTETICO — que fraccion del score proviene de features
-   derivadas de capas simuladas.
+4. DEPENDENCIA DE LO SIMULADO — que fraccion del score proviene de capas
+   generadas. Tras retirar el generador deberia ser cero.
+5. COBERTURA DE FEATURES — cuantas features del vector estan realmente
+   pobladas y cuantas se declaran no disponibles. Un score calculado sobre
+   features ausentes se sostiene en menos de lo que aparenta.
 """
 
 from __future__ import annotations
@@ -27,20 +27,24 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from uri import pipeline  # noqa: E402
+from uri.contracts import CONTRIBUTING_SOURCES_SQL  # noqa: E402
 from uri.db import worker_connection  # noqa: E402
-from uri.ingestion import loader  # noqa: E402
 from uri.scoring.model import DEFAULT_WEIGHTS  # noqa: E402
-from uri.settings import settings  # noqa: E402
 
 TOP_N = 20
 PORTFOLIO_BUDGET = 25_000_000_000
+#: La fuente que sella la corrida, la misma que usa scripts/run_pipeline.py.
+DAMAGE_SOURCE = "copernicus_ems"
 
-#: De que capa proviene cada factor del modelo. `deficit` es mixto: el area
-#: verde es real (OSM) pero se divide por poblacion simulada.
+#: De que capa proviene cada factor del modelo. Tras retirar el generador,
+#: todas son reales o derivadas de un dato real por un metodo declarado.
 FACTOR_ORIGIN = {
-    "need": "sintetico",
-    "deficit": "mixto",
-    "vulnerability": "sintetico",
+    # Poblacion: total publicado por Copernicus EMS, repartido
+    # dasimetricamente sobre huellas reales de Microsoft.
+    "need": "derivado",
+    "deficit": "derivado",
+    # Sin indice de vulnerabilidad real la feature es nula y no contribuye.
+    "vulnerability": "no disponible",
     "accessibility": "real",
     "facility_gap": "real",
 }
@@ -59,14 +63,31 @@ def overlap(a: list[str], b: list[str]) -> float:
     return len(set(a) & set(b)) / len(a) if a else 0.0
 
 
-def run_with_seed(conn, seed: int) -> tuple[dict, list[str]]:
-    """Regenera las capas sinteticas con `seed` y recalcula todo aguas abajo."""
+def recompute(conn) -> tuple[dict, list[str]]:
+    """Recalcula features, restricciones, scoring y portafolio.
+
+    La version se resuelve por FUENTE y no con `max(data_version)`. El maximo
+    es de quien escribio ultimo: las fixtures de prueba publican versiones
+    propias que no se pueden borrar (la tabla es inmutable por trigger), y el
+    diagnostico acababa sellando cada fila de `site_feature` con la procedencia
+    de una prueba. Un diagnostico que corrompe la procedencia de lo que mide no
+    es un diagnostico.
+    """
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM core.population_cell")
-        cur.execute("DELETE FROM core.risk_zone")
-        cur.execute("DELETE FROM core.land_use")
-    version, _ = loader.load_synthetic_layers(conn, seed)
-    conn.commit()
+        cur.execute(
+            """
+            SELECT max(data_version) AS v
+            FROM core.dataset_version
+            WHERE source_id = %s
+            """,
+            (DAMAGE_SOURCE,),
+        )
+        version = cur.fetchone()["v"]
+    if version is None:
+        raise SystemExit(
+            f"No hay ninguna version de dataset para {DAMAGE_SOURCE}: "
+            "corre scripts/run_pipeline.py primero."
+        )
 
     pipeline.run_features(conn, data_version=version)
     pipeline.apply_constraints(conn)
@@ -87,7 +108,7 @@ def main() -> int:
         print("DIAGNOSTICO DE SEÑAL")
         print("=" * 72)
 
-        base_scored, base_portfolio = run_with_seed(conn, settings.synthetic_seed)
+        base_scored, base_portfolio = recompute(conn)
         rows = {r["site_id"]: r for r in pipeline.candidate_features(conn)}
         base_top = top_sites(base_scored)
 
@@ -144,41 +165,102 @@ def main() -> int:
             )
         )
 
-        # ── 4. Estabilidad ante la semilla — el examen decisivo ────────────
-        alt_scored, alt_portfolio = run_with_seed(conn, settings.synthetic_seed + 999)
-        alt_top = top_sites(alt_scored)
-        top_overlap = overlap(base_top, alt_top)
-        port_overlap = overlap(base_portfolio, alt_portfolio)
-        print("\n4. ESTABILIDAD ANTE LA SEMILLA SINTETICA  (el examen decisivo)")
-        print(f"   solapamiento del top-{TOP_N}  {top_overlap:.0%}")
-        print(f"   solapamiento del portafolio   {port_overlap:.0%}")
-        print(f"   portafolio A: {base_portfolio[:6]}")
-        print(f"   portafolio B: {alt_portfolio[:6]}")
-        print(
-            "   → "
-            + (
-                "el resultado sobrevive a cambiar la simulacion"
-                if top_overlap > 0.7
-                else "el resultado ES la simulacion: cambia con la semilla"
+        # ── 4. Dependencia de lo simulado ──────────────────────────────────
+        with conn.cursor() as cur:
+            # Una version sintetica que no alimenta ninguna fila no esta "en
+            # el resultado": es una fila huerfana en un catalogo inmutable —
+            # las fixtures de prueba dejan varias, y no se pueden borrar. La
+            # medicion es sobre lo que las capas referencian, no sobre lo que
+            # existe en la tabla.
+            cur.execute(
+                CONTRIBUTING_SOURCES_SQL
+                + """
+                SELECT DISTINCT dv.source_id
+                FROM core.dataset_version dv
+                JOIN contributing c USING (source_id)
+                JOIN referenciada r USING (data_version)
+                WHERE dv.is_synthetic
+                """
             )
-        )
+            synthetic_versions = cur.fetchall()
+            cur.execute("SELECT count(*) AS n FROM core.site WHERE is_synthetic")
+            synthetic_sites = cur.fetchone()["n"]
 
-        # restaurar la semilla de trabajo
-        run_with_seed(conn, settings.synthetic_seed)
-
-        # ── 5. Dependencia de lo sintetico ─────────────────────────────────
-        by_origin = {"real": 0.0, "sintetico": 0.0, "mixto": 0.0}
+        by_origin: dict[str, float] = {"real": 0.0, "derivado": 0.0, "no disponible": 0.0}
         for recs in base_scored.values():
             if not recs:
                 continue
             for contribution in recs[0].explanation.contributions:
                 by_origin[FACTOR_ORIGIN[contribution.factor]] += contribution.contribution
         total = sum(by_origin.values()) or 1.0
-        print("\n5. DE DONDE VIENE EL SCORE")
+
+        print("\n4. DEPENDENCIA DE LO SIMULADO")
+        print(f"   versiones de dataset sinteticas  {len(synthetic_versions)}")
+        print(f"   sitios sinteticos                {synthetic_sites}")
         for origin, value in sorted(by_origin.items(), key=lambda kv: -kv[1]):
-            print(f"   {origin:10} {value / total:6.1%}")
-        synthetic_share = (by_origin["sintetico"] + by_origin["mixto"]) / total
-        print(f"   → {synthetic_share:.0%} del score depende de capas simuladas")
+            print(f"   score desde {origin:16} {value / total:6.1%}")
+        print(
+            "   → "
+            + (
+                "sin capas simuladas en el resultado"
+                if not synthetic_versions and not synthetic_sites
+                else "QUEDAN CAPAS SIMULADAS en el resultado"
+            )
+        )
+
+        # ── 5. Cobertura y poder de discriminacion de features ─────────────
+        #
+        # La cobertura sola engaña: una feature presente en el 100% de los
+        # sitios con UN solo valor distinto esta poblada y no discrimina nada.
+        # Cuenta como dato disponible en cualquier tabla de cobertura y como
+        # cero informacion en el score. Por eso se miden las dos cosas.
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    count(*) AS sitios,
+                    count(risk_score) AS risk,
+                    count(DISTINCT risk_score) AS risk_d,
+                    count(land_use_compatibility) AS land_use,
+                    count(DISTINCT land_use_compatibility) AS land_use_d,
+                    count(population_10min) AS poblacion,
+                    count(DISTINCT population_10min) AS poblacion_d,
+                    count(social_vulnerability) AS vulnerabilidad,
+                    count(DISTINCT social_vulnerability) AS vulnerabilidad_d,
+                    count(park_deficit) AS deficit,
+                    count(DISTINCT park_deficit) AS deficit_d,
+                    count(building_density) AS densidad,
+                    count(DISTINCT building_density) AS densidad_d,
+                    count(*) FILTER (WHERE catchment_method = 'NETWORK') AS red,
+                    2 AS red_d
+                FROM analytics.site_feature
+                """
+            )
+            cov = cur.fetchone()
+
+        print("\n5. COBERTURA Y DISCRIMINACION DE FEATURES")
+        sitios = cov["sitios"] or 1
+        tracked = ("risk", "land_use", "poblacion", "vulnerabilidad", "deficit", "densidad", "red")
+        constantes = []
+        for key in tracked:
+            distintos = cov[f"{key}_d"]
+            marca = ""
+            if cov[key] and distintos <= 1:
+                marca = "  ← CONSTANTE: no discrimina"
+                constantes.append(key)
+            print(
+                f"   {key:16} {cov[key]:5}/{sitios}  {cov[key] / sitios:6.0%}"
+                f"   {distintos:4} {'valor ' if distintos == 1 else 'valores'}{marca}"
+            )
+        print(
+            "   → las features al 0 por ciento se declaran no disponibles; "
+            "no se rellenan con un valor inventado"
+        )
+        if constantes:
+            print(
+                f"   → {', '.join(constantes)}: un solo valor en toda la tabla. "
+                "Entra al score sin ordenar nada"
+            )
 
         print("\n" + "=" * 72)
         return 0

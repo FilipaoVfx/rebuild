@@ -57,8 +57,21 @@ SOURCES: list[SourceRegistration] = [
         terms_verified_by="equipo",
         terms_snapshot_path="storage://terms/sertit_20260913.pdf",
         verification_notes=(
-            "El copyright viaja por registro en el GeoJSON. Perfil COMMERCIAL "
-            "bloqueado: la puerta de export aborta nombrando la fuente."
+            "VERIFICADO 2026-09-15 contra los terminos publicados, y el resultado "
+            "es mas restrictivo de lo que se asumia, no menos. El aviso legal de "
+            "sertit.unistra.fr dice: «Toute reproduction, representation, "
+            "modification, publication, adaptation de tout ou partie des elements "
+            "du site, quel que soit le moyen ou le procede utilise, est interdite, "
+            "sauf autorisation ecrite prealable». No hay licencia abierta en ningun "
+            "sitio de SERTIT. Ademas el dato afirma su propia autoria por registro "
+            "(© ICube-SERTIT 2026), no la de la UE: si fuera un producto CEMS bajo "
+            "CC BY 4.0 la linea de copyright lo diria. Los terminos del "
+            "International Charter apuntan igual: «Users are not permitted to "
+            "reproduce or distribute such content without the explicit permission "
+            "of the content owners». "
+            "VIA ABIERTA: «sauf autorisation ecrite prealable» — pedirsela por "
+            "escrito es un correo, y si la conceden esta fila cambia y la puerta "
+            "se abre. Mientras tanto: citar no es redistribuir (fuentes.md §3)."
         ),
     ),
     SourceRegistration(
@@ -75,13 +88,32 @@ SOURCES: list[SourceRegistration] = [
         source_id="copernicus_ems",
         display_name="Copernicus EMS — activacion EMSR916",
         tier="B",
-        source_url="https://emergency.copernicus.eu/mapping/list-of-components/EMSR916",
+        source_url="https://mapping.emergency.copernicus.eu/activations/EMSR916",
         access_method="download",
         spatial_reference="EPSG:4326",
-        license_class=LicenseClass.UNCLEAR,
+        # Sube de UNCLEAR a ATTRIBUTION: el manual de producto del JRC para
+        # CEMS Rapid Mapping declara CC BY 4.0, y el propio servicio autoriza
+        # la reutilizacion bajo esa licencia. Eso no es una pagina
+        # institucional generica: es la documentacion del producto.
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="CC BY 4.0",
+        license_url="https://creativecommons.org/licenses/by/4.0/",
+        attribution_text="© European Union, Copernicus Emergency Management Service (EMSR916)",
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        quality_score=0.70,
+        terms_verified_at=date(2026, 9, 15),
+        terms_verified_by="equipo",
+        terms_snapshot_path="storage://terms/cems_rapid_mapping_jrc121741.pdf",
         verification_notes=(
-            "Los terminos viajan en el paquete de entrega de cada producto, "
-            "no en la pagina del servicio. Verificar por producto."
+            "Manual for CEMS-Rapid Mapping Products (JRC121741): los productos se "
+            "publican bajo CC BY 4.0, con vectores de descarga libre. "
+            "PENDIENTE: nadie ha abierto todavia el paquete de entrega de EMSR916 "
+            "para confirmarlo en ese producto concreto, que es el paso que "
+            "fuentes.md §10 exige. La clasificacion refleja la licencia del "
+            "programa documentada por su propio manual; confirmarla en el paquete "
+            "es lo que queda. Es la via mas prometedora para tener una capa de "
+            "daño REAL y publicable de Pereira."
         ),
     ),
     SourceRegistration(
@@ -132,34 +164,59 @@ SOURCES: list[SourceRegistration] = [
     SourceRegistration(
         source_id="sgc",
         display_name="Servicio Geologico Colombiano",
-        tier="A",
+        tier="C",
         source_url="https://geoportal.sgc.gov.co/arcgis/rest/services",
         access_method="wfs",
         spatial_reference="EPSG:4326",
-        license_class=LicenseClass.UNCLEAR,
+        license_class=LicenseClass.NON_COMMERCIAL,
+        license_name="Terminos y condiciones del portal SGC",
+        license_url="https://www2.sgc.gov.co/Paginas/terminos-y-condiciones.aspx",
+        attribution_text="Servicio Geologico Colombiano",
+        redistribution_allowed=False,
+        derivatives_allowed=False,
+        share_alike=False,
+        quality_score=0.6,
+        terms_verified_at=date(2026, 9, 15),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/sgc_terminos_20260915.txt",
         verification_notes=(
-            "WFS 2.0.0 verificado y operativo en /arcgis/services/. Licencia sin "
-            "auditar (OI-F2). Ademas: la amenaza publicada es nacional a escala "
-            "NSR-10, no microzonificacion de Pereira (D6)."
+            "OI-F2 cerrado. Los terminos del portal, verbatim: 'Ningun contenido "
+            "de este sitio puede ser copiado, reproducido, recopilado, cargado, "
+            "publicado, transmitido, distribuido, o utilizado para la creacion de "
+            "servicios derivados [...] sin su consentimiento previo por escrito', "
+            "y el permiso que otorgan es 'unicamente en su equipo y para su uso "
+            "personal y no comercial'. Misma forma que ICube-SERTIT. El propio "
+            "texto admite que un dataset con licencia propia se rige por ella, "
+            "pero la capa de amenaza que usabamos no declara ninguna. Copia en "
+            "db/terms/sgc_terminos_20260915.txt. Consecuencia: la capa se retiro "
+            "del pipeline (ADR-18). Ademas, la amenaza publicada es nacional a "
+            "escala NSR-10, no microzonificacion de Pereira (D6): un solo valor "
+            "para todo el AOI, que no excluia ni penalizaba a ningun sitio."
         ),
     ),
     SourceRegistration(
-        source_id="synthetic",
-        display_name="Generador sintetico (URI)",
+        source_id="microsoft_buildings",
+        display_name="Microsoft Building Footprints",
         tier="A",
-        source_url="urn:uri:synthetic-generator",
-        access_method="generated",
+        source_url="https://minedbuildings.z5.web.core.windows.net/global-buildings/",
+        access_method="download",
         spatial_reference="EPSG:4326",
-        license_class=LicenseClass.COMMERCIAL_SAFE,
-        license_name="Produccion propia",
-        attribution_text="Capa simulada — Urban Recovery Intelligence",
+        license_class=LicenseClass.SHARE_ALIKE,
+        license_name="Open Data Commons Open Database License (ODbL)",
+        license_url="https://opendatacommons.org/licenses/odbl/",
+        attribution_text="Microsoft Building Footprints",
         redistribution_allowed=True,
         derivatives_allowed=True,
-        quality_score=0.50,
-        terms_verified_at=VERIFIED,
+        share_alike=True,
+        quality_score=0.75,
+        terms_verified_at=date(2026, 9, 15),
         terms_verified_by="equipo",
-        terms_snapshot_path="urn:uri:internal",
-        verification_notes="FR-SYN-04: is_synthetic propaga a todo artefacto derivado.",
+        terms_snapshot_path="storage://terms/ms_building_footprints_20260915.html",
+        verification_notes=(
+            "15.024 huellas dentro del AOI de EMSR916. Base dasimetrica del "
+            "reparto de poblacion y fuente de densidad construida. Sustituye "
+            "al generador sintetico, que queda retirado."
+        ),
     ),
 ]
 

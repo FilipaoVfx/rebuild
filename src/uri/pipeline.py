@@ -23,7 +23,6 @@ from uri.contracts import InterventionType
 from uri.features.engine import compute_features
 from uri.features.network import build_pedestrian_graph, compute_catchments
 from uri.ingestion import loader
-from uri.ingestion.adapters import damage as damage_adapter
 from uri.optimizer.greedy import Candidate, PortfolioResult, select_portfolio
 from uri.scoring import score_site
 from uri.scoring.model import SCORING_VERSION
@@ -38,43 +37,38 @@ class PipelineReport:
     alerts: list[str]
 
 
-def run_ingestion(
-    conn: psycopg.Connection,
-    *,
-    sertit_path: Path,
-    osm_path: Path,
-    seed: int,
-    synthetic_damage: bool = False,
-) -> PipelineReport:
-    """Ejecuta la ingesta completa.
+def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport:
+    """Ingesta completa sobre fuentes reales.
 
-    `synthetic_damage` sustituye la evidencia satelital por la generada. Es lo
-    que permite publicar un demo sin redistribuir un producto que su licencia
-    no deja redistribuir (fuentes.md §7.12).
+    Ya no hay parametro de daño sintetico ni semilla: el generador esta
+    retirado y la base rechaza una fila simulada (migracion 006).
     """
+    from uri.ingestion.adapters import copernicus
+
     loader.register_sources(conn)
 
-    if synthetic_damage:
-        damage_version, count = loader.load_synthetic_damage(conn, seed)
-        evidence = [None] * count
-    else:
-        evidence = damage_adapter.load_sertit(sertit_path, municipality="Pereira")
-        damage_version = loader.load_damage_evidence(conn, evidence, source_id="monitor_terremoto")
+    seed = loader.SEED / "copernicus_emsr916_aoi02.json.gz"
+    evidence = copernicus.load_damage(seed)
+    damage_version = loader.load_damage_evidence(conn, evidence, source_id="copernicus_ems")
     osm_version, osm_counts = loader.load_osm(conn, osm_path)
-    synth_version, synth_counts = loader.load_synthetic_layers(conn, seed)
+    context_version, context_counts = loader.load_context_layers(conn)
 
     sites = loader.derive_sites(conn, damage_version)
-    fused = loader.fuse_damage_evidence(conn, as_of=date(2026, 9, 13))
+    fused = loader.fuse_damage_evidence(conn, as_of=date(2026, 9, 15))
     alerts = loader.raise_coverage_alerts(conn)
 
     return PipelineReport(
-        versions={"damage": damage_version, "osm": osm_version, "synthetic": synth_version},
+        versions={
+            "damage": damage_version,
+            "osm": osm_version,
+            "context": context_version,
+        },
         counts={
             "evidence": len(evidence),
             "sites": sites,
             "fused": fused,
             **osm_counts,
-            **synth_counts,
+            **context_counts,
         },
         alerts=alerts,
     )

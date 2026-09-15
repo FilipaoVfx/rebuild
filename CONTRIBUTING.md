@@ -19,29 +19,40 @@ El pipeline completo tarda ~12 s sobre el dataset de referencia de Pereira.
 
 ## Datos
 
-`data/raw/` no está versionado. Para poblarlo:
+**El contexto urbano de OSM está versionado** en `db/seed/osm_pereira.json.gz`
+y el pipeline lo usa por defecto. Es deliberado: OSM no versiona aguas arriba,
+así que el extracto archivado es lo único que permite reconstruir una
+`data_version` (`fuentes.md` §11, regla 3). También evita que cada ejecución
+dependa de que Overpass esté en pie.
+
+**Todas las fuentes están versionadas** en `db/seed/`: daño de Copernicus EMS,
+huellas de Microsoft, uso de suelo y red de OSM, estaciones de Megabús. El
+pipeline corre sin descargar nada. El extracto del SGC se borró: archivarlo
+en un repositorio público era redistribuirlo (ADR-18).
 
 ```bash
-curl -o data/raw/sertit_damage.geojson https://datosdelterremoto.org/data/public/sertit_damage.geojson
-curl -o data/raw/unosat_damage.geojson https://datosdelterremoto.org/data/public/unosat_damage.geojson
-# Contexto urbano OSM del AOI (ver docs/plan/conexiones.md §7)
-curl -X POST --data-urlencode "data@db/seed/pereira.overpass" \
-  https://overpass-api.de/api/interpreter -o data/raw/osm_pereira.json
+.venv/bin/python scripts/run_pipeline.py
 ```
+
+**No se admiten datos sintéticos.** El generador está retirado y la migración
+006 lo impone con un `CHECK` en la base: una fila con `is_synthetic = true` en
+una capa de contexto falla al insertarse.
 
 ## Comprobaciones
 
 ```bash
 .venv/bin/ruff check src tests scripts && .venv/bin/ruff format --check src tests scripts
 .venv/bin/lint-imports                       # fronteras de ADR-01
-.venv/bin/python -m pytest -q                # 98 pruebas
+.venv/bin/python -m pytest -q                # 109 pruebas
 .venv/bin/python scripts/checks/browser_check.py   # el visor, en un navegador real
 .venv/bin/python scripts/checks/signal_check.py    # ¿señal o ruido? cinco mediciones
 ```
 
-`signal_check.py` es el semáforo del proyecto. Su prueba 4 regenera las capas
-simuladas con otra semilla y recalcula todo: si el top-20 cambia, el ranking
-describe el generador y no el territorio. Hoy conserva 3 de 20.
+`signal_check.py` es el semáforo del proyecto. La prueba 4 comprueba que no
+queda ninguna capa simulada en el resultado. La prueba 5 mide dos cosas por
+feature: **cobertura** y **valores distintos**. La segunda columna es la que
+importa — una feature presente en el 100 % de los sitios con un solo valor
+está poblada y no ordena nada. Hoy `land_use` sale así.
 
 ## Paquete estático (GitHub Pages)
 
@@ -54,6 +65,20 @@ describe el generador y no el territorio. Hoy conserva 3 de 20.
 Los escenarios van precalculados a presupuestos fijos y los exportes no se
 publican: la puerta de licencia por perfil es lógica de servidor, y servirla
 como descarga estática la eliminaría.
+
+### Primer despliegue a GitHub Pages
+
+Hay **un paso manual que no se puede automatizar**: Settings → Pages →
+Source: **GitHub Actions**.
+
+Crear un sitio de Pages por API exige permisos de administrador del
+repositorio, y el `GITHUB_TOKEN` de un workflow no los tiene aunque se le
+conceda `pages: write` — ese permiso habilita desplegar en un sitio que ya
+existe, no crearlo. Intentarlo devuelve
+`Resource not accessible by integration`.
+
+Después de ese clic, `Actions → Pages → Run workflow` despliega, y los pushes
+a `main` lo hacen solos.
 
 Las pruebas que necesitan PostGIS se saltan solas si no hay base, en vez de
 fallar con un error de conexión que no dice nada.
@@ -73,7 +98,16 @@ fallar con un error de conexión que no dice nada.
 
 ## Lo que NO se debe hacer
 
-**No ajustar los pesos del modelo mirando resultados calculados sobre capas
-sintéticas.** Las capas de población, riesgo y uso de suelo son generadas; si
-los pesos se afinan contra ellas, el sistema aprende el generador y no el
-territorio. Ver `docs/plan/antes-de-empezar.md` §5.
+**No ajustar los pesos del modelo mirando el ranking.** El riesgo cambió de
+forma pero no desapareció: ya no hay generador que aprender, pero el 67,2 %
+del score proviene de un reparto dasimétrico que asume densidad uniforme por
+área construida. Afinar los pesos hasta que el orden "se vea bien" enseña al
+sistema ese supuesto, no el territorio. Los pesos se fijan por elicitación y
+se congelan con versión. Ver `docs/plan/antes-de-empezar.md` §5 y
+`docs/plan/estado-actual.md` §2.
+
+**No rellenar una feature ausente con un valor por defecto.** `vulnerability`
+es nula en los 115 sitios y `land_use_compatibility` en 114: se declaran no
+disponibles y la restricción se salta. Un `COALESCE(..., 0)` convertiría
+"no lo sé" en "medí cero", que es lo que excluyó los 115 sitios antes de que
+se corrigiera.

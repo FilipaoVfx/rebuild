@@ -80,12 +80,15 @@ def evaluate_constraints(
             )
         )
 
-    risk = float(features.get("risk_score") or 0)
-    if risk >= constraint_set.prohibited_risk_threshold:
+    # Mismo criterio que el uso de suelo: `None` es "no hay dato de riesgo",
+    # no "riesgo cero". `float(... or 0)` convertia la ausencia en la mejor
+    # calificacion posible y dejaba pasar cualquier sitio en silencio.
+    risk = features.get("risk_score")
+    if risk is not None and float(risk) >= constraint_set.prohibited_risk_threshold:
         exclusions.append(
             Exclusion(
                 constraint_id="prohibited_risk",
-                reason=f"Riesgo {risk:.2f} en o por encima del umbral prohibido "
+                reason=f"Riesgo {float(risk):.2f} en o por encima del umbral prohibido "
                 f"{constraint_set.prohibited_risk_threshold:.2f}",
                 # FR-LIFE-03 — esta marca es la que impide que un override
                 # manual devuelva el sitio al ranking.
@@ -93,13 +96,21 @@ def evaluate_constraints(
             )
         )
 
-    compatibility = float(features.get("land_use_compatibility") or 0)
-    if compatibility < constraint_set.min_land_use_compatibility:
+    # `None` significa que no hay dato de uso de suelo para este sitio, y eso
+    # NO es incompatibilidad. Excluir por falta de dato convierte una laguna
+    # de cobertura en un veredicto, que es el error contrario al que una
+    # restriccion dura existe para evitar. El sitio sigue vivo y la feature
+    # queda declarada como no disponible, penalizando su confianza.
+    compatibility = features.get("land_use_compatibility")
+    if (
+        compatibility is not None
+        and float(compatibility) < constraint_set.min_land_use_compatibility
+    ):
         exclusions.append(
             Exclusion(
                 constraint_id="land_use_incompatible",
                 reason=(
-                    f"Compatibilidad de uso de suelo {compatibility:.2f} por debajo de "
+                    f"Compatibilidad de uso de suelo {float(compatibility):.2f} por debajo de "
                     f"{constraint_set.min_land_use_compatibility:.2f}"
                 ),
             )
@@ -115,12 +126,15 @@ def evaluate_penalties(
     y cuantificada, no reordenan resultados en silencio."""
     penalties: list[Penalty] = []
 
-    risk = float(features.get("risk_score") or 0)
-    if 0.4 <= risk < constraint_set.prohibited_risk_threshold:
-        magnitude = constraint_set.soft["moderate_risk"] * (risk - 0.4) / 0.35
-        penalties.append(Penalty("moderate_risk", magnitude, f"Riesgo moderado ({risk:.2f})"))
+    risk = features.get("risk_score")
+    if risk is not None and 0.4 <= float(risk) < constraint_set.prohibited_risk_threshold:
+        magnitude = constraint_set.soft["moderate_risk"] * (float(risk) - 0.4) / 0.35
+        penalties.append(
+            Penalty("moderate_risk", magnitude, f"Riesgo moderado ({float(risk):.2f})")
+        )
 
-    compatibility = float(features.get("land_use_compatibility") or 0)
+    compatibility = features.get("land_use_compatibility")
+    compatibility = 0.6 if compatibility is None else float(compatibility)
     if compatibility < 0.6:
         magnitude = constraint_set.soft["low_land_use_compatibility"] * (0.6 - compatibility) / 0.6
         penalties.append(
@@ -147,13 +161,19 @@ def applicable_interventions(features: dict, catalog: dict) -> list[Intervention
     en riesgo no necesita.
     """
     area = float(features.get("site_area") or 0)
-    risk = float(features.get("risk_score") or 0)
+    risk = features.get("risk_score")
 
     out: list[InterventionType] = []
     for intervention_type, spec in catalog.items():
         if intervention_type is InterventionType.NO_BUILD:
             out.append(intervention_type)
             continue
-        if area >= spec["minimum_area_m2"] and risk <= spec["max_risk_score"]:
-            out.append(intervention_type)
+        if area < spec["minimum_area_m2"]:
+            continue
+        # Sin dato de riesgo el tope por intervencion no se puede comprobar.
+        # No se finge que se comprobo: la feature queda declarada no
+        # disponible y la confianza del sitio lo refleja.
+        if risk is not None and float(risk) > spec["max_risk_score"]:
+            continue
+        out.append(intervention_type)
     return out

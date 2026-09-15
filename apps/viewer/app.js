@@ -50,8 +50,7 @@ const LAYERS = [
   { id: "green", label: "Espacio verde (OSM)", origin: "real", on: true },
   { id: "facilities", label: "Equipamientos (OSM)", origin: "real", on: false },
   { id: "catchments", label: "Catchment 10 min del sitio", origin: "real", on: false },
-  { id: "risk", label: "Zonas de riesgo alto", origin: "simulada", on: false },
-  { id: "population", label: "Malla de población", origin: "simulada", on: false },
+  { id: "population", label: "Población (dasimétrica)", origin: "derivada", on: false },
 ];
 
 const state = {
@@ -119,10 +118,6 @@ async function staticApi(path, options) {
     const params = new URLSearchParams(path.split("?")[1] || "");
     let sites = all.sites;
     if (params.get("state")) sites = sites.filter((s) => s.state === params.get("state"));
-    if (params.get("max_risk")) {
-      const max = Number(params.get("max_risk"));
-      sites = sites.filter((s) => (s.risk_score ?? 0) <= max);
-    }
     if (params.get("min_score")) {
       const min = Number(params.get("min_score"));
       sites = sites.filter((s) => (s.top_score ?? -1) >= min);
@@ -229,7 +224,20 @@ function sitePaint() {
   ];
 }
 
-async function initMap() {
+/* FR-LIC-01 — la atribución se compone desde la procedencia que la página
+ * cargó, no desde una lista escrita a mano. Una cadena fija atribuye fuentes
+ * que quizá no estén en el despliegue: el registro de fuentes cataloga ocho,
+ * el paquete público consume tres y ninguna es ICube-SERTIT, así que nombrar
+ * las demás afirmaría lo contrario de lo que la puerta de licencia garantiza. */
+function attributionFrom(provenance) {
+  const seen = new Set();
+  for (const layer of provenance?.layers || []) {
+    if (layer.attribution) seen.add(layer.attribution);
+  }
+  return [...seen].join(" · ") || "Urban Recovery Intelligence";
+}
+
+async function initMap(provenance) {
   if (state.map) return;
 
   state.map = new maplibregl.Map({
@@ -247,26 +255,24 @@ async function initMap() {
   });
   state.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-left");
   state.map.addControl(
-    new maplibregl.AttributionControl({
-      customAttribution: "© OpenStreetMap contributors (ODbL) · © ICube-SERTIT 2026",
-    }),
+    new maplibregl.AttributionControl({ customAttribution: attributionFrom(provenance) }),
     "bottom-right"
   );
 
   await new Promise((resolve) => state.map.on("load", resolve));
 
-  const [sites, evidence, green, risk, catchments, facilities, population] = await Promise.all([
+  const [sites, evidence, green, catchments, facilities, population] = await Promise.all([
     geojson("sites"),
     geojson("evidence"),
     geojson("green"),
-    geojson("risk"),
     geojson("catchments"),
     geojson("facilities").catch(() => ({ type: "FeatureCollection", features: [] })),
     geojson("population").catch(() => ({ type: "FeatureCollection", features: [] })),
   ]);
 
-  // Las capas simuladas van debajo de todo: son contexto provisional, no
-  // evidencia, y no deberían competir visualmente con lo que sí se observó.
+  // Lo derivado va debajo de todo: la población dasimétrica es un reparto
+  // calculado sobre huellas de edificio, no una medición, y no debería
+  // competir visualmente con lo que sí se observó.
   state.map.addSource("population", { type: "geojson", data: population });
   state.map.addLayer({
     id: "population",
@@ -280,22 +286,6 @@ async function initMap() {
       ],
       "fill-opacity": 0.45,
     },
-  });
-
-  state.map.addSource("risk", { type: "geojson", data: risk });
-  state.map.addLayer({
-    id: "risk",
-    type: "fill",
-    source: "risk",
-    layout: { visibility: "none" },
-    paint: { "fill-color": "#d03b3b", "fill-opacity": 0.07 },
-  });
-  state.map.addLayer({
-    id: "risk-outline",
-    type: "line",
-    source: "risk",
-    layout: { visibility: "none" },
-    paint: { "line-color": "#d03b3b", "line-width": 1, "line-dasharray": [3, 2], "line-opacity": 0.6 },
   });
 
   state.map.addSource("catchments", { type: "geojson", data: catchments });
@@ -352,6 +342,28 @@ async function initMap() {
     paint: { "line-color": "#0b0b0b", "line-width": 2.5 },
   });
 
+  // A escala de ciudad los polígonos de sitio miden menos de un píxel y el
+  // mapa se lee como si estuviera vacío. Esta capa los representa como puntos
+  // por debajo de z16. Las coordenadas vienen del servidor — el cliente no
+  // computa geometría (ADR-13).
+  state.map.addSource("site-points", {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+  state.map.addLayer({
+    id: "site-points",
+    type: "circle",
+    source: "site-points",
+    maxzoom: 16,
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 3, 16, 7],
+      "circle-color": sitePaint(),
+      "circle-stroke-width": 0.8,
+      "circle-stroke-color": "#fcfcfb",
+      "circle-opacity": 0.9,
+    },
+  });
+
   state.map.addSource("evidence", { type: "geojson", data: evidence });
   state.map.addLayer({
     id: "evidence",
@@ -381,7 +393,7 @@ async function initMap() {
       sites.features[0].geometry.coordinates[0][0],
       sites.features[0].geometry.coordinates[0][0]
     ));
-    state.map.fitBounds(bounds, { padding: 60, duration: 0 });
+    state.map.fitBounds(bounds, { padding: 60, duration: 0, maxZoom: 15.5 });
   }
 }
 
@@ -408,17 +420,56 @@ function wireMapInteraction() {
     popup.remove();
   });
   state.map.on("click", "sites", (event) => selectSite(event.features[0].properties.site_id));
+
+  state.map.on("mousemove", "site-points", (event) => {
+    state.map.getCanvas().style.cursor = "pointer";
+    const p = event.features[0].properties;
+    popup
+      .setLngLat(event.lngLat)
+      .setHTML(
+        `<strong>${p.site_id}</strong><br>
+         ${STATE_LABEL[p.state] || p.state} · ${fmt(Number(p.area_m2))} m²<br>
+         ${p.score === null || p.score === undefined ? "sin score" : `score ${Number(p.score).toFixed(1)}`}`
+      )
+      .addTo(state.map);
+  });
+  state.map.on("mouseleave", "site-points", () => {
+    state.map.getCanvas().style.cursor = "";
+    popup.remove();
+  });
+  state.map.on("click", "site-points", (event) =>
+    selectSite(event.features[0].properties.site_id)
+  );
+}
+
+/* Alimenta la capa de puntos con lo que el servidor ya devolvió. */
+function syncSitePoints() {
+  if (!state.mapReady || !state.map.getSource("site-points")) return;
+  state.map.getSource("site-points").setData({
+    type: "FeatureCollection",
+    features: state.sites.map((site) => ({
+      type: "Feature",
+      properties: {
+        site_id: site.site_id,
+        state: site.state,
+        area_m2: site.area_m2,
+        score: site.top_score,
+        damage_class: site.damage_class,
+        confidence: site.confidence,
+      },
+      geometry: { type: "Point", coordinates: [site.lon, site.lat] },
+    })),
+  });
 }
 
 function applyLayerVisibility() {
   if (!state.mapReady) return;
   const pairs = {
-    sites: ["sites", "sites-outline", "sites-selected"],
+    sites: ["sites", "sites-outline", "sites-selected", "site-points"],
     evidence: ["evidence"],
     green: ["green"],
     facilities: ["facilities"],
     catchments: ["catchments"],
-    risk: ["risk", "risk-outline"],
     population: ["population"],
   };
   for (const [key, ids] of Object.entries(pairs)) {
@@ -456,7 +507,10 @@ function renderMapControls() {
   $("#color-by").value = state.colorBy;
   $("#color-by").addEventListener("change", (event) => {
     state.colorBy = event.target.value;
-    if (state.mapReady) state.map.setPaintProperty("sites", "fill-color", sitePaint());
+    if (state.mapReady) {
+      state.map.setPaintProperty("sites", "fill-color", sitePaint());
+      state.map.setPaintProperty("site-points", "circle-color", sitePaint());
+    }
     renderMapLegend();
   });
   $("#layer-control")
@@ -503,8 +557,8 @@ const COLUMNS = [
   { key: "top_score", label: "Score", type: "bar", max: 100, digits: 1 },
   { key: "population_10min", label: "Pobl. 10 min", type: "num", digits: 0 },
   { key: "park_deficit", label: "Déficit EP", type: "bar", max: 1, digits: 2 },
-  { key: "social_vulnerability", label: "Vulnerab.", type: "bar", max: 1, digits: 2 },
-  { key: "risk_score", label: "Riesgo", type: "bar", max: 1, digits: 2 },
+  { key: "social_vulnerability", label: "Vulnerab.", type: "bar", max: 1, digits: 2, absent: "sin fuente" },
+  { key: "risk_score", label: "Riesgo", type: "bar", max: 1, digits: 2, absent: "sin fuente" },
   { key: "pedestrian_accessibility", label: "Acces. peat.", type: "bar", max: 1, digits: 2 },
   { key: "area_m2", label: "Área m²", type: "num", digits: 0 },
   { key: "catchment_method", label: "Catchment", type: "method" },
@@ -528,7 +582,13 @@ function cell(column, row) {
       return `<td><span class="tag method-${value}"><span class="dot"></span>${
         value === "BUFFER" ? "buffer (degradado)" : "red"}</span></td>`;
     case "bar": {
-      if (value === null || value === undefined) return `<td class="num">—</td>`;
+      // Un guion no distingue "no lo medimos" de "salio bajo". Una columna
+      // que declara por que falta dice lo segundo sin que nadie lo suponga.
+      if (value === null || value === undefined) {
+        return column.absent
+          ? `<td class="num absent" title="${column.label}: ${column.absent}">${column.absent}</td>`
+          : `<td class="num">—</td>`;
+      }
       const pct = Math.max(0, Math.min(100, (Number(value) / column.max) * 100));
       return `<td class="num"><span class="bar-cell">
         <span class="n">${fmt(value, column.digits)}</span>
@@ -719,11 +779,11 @@ function renderDetail(detail) {
     ${
       recommendations.length
         ? `<div class="section">
-             <h2>Recomendaciones <span class="origin simulada">provisional</span></h2>
+             <h2>Recomendaciones</h2>
              <p class="note warn">
-               El orden entre sitios depende de capas simuladas: al cambiar la semilla
-               del generador, el top-20 conserva 3 de 20. Léase como estructura del
-               modelo, no como prioridad de inversión.
+               Calculado sobre datos reales. Dos features del vector no están
+               disponibles —uso de suelo normativo (IDE AMCO) y vulnerabilidad
+               social (DANE)— y se declaran como tales en lugar de rellenarse.
              </p>
              ${recBlocks}
            </div>`
@@ -796,16 +856,26 @@ function renderPortfolio(scenario) {
              Se muestra el de ${cop(scenario.static_note)} COP, el más cercano al pedido.</p>`
           : ""
       }
+      ${
+        scenario.stop_reason === "cobertura_saturada"
+          ? `<p class="note warn">
+              El presupuesto no es lo que limita este portafolio. La selección se detuvo
+              en ${scenario.items.length} proyectos porque ningún candidato restante alcanza
+              población nueva: el objetivo es de cobertura y satura. Subir el presupuesto
+              por encima de ${cop(scenario.total_cost)} COP devuelve exactamente esta lista.</p>`
+          : ""
+      }
       <div class="stat-row">
         <div class="stat"><div class="k">Proyectos</div>
           <div class="v">${scenario.items.length}</div>
           <div class="u">de ${scenario.considered} candidatos</div></div>
         <div class="stat"><div class="k">Inversión</div>
           <div class="v">${cop(scenario.total_cost)}</div>
-          <div class="u">COP · estimada (OI-05)</div></div>
+          <div class="u">COP · estimada (OI-05) ·
+            ${scenario.budget_binding ? "presupuesto agotado" : "presupuesto no vinculante"}</div></div>
         <div class="stat"><div class="k">Población servida</div>
           <div class="v">${fmt(scenario.total_population)}</div>
-          <div class="u">simulada · catchment 10 min</div></div>
+          <div class="u">catchment 10 min</div></div>
         <div class="stat"><div class="k">Gini de acceso</div>
           <div class="v">${scenario.equity_after.gini_access.toFixed(4)}</div>
           <div class="u">antes ${scenario.equity_before.gini_access.toFixed(4)} ·
@@ -927,8 +997,6 @@ async function loadSites() {
   const params = new URLSearchParams();
   const stateFilter = $("#f-state").value;
   if (stateFilter) params.set("state", stateFilter);
-  const risk = Number($("#f-risk").value);
-  if (risk < 1) params.set("max_risk", risk);
   const minScore = Number($("#f-score").value);
   if (minScore > 0) params.set("min_score", minScore);
   const intervention = $("#f-intervention").value;
@@ -942,6 +1010,7 @@ async function loadSites() {
     const visible = new Set(state.sites.map((s) => s.site_id));
     state.map.setFilter("sites", ["in", ["get", "site_id"], ["literal", [...visible]]]);
     state.map.setFilter("sites-outline", ["in", ["get", "site_id"], ["literal", [...visible]]]);
+    syncSitePoints();
   }
   return data.provenance;
 }
@@ -968,12 +1037,8 @@ async function main() {
   renderMapControls();
   renderMapLegend();
 
-  $("#f-risk").addEventListener(
-    "input",
-    (e) => ($("#f-risk-out").value = Number(e.target.value).toFixed(2))
-  );
   $("#f-score").addEventListener("input", (e) => ($("#f-score-out").value = e.target.value));
-  ["#f-state", "#f-risk", "#f-score", "#f-intervention"].forEach((sel) =>
+  ["#f-state", "#f-score", "#f-intervention"].forEach((sel) =>
     $(sel).addEventListener("change", loadSites)
   );
   $("#reset-weights").addEventListener("click", () => {
@@ -1011,13 +1076,18 @@ async function main() {
     }
   });
 
-  await initMap();
-
-  const [provenance, sources, alerts] = await Promise.all([
-    loadSites(),
+  // Los sitios primero: su respuesta trae la procedencia, y el mapa la
+  // necesita para componer su atribución antes de pintarse.
+  const [sitesData, sources, alerts] = await Promise.all([
+    api(`/sites?state=CANDIDATE`),
     api("/data-sources"),
     api("/quality/alerts"),
   ]);
+  const provenance = sitesData.provenance;
+
+  await initMap(provenance);
+  await loadSites();
+
   renderProvenance(provenance, sources);
   renderSources(sources);
   renderAlerts(alerts);

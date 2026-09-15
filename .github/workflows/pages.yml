@@ -56,39 +56,42 @@ jobs:
           docker exec $(docker ps -qf "ancestor=postgis/postgis:16-3.4") \
             sh -c "apt-get update -qq && apt-get install -y -qq postgresql-16-pgrouting"
 
-      # El contexto urbano de OSM se descarga aquí: lo publicado es
-      # reproducible desde el repositorio, no un volcado que alguien generó en
-      # su máquina. `data/raw/` no está versionado.
-      - name: Descargar contexto urbano (OSM)
+      # El extracto de OSM está versionado en db/seed/ — no se descarga.
+      # Una descarga aquí ataría cada despliegue a que Overpass esté en pie
+      # ese día, y ya falló así una vez: el bucle de curl no abortaba el paso,
+      # así que el error reaparecía tres pasos después disfrazado de otra cosa.
+      - name: Verificar el extracto archivado
         run: |
-          mkdir -p data/raw
-          for host in overpass.kumi.systems overpass-api.de; do
-            curl -sSf --max-time 300 -X POST \
-              --data-urlencode "data@db/seed/pereira.overpass" \
-              "https://$host/api/interpreter" -o data/raw/osm_pereira.json && break
-          done
-          ls -la data/raw/
+          test -s db/seed/osm_pereira.json.gz \
+            || { echo "::error::falta db/seed/osm_pereira.json.gz"; exit 1; }
+          echo "extracto OSM: $(du -h db/seed/osm_pereira.json.gz | cut -f1)"
 
-      # El sitio publicado corre sobre DAÑO SINTÉTICO, no sobre la evidencia
-      # satelital real. No es una simplificación: la evidencia de ICube-SERTIT
-      # está registrada con `redistribution_allowed = false`, y publicar un
-      # sitio web es redistribuir. El paso siguiente lo verifica y falla si
-      # alguna fuente no redistribuible llegó a contribuir.
-      - name: Migraciones y pipeline (daño sintético)
+      # El sitio publicado corre sobre DATOS REALES: daño de Copernicus EMS
+      # (EMSR916, CC BY 4.0), huellas de Microsoft, amenaza del SGC y contexto
+      # de OSM. Ya no hay capas simuladas — la migración 006 las prohíbe en la
+      # base. El paso siguiente verifica que ninguna fuente no redistribuible
+      # llegó a contribuir.
+      - name: Migraciones y pipeline
         run: |
           python scripts/migrate.py
-          python scripts/run_pipeline.py --synthetic-damage
+          python scripts/run_pipeline.py
 
       - name: Construir paquete estático (con puerta de licencia)
         run: python scripts/build_static.py --profile PUBLIC
 
-      # `enablement: true` activa Pages por API en la primera ejecución, en
-      # lugar de exigir que alguien lo active a mano en Settings. Requiere que
-      # el repositorio sea elegible: público, o privado con un plan que
-      # incluya Pages privadas.
+      # PASO MANUAL, UNA SOLA VEZ, ANTES DEL PRIMER DESPLIEGUE:
+      #   Settings -> Pages -> Source: GitHub Actions
+      #
+      # No se puede automatizar. `enablement: true` existe en esta action pero
+      # crear un sitio de Pages por API exige permisos de administrador del
+      # repositorio, y el GITHUB_TOKEN de un workflow no los tiene por mucho
+      # que se le conceda `pages: write`:
+      #
+      #   Create Pages site failed. Error: Resource not accessible by integration
+      #
+      # `pages: write` habilita DESPLEGAR en un sitio que ya existe, no crearlo.
+      # Una vez activado a mano, todo lo demás es automático.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

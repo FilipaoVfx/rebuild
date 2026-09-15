@@ -38,8 +38,11 @@ class BlockingLayerMissing(RuntimeError):
 
 def compute_features(conn: psycopg.Connection, *, feature_version: str, data_version: int) -> int:
     with conn.cursor() as cur:
+        # `risk` ya no esta en esta lista. Era dependencia bloqueante cuando
+        # habia una capa de amenaza; retirada la del SGC por licencia (ADR-18)
+        # no hay ninguna, y bloquear el pipeline por su ausencia solo obligaria
+        # a rellenarla. La feature queda nula y se declara.
         for layer, table in (
-            ("risk", "core.risk_zone"),
             ("land_use", "core.land_use"),
             ("population", "core.population_cell"),
         ):
@@ -71,23 +74,38 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
 
                 -- Riesgo: el maximo que toca el sitio, no el promedio.
                 -- Promediar riesgo diluye exactamente la zona que hay que evitar.
-                COALESCE((
+                --
+                -- SIN COALESCE a cero, por la misma razon que el uso de suelo:
+                -- hoy la tabla esta vacia (ADR-18) y un cero se leeria como
+                -- "medimos riesgo nulo" en vez de "no hay dato de riesgo".
+                -- Cero es ademas el valor mas favorable, asi que la ausencia
+                -- se convertiria en un aprobado silencioso.
+                (
                     SELECT max(rz.risk_score) FROM core.risk_zone rz
                     WHERE ST_Intersects(rz.geometry, s.geometry)
-                ), 0),
+                ),
 
-                -- Compatibilidad de uso de suelo: fraccion del sitio en
-                -- categorias donde una intervencion de espacio publico cabe.
-                COALESCE((
-                    SELECT sum(CASE WHEN lu.category IN ('green', 'institutional', 'mixed')
+                -- Compatibilidad de uso de suelo.
+                --
+                -- SIN COALESCE a cero: un sitio que no intersecta ningun
+                -- poligono no es incompatible, es desconocido. Confundir
+                -- ambas cosas excluye por falta de dato, que es justo lo que
+                -- una restriccion dura no debe hacer (FR-FEAT-01: una feature
+                -- no calculada se declara, no se rellena).
+                (
+                    SELECT sum(CASE WHEN lu.category IN ('grass', 'meadow', 'forest', 'wood',
+                                                         'recreation_ground', 'village_green',
+                                                         'greenfield', 'brownfield')
                                     THEN 1.0
-                                    WHEN lu.category = 'residential' THEN 0.6
+                                    WHEN lu.category IN ('residential', 'farmland', 'orchard')
+                                    THEN 0.6
+                                    WHEN lu.category IN ('retail', 'commercial') THEN 0.4
                                     ELSE 0.2 END
                                * ST_Area(ST_Intersection(lu.geometry, s.geometry)))
                            / NULLIF(ST_Area(s.geometry), 0)
                     FROM core.land_use lu
                     WHERE ST_Intersects(lu.geometry, s.geometry)
-                ), 0),
+                ),
 
                 s.area_m2,
 
@@ -110,9 +128,16 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
                 -- normalizada contra un techo de 12 km/km2 de via.
                 least(1.0, COALESCE(net.road_m, 0) / 12000.0),
 
-                COALESCE(vuln.value, 0.5),
+                -- Sin indice de vulnerabilidad social real (DANE no
+                -- alcanzable, OI-F4) la feature queda nula y se declara. El
+                -- 0.5 que habia antes era un valor inventado con aspecto de
+                -- medicion.
+                NULL,
 
-                least(1.0, COALESCE(net.segments, 0) / 60.0),
+                -- Densidad construida desde huellas reales de Microsoft, no
+                -- desde un conteo de segmentos de via. Techo: 0,35 de suelo
+                -- ocupado en 200 m, que es tejido urbano denso.
+                least(1.0, COALESCE(built.ratio, 0) / 0.35),
 
                 least(1.0, COALESCE(edu.n, 0) / 3.0),
                 least(1.0, COALESCE(hea.n, 0) / 2.0),
@@ -123,7 +148,7 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
                 '{}'::jsonb,
                 0.5,
                 '{}'::jsonb,
-                s.is_synthetic
+                false
             FROM core.site s
             LEFT JOIN analytics.site_catchment c10
                    ON c10.site_id = s.site_id AND c10.minutes = 10
@@ -140,6 +165,12 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
                 WHERE ST_DWithin(ST_Transform(r.geometry, %(srid)s),
                                  ST_Transform(s.centroid, %(srid)s), 400)
             ) net ON true
+            LEFT JOIN LATERAL (
+                SELECT sum(b.area_m2) / (pi() * 200 * 200) AS ratio
+                FROM core.building_footprint b
+                WHERE ST_DWithin(ST_Transform(b.geometry, %(srid)s),
+                                 ST_Transform(s.centroid, %(srid)s), 200)
+            ) built ON true
             LEFT JOIN LATERAL (
                 SELECT sum(p.vulnerability * p.population) / NULLIF(sum(p.population), 0) AS value
                 FROM core.population_cell p

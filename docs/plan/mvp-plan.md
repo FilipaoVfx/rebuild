@@ -52,7 +52,7 @@ El SRS es el contrato del piloto completo. El MVP es un subconjunto de él. Esta
 | Contrato de daño congelado + adaptador | `FR-DC-01..02` |
 | Evidencia de daño multifuente y fusión (ADR-16) | `FR-DC-01`, `FR-QUAL-01`, `FR-SYN-05` |
 | Registro de licencias y puerta de export por perfil | `FR-LIC-01`, `FR-ING-01` |
-| Generador sintético de daño | `FR-SYN-01..06` |
+| ~~Generador sintético de daño~~ · **derogado, ADR-17** | ~~`FR-SYN-01..06`~~ |
 | Ingesta versionada e inmutable | `FR-ING-01..05` |
 | Motor de features (vector recortado, §1.3) | `FR-FEAT-01..06` |
 | Restricciones duras y blandas versionadas | `FR-CONS-01..04` |
@@ -178,6 +178,8 @@ Lo que se construye:
 ---
 
 ### M2 — Generador sintético de daño · ~2 semanas
+
+> **DEROGADO por [ADR-17](../adr/ADR-17-prohibicion-de-datos-sinteticos.md) (2026-09-15).** El generador sintético se retiró: la prueba de estabilidad ante la semilla dio 15 % y el ranking resultó ser una propiedad del generador. La migración 006 prohíbe `is_synthetic = true` en la base. Esta sección queda como registro de lo que se planeó, no de lo que se hace.
 
 Es un componente de primera clase, no un script de fixtures (SRS §7). Todo el piloto se apoya en él.
 

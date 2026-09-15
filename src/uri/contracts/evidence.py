@@ -102,13 +102,24 @@ def prohibited_columns(columns: list[str]) -> list[str]:
     return sorted(offending)
 
 
-def assert_no_prohibited_fields(columns: list[str], *, source: str) -> None:
+def assert_no_prohibited_fields(
+    columns: list[str], *, source: str, reviewed: dict[str, str] | None = None
+) -> None:
     """Rechaza el lote entero si alguna columna nombra un campo prohibido.
 
     Rechaza el LOTE, no la columna: dejar entrar las demas filas de un archivo
     que contiene datos personales solo mueve el problema de sitio.
+
+    `reviewed` admite excepciones que alguien miro una por una, mapeando cada
+    columna a la razon por la que es segura. Existe porque el diccionario
+    marca `name` a secas —y hace bien: es indistinguible de un campo personal—
+    pero algunos esquemas lo usan para nombrar cosas. La excepcion se declara
+    en el adaptador, junto al dato, con su justificacion escrita: un guardian
+    que se debilita en abstracto deja de guardar, uno que exige justificar
+    cada excepcion sigue haciendo su trabajo.
     """
-    offending = prohibited_columns(columns)
+    reviewed = reviewed or {}
+    offending = [c for c in prohibited_columns(columns) if c not in reviewed]
     if offending:
         raise PiiViolation(
             f"{source}: la fuente trae campos prohibidos {offending}. "

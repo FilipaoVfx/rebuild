@@ -2,7 +2,7 @@
 
 **Documento operativo.** Lo consume el equipo que escribe los adaptadores de ingesta y quien audite el origen de un número en un export.
 **Traza:** `FR-ING-01` (fuentes registradas), `FR-LIC-01` (registro de licencias), `FR-EXT-01` (aislamiento de fallo), `FR-DEG-01` (modos degradados)
-**Versión:** 0.2 — el estado de verificación de licencia de la mayoría de filas es `POR VERIFICAR`
+**Versión:** 0.3 — el estado de verificación de licencia de la mayoría de filas es `POR VERIFICAR`
 **Complemento:** [conexiones.md](./conexiones.md) — endpoints verificados y recetas de conexión
 
 ---
@@ -61,16 +61,17 @@ Estado actual, con la distinción entre lo verificado y lo asumido marcada expl�
 | OpenStreetMap | `SHARE_ALIKE` | ✅ | ✅ | ⚠️ condicionado | Verificado — ODbL. Ver §8, es el caso difícil |
 | datosdelterremoto.org (derivados) | `ATTRIBUTION` | ✅ | ✅ | ✅ | Verificado — CC BY 4.0 declarado sobre *derivados* |
 | datosdelterremoto.org (crudos) | hereda del original | — | — | — | Cada archivo conserva su licencia de origen |
-| SGC | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** — por dataset |
+| SGC | `NON_COMMERCIAL` | ❌ | ❌ | ❌ | **Verificado 2026-09-15** — «Ningún contenido […] copiado, reproducido […] publicado, transmitido, distribuido […] sin su consentimiento previo por escrito». **Capa retirada (ADR-18)** |
 | IDEAM | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** — por dataset |
 | IDE AMCO | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** — por capa |
 | CARDER | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** — por dataset |
 | Megabús | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** |
-| Copernicus EMS | `UNCLEAR` | ⚠️ | ⚠️ | ⚠️ | **POR VERIFICAR por producto**, no por programa |
+| Copernicus EMS | `ATTRIBUTION` | ✅ | ✅ | ✅ | **Verificado 2026-09-15** — CC BY 4.0 según el manual de producto del JRC; falta abrir el paquete de EMSR916 |
 | International Charter | `UNCLEAR` | ⚠️ | ❌ probable | ⚠️ | **POR VERIFICAR** — ver §7.11, hay un problema anterior al de licencia |
-| SERTIT | `NON_COMMERCIAL` | ❌/⚠️ | ⚠️ | ⚠️ | Algunos productos con condición no comercial |
+| SERTIT | `NON_COMMERCIAL` | ❌ | ❌ | ⚠️ | **Verificado 2026-09-15** — "reproduction […] interdite, sauf autorisation écrite préalable" |
 | UNOSAT | `UNCLEAR` | ⚠️ | ⚠️ | ⚠️ | **POR VERIFICAR por producto** |
-| Generador sintético | `COMMERCIAL_SAFE` | ✅ | ✅ | ✅ | Producción propia |
+| Microsoft Building Footprints | `SHARE_ALIKE` | ✅ | ✅ | ⚠️ condicionado | **Verificado 2026-09-15** — ODbL, la misma licencia que OSM y por tanto la misma clase. Ver §7.15 |
+| ~~Generador sintético~~ | ~~`COMMERCIAL_SAFE`~~ | — | — | — | **Retirado** — [ADR-17](../adr/ADR-17-prohibicion-de-datos-sinteticos.md) |
 
 > "Gratis" no aparece como columna a propósito. Las catorce lo son. La columna no discrimina nada y su presencia induce exactamente el error que este documento existe para evitar.
 
@@ -82,7 +83,9 @@ La clasificación dice qué se *puede* hacer. El tier dice qué *hacemos*.
 
 ### 🟢 Tier A — Núcleo comercialmente seguro
 
-`DANE` · `Datos.gov.co` · `IDE AMCO`* · `SGC`* · `IDEAM`* · `CARDER`* · `OSM` (con las condiciones de §8)
+`DANE` · `Datos.gov.co` · `IDE AMCO`* · `IDEAM`* · `CARDER`* · `OSM` y `Microsoft Building Footprints` (ambas con las condiciones de §8)
+
+> **El SGC salió de Tier A.** La auditoría de §10 lo movió de `UNCLEAR` a `NON_COMMERCIAL` con `redistribution_allowed = false`, no en la dirección que se esperaba. Es el segundo caso —tras SERTIT— en que «condicionalmente utilizable» resultó ser «no». Ver §7.5 y [ADR-18](../adr/ADR-18-retirada-de-la-capa-del-sgc.md).
 
 Es el núcleo del producto. Toda feature que alimente un score de la V1 sale de aquí. El asterisco marca las que están en Tier A **condicionalmente**: son casi con certeza utilizables, pero hasta que la auditoría de §10 las mueva de `UNCLEAR`, su uso está bloqueado por el control de §6.
 
@@ -252,17 +255,25 @@ C5 es el que convierte este documento en algo vivo. Sin él, la matriz de §2 en
 
 ---
 
-### 7.5 SGC — microzonificación sísmica, amenaza, movimientos en masa · Tier A condicional
+### 7.5 SGC — microzonificación sísmica, amenaza, movimientos en masa · **RETIRADO** · Tier C
+
+> **Capa retirada del pipeline por [ADR-18](../adr/ADR-18-retirada-de-la-capa-del-sgc.md) (2026-09-15).** La auditoría de §10 se cerró en la dirección restrictiva.
 
 | | |
 |---|---|
-| **Aporta** | `risk_score` (**bloqueante**), restricciones duras de riesgo prohibido, correlación espacial del generador sintético (`FR-SYN-02`) |
-| **Acceso** | Geoportal SGC. Servicios OGC probables; a confirmar |
-| **Modo degradado** | **Parada total.** `FR-DEG-01` es explícito: si la capa de riesgo no está, el sistema se detiene y lo dice, en lugar de puntuar sin riesgo |
-| **Licencia** | `UNCLEAR` — auditar por dataset |
-| **Adaptador** | `packages/ingestion/adapters/sgc.py` |
+| **Aportaba** | `risk_score`, restricciones duras de riesgo prohibido |
+| **Aporta hoy** | Nada. `core.risk_zone` está vacía y `risk_score` es nulo |
+| **Acceso** | WFS 2.0.0 verificado y operativo en `/arcgis/services/` (no `/arcgis/rest/services/`) |
+| **Licencia** | `NON_COMMERCIAL`, `redistribution_allowed = false`, `derivatives_allowed = false` |
+| **Términos, verbatim** | «Ningún contenido de este sitio puede ser copiado, reproducido, recopilado, cargado, publicado, transmitido, distribuido, o utilizado para la creación de servicios derivados […] sin su consentimiento previo por escrito», y el permiso otorgado es «únicamente en su equipo y para su uso personal y no comercial» |
+| **Copia archivada** | `db/terms/sgc_terminos_20260915.txt` |
+| **Vía abierta** | «sin su consentimiento previo por escrito» describe una vía, igual que con SERTIT: pedirlo es un correo. El propio texto añade que un dataset con licencia propia se rige por ella — la capa de amenaza que usábamos no declara ninguna |
 
-> El riesgo actúa como restricción, no como una variable más del ranking (PRD §9.6). Un sitio en riesgo prohibido no se rescata con un score alto, y `FR-LIFE-03` impide incluso el override manual. Eso hace que la disponibilidad de esta capa sea una precondición del producto, no una feature más.
+**Qué costó retirarla: nada.** El SGC publica un valor por municipio, no microzonificación de Pereira (D6). `risk_score` valía 0,28 en los 115 sitios, con exclusión en 0,75 y penalización blanda desde 0,30: no excluía ni penalizaba a ninguno. Antes y después de retirarla, el pipeline produce los mismos 115 sitios, 105 candidatos y 19 proyectos.
+
+**Cómo se estuvo publicando sin que la puerta la viera.** El cargador sellaba cuatro capas de tres fuentes con **una sola** `dataset_version` bajo `microsoft_buildings`. La puerta de §6 resuelve por fuente, y la del SGC no existía como versión. Es la misma forma de fuga que ADR-16 corrigió para SERTIT, reaparecida por otra vía. Corregido: una versión por fuente, y una sola definición compartida de "qué contribuye" (`CONTRIBUTING_SOURCES_SQL`).
+
+> El riesgo actúa como restricción, no como una variable más del ranking (PRD §9.6). `FR-DEG-01` lo declaraba dependencia **bloqueante**: sin capa de riesgo, parada total. Esa regla se levanta mientras no exista **ninguna** fuente de riesgo utilizable — bloquear el pipeline por su ausencia solo obligaría a rellenarla, que es lo que [ADR-17](../adr/ADR-17-prohibicion-de-datos-sinteticos.md) prohíbe. Si llega la microzonificación (D6), vuelve a ser precondición.
 
 ---
 
@@ -318,10 +329,16 @@ C5 es el que convierte este documento en algo vivo. Sin él, la matriz de §2 en
 | | |
 |---|---|
 | **Aporta** | Evidencia de daño derivada de observación de la Tierra, por activación |
-| **Acceso** | Portal de Copernicus Emergency Management Service, por activación |
-| **Licencia** | `UNCLEAR` — **se verifica por producto, no por programa.** Los términos viajan en el paquete de entrega de cada activación; ahí es donde hay que mirar, no en la página institucional del servicio |
-| **Uso permitido en la V1** | Tier B: evidencia citada en `damage_evidence`, con atribución. **No redistribuible** hasta que el producto concreto se verifique |
-| **Trampa** | "Gratuito para gestión de desastres" y "libre para incorporar a un producto comercial" son afirmaciones distintas. La primera no implica la segunda |
+| **Acceso** | `https://mapping.emergency.copernicus.eu/activations/EMSR916` — vectores de descarga libre (shapefile, KMZ, GeoTIFF) |
+| **Licencia** | `ATTRIBUTION` — **CC BY 4.0** |
+| **Evidencia** | *Manual for CEMS-Rapid Mapping Products* (JRC121741) declara que los productos se publican bajo CC BY 4.0; el propio servicio autoriza la reutilización bajo esa licencia. Eso no es una página institucional genérica: es la documentación del producto |
+| **Atribución** | `© European Union, Copernicus Emergency Management Service (EMSR916)` |
+| **Pendiente** | Nadie ha abierto todavía el paquete de entrega de EMSR916 para confirmarlo en ese producto concreto. La clasificación refleja la licencia del programa documentada por su propio manual; confirmarla en el paquete es lo que queda |
+
+> **Es la vía más prometedora para tener una capa de daño real y publicable de
+> Pereira.** El cruce del monitor atribuye 182 edificios afectados en Pereira a
+> `EMSR916`. Si esos vectores están en el paquete, entran al pipeline sin
+> tropezar con la puerta de licencia — a diferencia de los de SERTIT.
 
 ---
 
@@ -338,11 +355,35 @@ C5 es el que convierte este documento en algo vivo. Sin él, la matriz de §2 en
 
 ### 7.12 SERTIT · Tier B
 
+**Verificado el 2026-09-15. El resultado es más restrictivo de lo que se
+asumía, no menos.**
+
 | | |
 |---|---|
-| **Licencia** | `NON_COMMERCIAL` por defecto — algunos productos tienen condiciones explícitamente no comerciales |
-| **Uso permitido** | Perfil `INSTITUTIONAL` únicamente. El control C3 aborta cualquier export `COMMERCIAL` en el que aparezca |
-| **Nota** | Es la corrección más importante frente a la lectura inicial de "todo esto es gratis": gratuito y no comercial son compatibles entre sí, y ese cruce es precisamente el que rompe un SaaS |
+| **Licencia** | `NON_COMMERCIAL`, sin redistribución |
+| **Términos publicados** | El aviso legal de `sertit.unistra.fr` dice: «*Toute reproduction, représentation, modification, publication, adaptation de tout ou partie des éléments du site, quel que soit le moyen ou le procédé utilisé, est interdite, sauf autorisation écrite préalable*» |
+| **Licencia abierta** | Ninguna. No hay Creative Commons ni equivalente en ningún punto de su sitio |
+| **Uso permitido** | Perfil `INSTITUTIONAL` únicamente. El control C3 aborta cualquier export `COMMERCIAL` o `PUBLIC` nombrando la fuente |
+
+Tres señales independientes apuntan en la misma dirección:
+
+1. **El aviso legal**, citado arriba: prohibido sin autorización escrita previa.
+2. **El propio dato afirma su autoría**: `© ICube-SERTIT 2026` en los 512
+   registros. Si fuera un producto CEMS bajo CC BY 4.0, la línea de copyright
+   diría `© European Union`. Dice lo contrario.
+3. **Los identificadores no son de CEMS**: `producto_id` 3244–3248, capa
+   `UrbanP`. Los productos de Copernicus se numeran bajo su código `EMSR###`.
+   Esto parece del International Charter, cuyos términos dicen lo mismo:
+   «*Users are not permitted to reproduce or distribute such content without
+   the explicit permission of the content owners*».
+
+**Hay una vía abierta, y es barata.** «*Sauf autorisation écrite préalable*»
+significa que la autorización existe como figura: pedirla es un correo. Si la
+conceden, esta fila cambia y la puerta se abre sola.
+
+**Y mientras tanto, citar no es redistribuir** (§3). Un sitio público puede
+afirmar «ICube-SERTIT clasificó 252 estructuras dañadas en Pereira el
+11/08/2026» con atribución. Lo que no puede es publicar sus geometrías.
 
 ---
 
@@ -357,12 +398,31 @@ C5 es el que convierte este documento en algo vivo. Sin él, la matriz de §2 en
 
 ### 7.14 Generador sintético de daño · producción propia
 
+> **DEROGADO por [ADR-17](../adr/ADR-17-prohibicion-de-datos-sinteticos.md) (2026-09-15).** El generador sintético se retiró: la prueba de estabilidad ante la semilla dio 15 % y el ranking resultó ser una propiedad del generador. La migración 006 prohíbe `is_synthetic = true` en la base. Esta sección queda como registro de lo que se planeó, no de lo que se hace.
+
 | | |
 |---|---|
 | **Aporta** | La capa de daño completa de la V1 (CON-01 — el dataset municipal no existe a tiempo de desarrollo) |
 | **Licencia** | `COMMERCIAL_SAFE` — producción propia |
 | **Obligación específica** | `is_synthetic` no nulo, propagado a toda feature, score, escenario, mapa, reporte y export (`FR-SYN-04`). Ningún artefacto derivado puede perderlo, y hay un test por formato de salida que lo verifica (mitigación de R3) |
 | **Restricción** | Un escenario no puede marcarse `ENDORSED` mientras contribuya un registro de daño sintético (`FR-SYN-06`). En la V1 eso hace ese estado inalcanzable por construcción |
+
+---
+
+### 7.15 Microsoft Building Footprints — huellas de edificación · Tier A
+
+| | |
+|---|---|
+| **Aporta** | `building_density`; y la geometría sobre la que se reparte la población dasimétricamente, de donde salen `need` y `deficit` |
+| **Acceso** | Descarga directa por cuadrante. 15.024 huellas en el AOI |
+| **Licencia** | `SHARE_ALIKE` — Open Data Commons ODbL |
+| **Atribución** | `Microsoft Building Footprints` |
+| **Copia archivada** | `storage://terms/ms_building_footprints_20260915.html` |
+| **Modo degradado** | Bloqueante hoy: sin huellas no hay reparto de población, y `need`/`deficit` son dos de los cinco factores |
+
+**Estaba clasificada `ATTRIBUTION` y es `SHARE_ALIKE`.** El registro declaraba `license_name = "ODbL"` y `share_alike = true`, pero la clase era `ATTRIBUTION`, mientras `osm` —**la misma licencia**— estaba en `SHARE_ALIKE`. La clase es lo que lee la puerta de perfiles de §6, así que la obligación de compartir igual pasaba sin aplicarse. Corregido, con una prueba que exige que toda fuente cuyo `license_name` contenga `ODbL` se clasifique igual.
+
+La consecuencia práctica es la de §8: el share-alike llega ahora por **dos** fuentes, no solo por OSM, y el aislamiento de esquemas que acota la obligación tiene que cubrir también `core.building_footprint` y lo derivado de él — que incluye `core.population_cell`.
 
 ---
 
@@ -495,7 +555,7 @@ Es trabajo de E0-6 y condiciona la puerta de M0. Una fuente Tier A sin auditar e
 | ID | Pregunta | Bloquea | Responsable |
 |---|---|---|---|
 | OI-F1 | ODbL share-alike sobre base derivada servida por API en un producto comercial | Comercialización. **No** el piloto | Legal |
-| OI-F2 | Auditoría de licencia de SGC, IDEAM, AMCO, CARDER y Megabús, dataset por dataset | M0 (puerta), y M3 por dependencia | Datos |
+| ~~OI-F2~~ | ~~Auditoría de licencia del SGC~~ — **cerrado 2026-09-15**: `NON_COMMERCIAL`, capa retirada (ADR-18). Sigue abierto para IDEAM, AMCO, CARDER y Megabús | M0 (puerta), y M3 por dependencia | Datos |
 | OI-F3 | ¿Publica IDE AMCO WFS operativo? | E1-4, y el caso principal de `FR-ING-05` | GIS |
 | OI-F4 | ¿Población DANE a nivel de manzana o de sector? | OI-07 (imputación), umbral efectivo de `FR-PII-03` | Datos |
 | OI-F5 | Vía de acceso y términos exactos de datosdelterremoto.org | Tier C, M2 | Datos |

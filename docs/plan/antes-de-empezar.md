@@ -106,6 +106,8 @@ La regla, escrita antes de empezar: **los pesos se fijan por elicitación con ex
 
 Ahora hay una alternativa mejor que la sintética pura: calibrar el generador contra los 252 puntos reales de SERTIT en Pereira. Sigue siendo un sector, pero es estructura espacial observada en lugar de inventada.
 
+> **Actualización (2026-09-15, [ADR-17](../adr/ADR-17-prohibicion-de-datos-sinteticos.md)).** Ni una ni otra: el generador se retiró por completo y la base prohíbe `is_synthetic = true`. La calibración se evaluó y se descartó — un generador calibrado sobre un sector sigue siendo la especificación implícita de cómo es la realidad fuera de él. La regla sobre los pesos **se mantiene y se endurece**: ya no hay generador que aprender, pero el 67,2 % del score proviene de un reparto dasimétrico que asume densidad uniforme por área construida, y afinar los pesos mirando el ranking enseña al sistema ese supuesto.
+
 ---
 
 ## 6. El camino crítico es institucional, no técnico

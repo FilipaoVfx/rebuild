@@ -18,15 +18,17 @@ from uri.contracts import DamageEvidence, LicenseClass
 from uri.contracts.enums import DAMAGE_ORDER, METHOD_RELIABILITY, DamageClass, EvidenceMethod
 from uri.ingestion.adapters import osm as osm_adapter
 from uri.ingestion.registry import SOURCES
-from uri.ingestion.synthetic import (
-    generate_land_use,
-    generate_population,
-    generate_risk_zones,
-)
 
-#: AOI de trabajo: el area de Pereira cubierta por la evidencia satelital,
-#: con margen para que los catchments no se corten en el borde.
-PEREIRA_BBOX = (-75.725, 4.790, -75.670, 4.830)
+#: AOI de trabajo. Ya no es un bbox elegido a mano: es el area que Copernicus
+#: EMS declaro haber observado en EMSR916/AOI02. El alcance del analisis lo
+#: fija quien produjo la evidencia, no nosotros.
+PEREIRA_BBOX = (-75.7251, 4.7878, -75.6748, 4.8229)
+
+#: Poblacion estimada del AOI, publicada en las estadisticas del producto
+#: EMSR916/AOI02. Es el total que se reparte dasimetricamente (FR-FEAT-06).
+AOI_POPULATION = 190_000
+
+SEED = Path(__file__).resolve().parents[3] / "db" / "seed"
 
 #: Radio de agrupamiento de evidencia en sitios. Dos puntos a menos de esto
 #: se leen como el mismo predio o predios contiguos.
@@ -182,59 +184,6 @@ def load_damage_evidence(
     return version
 
 
-def load_synthetic_damage(conn: psycopg.Connection, seed: int) -> tuple[int, int]:
-    """Carga daño sintetico como evidencia (ADR-16) en lugar del satelital.
-
-    Es el camino publicable: la evidencia de SERTIT no se puede redistribuir,
-    y un sitio web publico es redistribucion. Todo lo que entra por aqui lleva
-    `is_synthetic = true` y lo propaga a cada artefacto derivado.
-    """
-    from uri.ingestion.synthetic import generate_damage
-
-    observations, manifest = generate_damage(PEREIRA_BBOX, seed)
-    version = _publish_version(
-        conn,
-        source_id="synthetic",
-        record_count=len(observations),
-        content_hash=manifest.content_hash(),
-        is_synthetic=True,
-        manifest=manifest.as_dict(),
-    )
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT count(*) AS n FROM core.damage_evidence WHERE data_version = %s", (version,)
-        )
-        if cur.fetchone()["n"]:
-            return version, len(observations)
-        for item in observations:
-            cur.execute(
-                """
-                INSERT INTO core.damage_evidence (
-                    source, original_source, geometry, positional_accuracy_m,
-                    observation_date, acquisition_date, damage_class, raw_damage_label,
-                    building_type, method, field_validated, confidence, is_synthetic,
-                    data_version, notes
-                ) VALUES (
-                    'synthetic', 'synthetic', ST_GeomFromText(%s, 4326), %s,
-                    %s, %s, %s, %s, %s, 'SYNTHETIC', false, %s, true, %s, %s
-                )
-                """,
-                (
-                    item.wkt,
-                    item.accuracy_m,
-                    date(2026, 8, 11),
-                    date(2026, 9, 12),
-                    item.damage_class,
-                    item.damage_class,
-                    item.building_type,
-                    0.5,
-                    version,
-                    "Capa simulada — no es una observacion de daño real",
-                ),
-            )
-    return version, len(observations)
-
-
 def load_osm(conn: psycopg.Connection, overpass_path: Path) -> tuple[int, dict[str, int]]:
     roads, greens, facilities = osm_adapter.load_overpass(overpass_path)
     content_hash = _hash_rows(
@@ -294,36 +243,80 @@ def load_osm(conn: psycopg.Connection, overpass_path: Path) -> tuple[int, dict[s
     return version, {"roads": len(roads), "greens": len(greens), "facilities": len(facilities)}
 
 
-def load_synthetic_layers(conn: psycopg.Connection, seed: int) -> tuple[int, dict[str, int]]:
-    cells, pop_manifest = generate_population(PEREIRA_BBOX, seed)
-    zones, risk_manifest = generate_risk_zones(PEREIRA_BBOX, seed)
-    parcels, land_manifest = generate_land_use(PEREIRA_BBOX, seed)
+def load_context_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
+    """Carga poblacion, edificacion, riesgo y uso de suelo desde fuentes reales.
 
-    combined = {
-        "population": pop_manifest.as_dict(),
-        "risk": risk_manifest.as_dict(),
-        "land_use": land_manifest.as_dict(),
-    }
-    content_hash = hashlib.sha256(
-        "".join(m["content_hash"] for m in combined.values()).encode()
-    ).hexdigest()
-    version = _publish_version(
-        conn,
-        source_id="synthetic",
-        record_count=len(cells) + len(zones) + len(parcels),
-        content_hash=content_hash,
-        is_synthetic=True,
-        manifest=combined,
+    Una version de dataset POR FUENTE, no una por corrida. Sellar el uso de
+    suelo de OSM con la version de Microsoft lo deja atribuido a quien no lo
+    produjo, y es la misma falla de forma que ADR-16 existe para evitar: la
+    puerta de publicacion resuelve por fuente, y una fuente escondida detras
+    de otra no se puede evaluar. Fue asi como la capa del SGC se publico sin
+    que la puerta llegara a verla (ADR-18).
+
+    No hay capa de amenaza sismica: la del SGC se retiro por licencia, y
+    ninguna otra la sustituye. `risk_score` queda nulo y las restricciones de
+    riesgo se saltan declarandolo, en vez de leerse como riesgo cero.
+
+    Ninguna capa inventa un valor; cada una declara su metodo y su limitacion
+    en el manifiesto de su propia version.
+    """
+    import json as _json
+
+    from uri.ingestion.adapters import context as ctx
+    from uri.ingestion.adapters import osm as osm_adapter
+
+    footprints = ctx.load_building_footprints(SEED / "ms_buildings_pereira.geojson.gz")
+    cells, apportionment = ctx.dasymetric_population(
+        footprints, PEREIRA_BBOX, total_population=AOI_POPULATION
     )
+    landuse = osm_adapter.load_landuse(SEED / "osm_landuse_pereira.json.gz")
+
+    def _version(source_id: str, records: int, payload: dict) -> int:
+        return _publish_version(
+            conn,
+            source_id=source_id,
+            record_count=records,
+            content_hash=hashlib.sha256(
+                _json.dumps({"source": source_id, **payload}, sort_keys=True).encode()
+            ).hexdigest(),
+            is_synthetic=False,
+            manifest=payload,
+        )
+
+    # Microsoft: las huellas, y la poblacion repartida sobre ellas. El total
+    # que se reparte lo publica Copernicus, y el manifiesto lo declara; la
+    # geometria que lo soporta es de Microsoft, y por eso la capa se sella con
+    # su version. Copernicus entra a la puerta por su propia via (la evidencia
+    # de daño), asi que ninguna de las dos queda sin evaluar.
+    ms_version = _version(
+        "microsoft_buildings",
+        len(footprints) + len(cells),
+        {"buildings": {"footprints": len(footprints)}, "population": apportionment},
+    )
+    # OSM: el uso de suelo, extracto aparte del de vias y equipamientos.
+    osm_landuse_version = _version(
+        "osm",
+        len(landuse),
+        {
+            "landuse": {
+                "polygons": len(landuse),
+                "limitation": (
+                    "Proxy del POT. IDE AMCO publica la capa normativa en un "
+                    "GeoServer no alcanzable desde este entorno (OI-F3)."
+                ),
+            }
+        },
+    )
+
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT count(*) AS n FROM core.population_cell WHERE data_version = %s", (version,)
+            "SELECT count(*) AS n FROM core.population_cell WHERE data_version = %s", (ms_version,)
         )
         if cur.fetchone()["n"]:
-            return version, {
+            return ms_version, {
                 "cells": len(cells),
-                "risk_zones": len(zones),
-                "land_use": len(parcels),
+                "landuse": len(landuse),
+                "footprints": len(footprints),
             }
 
         for cell in cells:
@@ -331,26 +324,38 @@ def load_synthetic_layers(conn: psycopg.Connection, seed: int) -> tuple[int, dic
                 """
                 INSERT INTO core.population_cell
                     (geometry, population, households, vulnerability, is_synthetic, data_version)
-                VALUES (ST_GeomFromText(%s, 4326), %s, %s, %s, true, %s)
+                VALUES (ST_GeomFromText(%s, 4326), %s, %s, %s, false, %s)
                 """,
-                (cell.wkt, cell.population, cell.households, cell.vulnerability, version),
+                # Sin indice de vulnerabilidad social real (DANE no alcanzable,
+                # OI-F4), la feature se marca no disponible en lugar de
+                # rellenarse con un numero inventado. 0.5 es el marcador que el
+                # motor de features reconoce como "sin dato".
+                (cell.wkt, cell.population, cell.households, 0.5, ms_version),
             )
-        for zone in zones:
+
+        for parcel in landuse:
             cur.execute(
                 """
-                INSERT INTO core.risk_zone
-                    (geometry, risk_level, risk_score, is_synthetic, data_version)
-                VALUES (ST_GeomFromText(%s, 4326), %s, %s, true, %s)
+                INSERT INTO core.land_use (geometry, category, is_synthetic, data_version)
+                VALUES (ST_MakeValid(ST_GeomFromText(%s, 4326)), %s, false, %s)
                 """,
-                (zone.wkt, zone.level, zone.score, version),
+                (parcel.wkt, parcel.category, osm_landuse_version),
             )
-        for parcel in parcels:
+
+        for footprint in footprints:
             cur.execute(
-                "INSERT INTO core.land_use (geometry, category, is_synthetic, data_version) "
-                "VALUES (ST_GeomFromText(%s, 4326), %s, true, %s)",
-                (parcel.wkt, parcel.level, version),
+                """
+                INSERT INTO core.building_footprint (geometry, area_m2, data_version)
+                VALUES (ST_MakeValid(ST_GeomFromText(%s, 4326)), %s, %s)
+                """,
+                (footprint.wkt, footprint.area_m2, ms_version),
             )
-    return version, {"cells": len(cells), "risk_zones": len(zones), "land_use": len(parcels)}
+
+    return ms_version, {
+        "cells": len(cells),
+        "landuse": len(landuse),
+        "footprints": len(footprints),
+    }
 
 
 def derive_sites(conn: psycopg.Connection, data_version: int) -> int:

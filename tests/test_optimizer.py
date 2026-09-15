@@ -110,3 +110,41 @@ def test_presupuesto_cero_no_selecciona_nada():
     result = select_portfolio([make("a", {1: 100.0}, 10.0)], budget=0.0)
     assert result.items == []
     assert result.total_cost == 0.0
+
+
+def test_se_declara_que_el_presupuesto_limito_la_seleccion():
+    """Sin esta distincion, un portafolio que no gasta el presupuesto y otro
+    que lo agota se leen igual."""
+    candidates = [make(f"s{i}", {i: 1000.0}, 100.0) for i in range(10)]
+    result = select_portfolio(candidates, budget=350.0)
+    assert result.stop_reason == "presupuesto"
+    assert result.budget_binding is True
+    assert result.skipped_over_budget > 0
+
+
+def test_se_declara_la_saturacion_de_cobertura():
+    """El caso que hace inerte al control de presupuesto: con la cobertura
+    agotada, subir el presupuesto devuelve el mismo portafolio. Si el sistema
+    no lo dice, el usuario concluye que el control esta roto."""
+    # Tres sitios sobre las MISMAS celdas: el primero las cubre por completo
+    # y los otros dos no alcanzan a nadie nuevo, sobre presupuesto o no.
+    candidates = [make(f"s{i}", {1: 1000.0, 2: 500.0}, 100.0) for i in range(3)]
+
+    holgado = select_portfolio(candidates, budget=10_000.0)
+    assert len(holgado.items) == 1
+    assert holgado.stop_reason == "cobertura_saturada"
+    assert holgado.budget_binding is False
+    assert holgado.skipped_over_budget == 0
+
+    # Diez veces mas presupuesto, mismo portafolio: eso es lo que se declara.
+    mas_holgado = select_portfolio(candidates, budget=100_000.0)
+    assert [i.site_id for i in mas_holgado.items] == [i.site_id for i in holgado.items]
+    assert mas_holgado.total_cost == holgado.total_cost
+
+
+def test_se_declara_el_limite_de_proyectos():
+    candidates = [make(f"s{i}", {i: 1000.0}, 100.0) for i in range(10)]
+    result = select_portfolio(candidates, budget=10_000.0, max_projects=4)
+    assert len(result.items) == 4
+    assert result.stop_reason == "limite_de_proyectos"
+    assert result.budget_binding is False
