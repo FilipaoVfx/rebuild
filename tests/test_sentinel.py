@@ -176,6 +176,18 @@ def test_el_recorte_del_aoi_cabe_en_los_limites_del_servicio():
 
 @pytest.fixture
 def sentinel_version(db_conn) -> int:
+    """Una version de dataset de Sentinel sobre la que probar el esquema.
+
+    Registra la fuente primero. En CI la base solo tiene migraciones —nadie
+    corre el pipeline— asi que `source_register` esta vacia y la clave ajena
+    de `dataset_version` falla. Estas pruebas comprueban invariantes del
+    ESQUEMA y tienen que correr ahi: un invariante que solo se verifica en la
+    maquina de quien lo escribio no esta verificado.
+    """
+    from uri.ingestion.loader import register_sources
+
+    register_sources(db_conn)
+    db_conn.commit()
     with db_conn.cursor() as cur:
         cur.execute(
             """

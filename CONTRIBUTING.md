@@ -43,7 +43,7 @@ una capa de contexto falla al insertarse.
 ```bash
 .venv/bin/ruff check src tests scripts && .venv/bin/ruff format --check src tests scripts
 .venv/bin/lint-imports                       # fronteras de ADR-01
-.venv/bin/python -m pytest -q                # 123 pruebas
+.venv/bin/python -m pytest -q                # 123 con pipeline, 112 + 11 saltadas sin él
 .venv/bin/python scripts/checks/browser_check.py   # el visor, en un navegador real
 .venv/bin/python scripts/checks/signal_check.py    # ¿señal o ruido? cinco mediciones
 ```
