@@ -43,7 +43,7 @@ una capa de contexto falla al insertarse.
 ```bash
 .venv/bin/ruff check src tests scripts && .venv/bin/ruff format --check src tests scripts
 .venv/bin/lint-imports                       # fronteras de ADR-01
-.venv/bin/python -m pytest -q                # 109 pruebas
+.venv/bin/python -m pytest -q                # 123 pruebas
 .venv/bin/python scripts/checks/browser_check.py   # el visor, en un navegador real
 .venv/bin/python scripts/checks/signal_check.py    # ¿señal o ruido? cinco mediciones
 ```
@@ -53,6 +53,18 @@ queda ninguna capa simulada en el resultado. La prueba 5 mide dos cosas por
 feature: **cobertura** y **valores distintos**. La segunda columna es la que
 importa — una feature presente en el 100 % de los sitios con un solo valor
 está poblada y no ordena nada. Hoy `land_use` sale así.
+
+## Escenas Sentinel (opcional)
+
+```bash
+export CDSE_CLIENT_ID=... CDSE_CLIENT_SECRET=...   # solo backend, nunca el visor
+.venv/bin/python scripts/fetch_sentinel.py --dry-run   # cataloga y elige, sin descargar
+.venv/bin/python scripts/fetch_sentinel.py             # recorta el AOI a data/sentinel/
+```
+
+Sin credenciales sale con código 2 y dice qué falta, en vez de escribir a
+medias. Los `.tif` no se versionan: `core.satellite_scene` guarda `scene_id` y
+`request_parameters` completos, que es lo que permite reconstruirlos.
 
 ## Paquete estático (GitHub Pages)
 

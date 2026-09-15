@@ -593,6 +593,98 @@ def raise_coverage_alerts(conn: psycopg.Connection) -> list[str]:
     return alerts
 
 
+# ── Escenas satelitales ─────────────────────────────────────────────────
+
+SENTINEL_DIR = Path(__file__).resolve().parents[3] / "data" / "sentinel"
+
+
+def record_satellite_scenes(
+    conn: psycopg.Connection,
+    scenes: list[tuple],
+    *,
+    manifest: dict,
+) -> tuple[int, int]:
+    """Escribe el catalogo de escenas consideradas, elegidas o no.
+
+    Se guardan TODAS, no solo las seleccionadas. Las descartadas son lo que
+    convierte "la mejor escena" en una decision entre alternativas que alguien
+    puede auditar; sin ellas es una afirmacion sin respaldo.
+
+    `scenes` son tuplas (scene, collection, window, selected, reason, params).
+    """
+    import json as _json
+
+    content_hash = hashlib.sha256(
+        _json.dumps(
+            {"scenes": sorted(s.scene_id for s, *_ in scenes), "manifest": manifest},
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+    version = _publish_version(
+        conn,
+        source_id="copernicus_sentinel",
+        record_count=len(scenes),
+        content_hash=content_hash,
+        is_synthetic=False,
+        manifest=manifest,
+    )
+
+    written = 0
+    with conn.cursor() as cur:
+        for scene, window, selected, reason, params in scenes:
+            cur.execute(
+                """
+                INSERT INTO core.satellite_scene (
+                    scene_id, collection, event_window, acquisition_date, footprint,
+                    cloud_cover, platform, processing_baseline, orbit_direction,
+                    relative_orbit, selected, selection_reason, request_parameters,
+                    processing_date, asset_path, data_version
+                ) VALUES (
+                    %s, %s, %s, %s, ST_GeomFromGeoJSON(%s), %s, %s, %s, %s, %s,
+                    %s, %s, %s::jsonb, %s, %s, %s
+                )
+                ON CONFLICT (scene_id, collection) DO NOTHING
+                """,
+                (
+                    scene.scene_id,
+                    scene.collection,
+                    window,
+                    scene.acquisition,
+                    _json.dumps(scene.geometry or _bbox_polygon(scene.bbox)),
+                    scene.cloud_cover,
+                    scene.platform,
+                    scene.processing_baseline,
+                    scene.orbit_direction,
+                    scene.relative_orbit,
+                    selected,
+                    reason,
+                    _json.dumps(params or {}),
+                    datetime.now(UTC) if selected else None,
+                    params.get("asset_path") if params else None,
+                    version,
+                ),
+            )
+            written += cur.rowcount
+    return version, written
+
+
+def _bbox_polygon(bbox: tuple[float, float, float, float]) -> dict:
+    """GeoJSON de respaldo cuando el catalogo no trae geometria."""
+    min_lon, min_lat, max_lon, max_lat = bbox
+    return {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [min_lon, min_lat],
+                [max_lon, min_lat],
+                [max_lon, max_lat],
+                [min_lon, max_lat],
+                [min_lon, min_lat],
+            ]
+        ],
+    }
+
+
 def assert_source_usable(source_id: str) -> None:
     """Control C1 de fuentes.md §6 — `UNCLEAR` no alimenta una feature."""
     from uri.ingestion.registry import SOURCES_BY_ID

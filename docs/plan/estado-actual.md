@@ -174,6 +174,7 @@ declarado**, y **lo que no ordena nada**.
 | **Contexto urbano real** (129 verdes, 58 equipamientos, red peatonal OSM) | Ver qué hay alrededor de cada sitio |
 | **Alerta de cobertura**: 6,91 km² de AOI | Sigue siendo, probablemente, el hallazgo más útil del sistema |
 | **Registro de licencias y puerta de publicación** | Saber qué se puede publicar antes de publicarlo — y que falle si no |
+| **Relieve de cobertura en 3D**: 87.715 de 190.000 personas alcanzadas (46,2 %), 610 de 1.858 celdas | Ver de un vistazo a quién NO llega el portafolio. Es la saturación de §3, hecha imagen |
 
 ### 🟡 Accionable con reserva — derivado bajo un supuesto declarado
 
@@ -268,6 +269,8 @@ En orden de impacto:
 
 | Parcial | Estado |
 |---|---|
+| **Evidencia de cambio satelital** (fase 1) | Pipeline CDSE completo y **sin correr**: no hay credenciales en este entorno. Los endpoints responden (401/400), así que falta una credencial, no acceso. `satellite_scene` y `satellite_observation` vacías — sembrarlas sería lo que ADR-17 prohíbe ([ADR-19](../adr/ADR-19-cambio-satelital-no-es-dano.md)) |
+| **Relieve 3D de cobertura** | Funcionando sobre población real. Sin edificios 3D: no existe fuente de altura |
 | Catchments de red | Reales con pgRouting, pero 27 de 115 caen a buffer y quedan marcados (`FR-FEAT-03`) |
 | Proximidad a tránsito | Las estaciones de Megabús están archivadas en `db/seed/`; el adaptador no está cableado |
 | Análisis de sensibilidad (`FR-SCEN-08`) | Existe como diagnóstico en `signal_check.py`, no como endpoint |

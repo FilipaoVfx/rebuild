@@ -32,7 +32,7 @@ descomposición exacta y contrafactuales · optimizador greedy con redundancia y
 equidad · API versionada con procedencia obligatoria · visor cartográfico
 denso en datos · exportes con puerta de licencia por perfil.
 
-109 pruebas, lint y fronteras de módulo verificadas en CI. Arranque en
+123 pruebas, lint y fronteras de módulo verificadas en CI. Arranque en
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Sin datos sintéticos
@@ -74,6 +74,38 @@ premisas del PRD.
 > `budget_binding`) en vez de dejar que el control parezca roto. Ver
 > [estado actual](docs/plan/estado-actual.md) §3.
 
+### Relieve de cobertura en 3D
+
+El mapa puede extruir la población en columnas con **deck.gl**, donde la altura
+es la población medida de cada celda y el color dice si algún proyecto del
+portafolio la alcanza. No hay edificios 3D: no existe la fuente de altura
+(`building_footprint` no la trae y OSM tiene `building:levels` en 3 elementos
+del AOI), y extruir 15.024 huellas exigiría inventar 15.021 alturas.
+
+Lo que la vista responde y la tabla no: el portafolio alcanza **87.715 de
+190.000 personas (46,2 %)** en 610 de 1.858 celdas. Las columnas apagadas son
+población que ningún proyecto seleccionado tiene a 10 minutos. Los 19 arcos —
+uno por proyecto, no uno por par sitio-celda — muestran el desplome del aporte
+marginal: 16.248 personas el primero, 30 el último.
+
+deck.gl se carga **en diferido**: 575 KB comprimidos que no paga quien solo
+quiere la tabla.
+
+### Evidencia de cambio satelital (fase 1)
+
+`scripts/fetch_sentinel.py` cataloga escenas Sentinel-1 GRD y Sentinel-2 L2A
+pre/post del sismo, elige la mejor de cada ventana con un criterio que queda
+escrito en la base, y recorta el AOI. Necesita `CDSE_CLIENT_ID` y
+`CDSE_CLIENT_SECRET` en el entorno — **nunca en el frontend**.
+
+**Nada de esto es daño.** Un cambio de retrodispersión o de NDVI lo produce
+igual una demolición que una obra nueva, una cosecha o un suelo mojado. La
+base rechaza por `CHECK` cualquier banda que se llame como un veredicto, y lo
+que se derive será `DAMAGE_EVIDENCE`, nunca `CONFIRMED_DAMAGE`
+([ADR-19](docs/adr/ADR-19-cambio-satelital-no-es-dano.md)). Las tablas están
+vacías hasta que haya credenciales: sembrarlas con escenas inventadas sería
+justo lo que ADR-17 prohíbe.
+
 La V1 **no entrega una aplicación web de propósito general**: entrega una API versionada, un paquete de evidencia exportable y un único visor cartográfico hecho a medida. El razonamiento está en [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md).
 
 ## Documentación
@@ -106,6 +138,7 @@ La V1 **no entrega una aplicación web de propósito general**: entrega una API 
 | [ADR-16](docs/adr/ADR-16-evidencia-de-dano-multifuente.md) | El daño es evidencia multifuente, no un atributo del sitio |
 | [ADR-17](docs/adr/ADR-17-prohibicion-de-datos-sinteticos.md) | Se prohíben los datos sintéticos, y la base lo impone |
 | [ADR-18](docs/adr/ADR-18-retirada-de-la-capa-del-sgc.md) | Se retira la capa del SGC, y la procedencia se sella por fuente |
+| [ADR-19](docs/adr/ADR-19-cambio-satelital-no-es-dano.md) | Un cambio satelital no es daño, y el esquema lo impide |
 
 ## Principios que gobiernan el diseño
 
