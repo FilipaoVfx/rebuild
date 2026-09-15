@@ -35,6 +35,18 @@ from uri.db import worker_connection  # noqa: E402
 from uri.ingestion import loader  # noqa: E402
 from uri.ingestion.adapters import sentinel  # noqa: E402
 
+# El adaptador lee `os.environ` directamente, no `Settings`: son credenciales
+# de un servicio externo, no configuracion de la aplicacion, y no llevan el
+# prefijo URI_. Pero el proyecto ya documenta `.env` como el sitio donde van
+# los secretos locales, asi que se carga aqui — sin el, pegar las claves en
+# `.env` fallaria en silencio con un mensaje de "faltan credenciales".
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(ROOT / ".env")
+except ImportError:  # pragma: no cover - python-dotenv es dependencia directa
+    pass
+
 #: Por defecto, el AOI que el resto del sistema ya usa: el poligono que
 #: Copernicus EMS declaro haber observado (EMSR916/AOI02), no un rectangulo
 #: dibujado a mano. El limite municipal oficial del DANE seria mejor, pero no
@@ -59,8 +71,21 @@ def main(bbox: tuple[float, float, float, float], *, dry_run: bool) -> int:
 
     try:
         client = sentinel.CdseClient()
+        # Se pide el token ANTES de empezar: una credencial mal pegada tiene
+        # que fallar aqui, con un mensaje, y no a mitad del catalogo con un
+        # traceback de 30 lineas que parece un fallo del programa.
+        client.token()
     except sentinel.CdseAuthMissing as exc:
         print(f"\n{exc}", file=sys.stderr)
+        return 2
+    except sentinel.CdseError as exc:
+        print(
+            f"\nCDSE no acepto las credenciales.\n{exc}\n\n"
+            "Revisa CDSE_CLIENT_ID y CDSE_CLIENT_SECRET (entorno o .env). "
+            "El secreto solo se muestra una vez al crear el cliente OAuth; "
+            "si se perdio, crea otro en Dashboard -> User Settings -> OAuth clients.",
+            file=sys.stderr,
+        )
         return 2
 
     considered: list[tuple] = []

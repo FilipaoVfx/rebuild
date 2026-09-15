@@ -56,14 +56,25 @@ está poblada y no ordena nada. Hoy `land_use` sale así.
 
 ## Escenas Sentinel (opcional)
 
+Las credenciales van en `.env` (ignorado por git) o en el entorno. Las dos
+formas funcionan; `cp .env.example .env` y rellena:
+
 ```bash
-export CDSE_CLIENT_ID=... CDSE_CLIENT_SECRET=...   # solo backend, nunca el visor
+CDSE_CLIENT_ID=...
+CDSE_CLIENT_SECRET=...
+```
+
+Se crean en `dataspace.copernicus.eu` → Dashboard → **User Settings → OAuth
+clients → Create**. El secreto se muestra **una sola vez**.
+
+```bash
 .venv/bin/python scripts/fetch_sentinel.py --dry-run   # cataloga y elige, sin descargar
 .venv/bin/python scripts/fetch_sentinel.py             # recorta el AOI a data/sentinel/
 ```
 
-Sin credenciales sale con código 2 y dice qué falta, en vez de escribir a
-medias. Los `.tif` no se versionan: `core.satellite_scene` guarda `scene_id` y
+El script pide el token **antes** de empezar, así que una credencial ausente o
+mal pegada sale con código 2 y un mensaje, no con un traceback a mitad del
+catálogo. Nunca en el visor ni en un archivo versionado. Los `.tif` no se versionan: `core.satellite_scene` guarda `scene_id` y
 `request_parameters` completos, que es lo que permite reconstruirlos.
 
 ## Paquete estático (GitHub Pages)
