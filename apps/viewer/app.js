@@ -63,6 +63,13 @@ const state = {
   mapReady: false,
   colorBy: "score",
   layers: Object.fromEntries(LAYERS.map((l) => [l.id, l.on])),
+  // Modo 3D: apagado por defecto y cargado en diferido. deck.gl son 575 KB
+  // comprimidos; cobrarlos en el arranque a quien solo quiere la tabla sería
+  // pagar por una vista que no pidió.
+  relief: false,
+  deckReady: false,
+  deckOverlay: null,
+  coverage: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -126,6 +133,12 @@ async function staticApi(path, options) {
       sites = sites.filter((s) => s.top_intervention === params.get("intervention"));
     }
     return { ...all, sites, total: sites.length };
+  }
+  if (path.startsWith("/scenarios/") && path.endsWith("/coverage")) {
+    const id = path.split("/")[2];
+    const all = await loadStatic("coverage.json");
+    if (!all[id]) throw new Error(`cobertura de ${id} no incluida en el paquete estático`);
+    return all[id];
   }
   if (path === "/data-sources") return loadStatic("sources.json");
   if (path === "/quality/alerts") return loadStatic("alerts.json");
@@ -481,6 +494,198 @@ function applyLayerVisibility() {
   }
 }
 
+/* ── Relieve de cobertura (deck.gl) ───────────────────────────────────────
+ *
+ * La tercera dimensión es un dato medido, no un efecto: cada columna es una
+ * celda de población y su altura ES su población. No hay altura de edificio
+ * porque no existe la fuente (las huellas de Microsoft no la traen y OSM
+ * tiene `building:levels` en 3 elementos del AOI), así que no se extruye
+ * nada que haya que inventar.
+ *
+ * Lo que la vista responde, y la tabla no puede: a quién alcanza el
+ * portafolio y a quién no. Las columnas apagadas son las personas que
+ * ningún proyecto seleccionado tiene a 10 minutos — la saturación que
+ * `stop_reason` solo nombra.
+ */
+
+const DECK_SRC = "vendor/deck.gl.js";
+
+// Un arco por PROYECTO, no por par sitio-celda: 19 líneas legibles en vez de
+// 5.982 que no dicen nada. El destino es el centroide ponderado por población
+// de lo que ese proyecto aporta por primera vez.
+const COVERED = [[38, 132, 118], [96, 206, 180]];
+const UNCOVERED = [[120, 113, 108], [176, 168, 160]];
+
+function loadDeck() {
+  if (window.deck) return Promise.resolve(window.deck);
+  return new Promise((resolve, reject) => {
+    const tag = document.createElement("script");
+    tag.src = DECK_SRC;
+    tag.onload = () => (window.deck ? resolve(window.deck) : reject(new Error("deck.gl no expuso su global")));
+    tag.onerror = () => reject(new Error("no se pudo cargar deck.gl"));
+    document.head.appendChild(tag);
+  });
+}
+
+/* La escala de altura se fija contra el máximo observado, no contra una
+ * constante: con otro AOI o otro reparto de población, una constante haría
+ * que las columnas se salieran de la pantalla o se aplastaran, y el lector
+ * leería eso como una diferencia en el dato. */
+function elevationScale(cells) {
+  const max = cells.reduce((m, c) => Math.max(m, c.population || 0), 0);
+  return max > 0 ? 900 / max : 0;
+}
+
+function reliefLayers(coverage) {
+  const { ColumnLayer, ArcLayer } = window.deck;
+  const scale = elevationScale(coverage.cells);
+  const maxArc = coverage.arcs.reduce((m, a) => Math.max(m, a.population || 0), 0) || 1;
+
+  return [
+    new ColumnLayer({
+      id: "poblacion-3d",
+      data: coverage.cells,
+      diskResolution: 4,
+      radius: 26,
+      extruded: true,
+      pickable: true,
+      elevationScale: scale,
+      getPosition: (d) => [d.lon, d.lat],
+      getElevation: (d) => d.population,
+      getFillColor: (d) => (d.covered_by ? COVERED[0] : UNCOVERED[0]),
+      getLineColor: (d) => (d.covered_by ? COVERED[1] : UNCOVERED[1]),
+      material: { ambient: 0.55, diffuse: 0.6, shininess: 32, specularColor: [255, 255, 255] },
+    }),
+    new ArcLayer({
+      id: "aporte-marginal",
+      data: coverage.arcs,
+      pickable: true,
+      getSourcePosition: (d) => d.from,
+      getTargetPosition: (d) => d.to,
+      getSourceColor: [214, 122, 45],
+      getTargetColor: COVERED[1],
+      // El grosor es el aporte marginal. El proyecto #1 trae 16.248 personas
+      // y el #19 trae 30: sin escalar, la diferencia no se vería.
+      getWidth: (d) => 2 + 10 * Math.sqrt(d.population / maxArc),
+      // Los arcos vuelan POR ENCIMA de las columnas. A poca altura quedaban
+      // enterrados entre ellas y se leían como ruido en vez de como el
+      // reparto de cobertura que son.
+      getHeight: 1.4,
+      widthUnits: "pixels",
+    }),
+  ];
+}
+
+function reliefTooltip({ object, layer }) {
+  if (!object) return null;
+  if (layer.id === "poblacion-3d") {
+    const alcance = object.covered_by
+      ? `alcanzada por ${object.covered_by}`
+      : "fuera del alcance del portafolio";
+    return {
+      text: `${fmt(object.population)} personas · ${alcance}`,
+      style: { background: "#1c1b19", color: "#f5f3ef", fontSize: "11px", padding: "6px 8px" },
+    };
+  }
+  return {
+    text: `#${object.rank} ${object.site_id}\n${fmt(object.population)} personas nuevas · ${object.cells} celdas`,
+    style: { background: "#1c1b19", color: "#f5f3ef", fontSize: "11px", padding: "6px 8px" },
+  };
+}
+
+async function setRelief(on) {
+  state.relief = on;
+  const note = $("#relief-note");
+  if (!on) {
+    if (state.deckOverlay) state.deckOverlay.setProps({ layers: [] });
+    state.map.easeTo({ pitch: 0, bearing: 0, duration: 700 });
+    if (note) note.hidden = true;
+    return;
+  }
+
+  if (note) {
+    note.hidden = false;
+    note.textContent = "Cargando deck.gl…";
+  }
+  try {
+    await loadDeck();
+    if (!state.coverage) {
+      if (!state.scenario) await runOptimization();
+      state.coverage = await api(`/scenarios/${state.scenario.scenario_id}/coverage`);
+    }
+  } catch (error) {
+    if (note) note.textContent = `No se pudo activar el relieve: ${error.message}`;
+    state.relief = false;
+    const box = $('#layer-control input[data-layer="relief"]');
+    if (box) box.checked = false;
+    return;
+  }
+
+  if (!state.deckOverlay) {
+    state.deckOverlay = new window.deck.MapboxOverlay({
+      interleaved: false,
+      layers: [],
+      getTooltip: reliefTooltip,
+    });
+    state.map.addControl(state.deckOverlay);
+  }
+  state.deckOverlay.setProps({ layers: reliefLayers(state.coverage) });
+  // Se aleja al entrar en 3D: con el encuadre de la vista plana, la inclinación
+  // deja la mitad del AOI fuera de pantalla y el hueco de cobertura —que es lo
+  // que esta vista existe para mostrar— queda justo fuera del encuadre.
+  state.map.easeTo({ pitch: 55, bearing: -18, zoom: 13.9, duration: 1400 });
+
+  const c = state.coverage;
+  const alcanzada = c.cells.reduce((s, x) => s + (x.covered_by ? x.population : 0), 0);
+  const total = c.cells.reduce((s, x) => s + x.population, 0);
+  if (note) {
+    note.innerHTML =
+      `<strong>Altura = población real.</strong> El portafolio alcanza ` +
+      `${fmt(alcanzada)} de ${fmt(total)} personas (${((alcanzada / total) * 100).toFixed(1)} %) ` +
+      `en ${c.reached} de ${c.total_cells} celdas. Las columnas apagadas no las alcanza ningún ` +
+      `proyecto seleccionado. Sin capa de altura de edificio: no existe la fuente.`;
+  }
+}
+
+/* Recorrido por los primeros proyectos del portafolio. No es decoración: es
+ * la forma más rápida de ver que el aporte marginal se desploma — el primer
+ * arco mueve una ciudad, el último mueve una manzana. */
+// Gancho de verificacion: el check de navegador necesita leer el pitch real
+// del mapa, y no hay forma de obtenerlo desde fuera sin exponerlo.
+/* El escenario que pide el boton y el que pide el relieve son el mismo, asi
+ * que la peticion vive en un solo sitio. Duplicarla dejaria dos formas de
+ * construir el cuerpo, y una de las dos se quedaria atras. */
+async function runOptimization() {
+  const maxProjects = $("#scn-max").value;
+  state.scenario = await api("/scenarios", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: $("#scn-name").value,
+      budget_cop: Number($("#scn-budget").value) * 1e9,
+      weights: state.weights,
+      max_projects: maxProjects ? Number(maxProjects) : null,
+    }),
+  });
+  // La cobertura corresponde a ESTE escenario: si se recalcula, la anterior
+  // deja de ser válida y no debe reutilizarse.
+  state.coverage = null;
+  return state.scenario;
+}
+
+window.__uriPitch = () => (state.map ? state.map.getPitch() : null);
+window.__uriCenter = () =>
+  state.map ? state.map.getCenter().toArray().map((n) => n.toFixed(4)).join(",") : null;
+
+async function tourPortfolio() {
+  if (!state.coverage) await setRelief(true);
+  const arcs = (state.coverage?.arcs || []).slice(0, 5);
+  for (const arc of arcs) {
+    state.map.flyTo({ center: arc.from, zoom: 16.2, pitch: 60, bearing: -18, duration: 2200 });
+    await new Promise((r) => setTimeout(r, 2600));
+  }
+}
+
 function renderMapControls() {
   $("#layer-control").innerHTML = `
     <div class="control-group">
@@ -502,6 +707,15 @@ function renderMapControls() {
           <span class="origin ${layer.origin}">${layer.origin}</span>
         </label>`
       ).join("")}
+    </div>
+    <div class="control-group">
+      <h3>Relieve de cobertura</h3>
+      <label class="layer-row">
+        <input type="checkbox" data-layer="relief" ${state.relief ? "checked" : ""}>
+        <span>Población en 3D</span>
+        <span class="origin derivada">derivada</span>
+      </label>
+      <button id="tour" type="button" class="ghost">Recorrer el portafolio</button>
     </div>`;
 
   $("#color-by").value = state.colorBy;
@@ -517,10 +731,19 @@ function renderMapControls() {
     .querySelectorAll("input[data-layer]")
     .forEach((input) =>
       input.addEventListener("change", () => {
+        if (input.dataset.layer === "relief") {
+          setRelief(input.checked);
+          return;
+        }
         state.layers[input.dataset.layer] = input.checked;
         applyLayerVisibility();
       })
     );
+  $("#tour").addEventListener("click", () => {
+    const box = $('#layer-control input[data-layer="relief"]');
+    if (box) box.checked = true;
+    tourPortfolio();
+  });
 }
 
 function renderMapLegend() {
@@ -1055,17 +1278,7 @@ async function main() {
     const label = button.textContent;
     button.textContent = "Calculando…";
     try {
-      const maxProjects = $("#scn-max").value;
-      state.scenario = await api("/scenarios", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: $("#scn-name").value,
-          budget_cop: Number($("#scn-budget").value) * 1e9,
-          weights: state.weights,
-          max_projects: maxProjects ? Number(maxProjects) : null,
-        }),
-      });
+      await runOptimization();
       renderPortfolio(state.scenario);
       document.querySelector('[data-panel="p-portfolio"]').click();
     } catch (error) {
