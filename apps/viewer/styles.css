@@ -318,6 +318,7 @@ tbody tr[aria-selected="true"] td:first-child { box-shadow: inset 2px 0 0 var(--
 }
 .origin.real { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
 .origin.simulada,
+.origin.derivada,
 .origin.provisional { color: #8a6200; border-color: var(--warning); }
 
 .map-caveat {

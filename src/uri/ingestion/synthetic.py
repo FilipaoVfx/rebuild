@@ -1,20 +1,23 @@
-"""Generador sintetico de capas de contexto.
+"""Generador sintético — RETIRADO.
 
-CON-01: el dataset municipal de daño no existe. En esta version tampoco
-existen como capa la poblacion a nivel de manzana, la microzonificacion de
-Pereira (D6) ni el POT. Este modulo las genera.
+Este módulo existió mientras CON-01 se sostenía: el dataset municipal de daño
+no existía y las capas de población, riesgo y uso de suelo no se habían
+localizado. Ese supuesto ya no aplica. Hoy el sistema corre sobre:
 
-Es un componente de primera clase, no un script de fixtures (SRS §7):
+    daño          Copernicus EMS EMSR916/AOI02 — 182 edificaciones
+    edificación   Microsoft Building Footprints — 15.024 huellas
+    población     total publicado, repartido dasimétricamente sobre huellas
+    riesgo        SGC, amenaza sísmica PGA475
+    uso de suelo  OSM (proxy declarado del POT)
+    contexto      OSM — red peatonal, parques, equipamientos
 
-- FR-SYN-01: misma semilla y mismos parametros producen salida identica.
-- FR-SYN-02: estructura espacial agrupada, no ruido uniforme.
-- FR-SYN-03: cada dataset generado emite su manifiesto.
-- FR-SYN-04: `is_synthetic` viaja en cada fila y no admite nulo.
+Las funciones siguen aquí porque el diagnóstico de señal las usa para medir
+cuánto dependía el resultado de una simulación — esa medición es el motivo
+por el que se retiraron. Cualquier otro uso levanta `SyntheticDataProhibited`.
 
-La trampa que este modulo crea, y que conviene tener presente: el generador
-se convierte en la especificacion de como es la realidad. Los pesos del
-modelo de scoring NO se ajustan mirando resultados calculados sobre estas
-capas (antes-de-empezar.md §5).
+El riesgo que este módulo creaba, y que conviene recordar: el generador se
+convierte en la especificación de cómo es la realidad, y afinar el modelo
+contra él enseña el generador, no el territorio.
 """
 
 from __future__ import annotations
@@ -27,6 +30,24 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 CELL_SIZE_M = 150.0
+
+
+class SyntheticDataProhibited(RuntimeError):
+    """El pipeline no admite capas simuladas."""
+
+
+#: Única puerta por la que el diagnóstico de señal puede invocar al generador.
+_DIAGNOSTIC_USE = "signal_check"
+
+
+def _guard(caller: str) -> None:
+    if caller != _DIAGNOSTIC_USE:
+        raise SyntheticDataProhibited(
+            "El generador sintético está retirado: el pipeline corre sobre "
+            "fuentes reales (Copernicus EMS, Microsoft Building Footprints, "
+            "SGC, OSM). Solo scripts/checks/signal_check.py puede invocarlo, "
+            "y únicamente para medir la dependencia histórica de la simulación."
+        )
 
 
 @dataclass(frozen=True)
@@ -119,7 +140,7 @@ def _intensity(lon: float, lat: float, centres: list[tuple[float, float, float, 
     return total
 
 
-def generate_population(
+def generate_population(  # noqa: D417
     bbox: tuple[float, float, float, float], seed: int
 ) -> tuple[list[Cell], GenerationManifest]:
     """Malla de poblacion sintetica.
@@ -182,7 +203,7 @@ def generate_population(
     return cells, manifest
 
 
-def generate_risk_zones(
+def generate_risk_zones(  # noqa: D417
     bbox: tuple[float, float, float, float], seed: int
 ) -> tuple[list[Zone], GenerationManifest]:
     """Zonas de riesgo sinteticas.
@@ -250,7 +271,7 @@ DAMAGE_MIX = (("DAMAGED", 48), ("POSSIBLY_DAMAGED", 34), ("DESTROYED", 18))
 BUILDING_TYPES = ("Residential", "Commercial", "Educational", "Industrial")
 
 
-def generate_damage(
+def generate_damage(  # noqa: D417
     bbox: tuple[float, float, float, float],
     seed: int,
     *,
@@ -313,7 +334,7 @@ def generate_damage(
 LAND_USE_CATEGORIES = ("residential", "mixed", "commercial", "institutional", "green")
 
 
-def generate_land_use(
+def generate_land_use(  # noqa: D417
     bbox: tuple[float, float, float, float], seed: int
 ) -> tuple[list[Zone], GenerationManifest]:
     """Uso de suelo sintetico. Sustituye al POT mientras no se confirme si

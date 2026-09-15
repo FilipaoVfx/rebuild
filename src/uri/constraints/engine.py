@@ -93,13 +93,21 @@ def evaluate_constraints(
             )
         )
 
-    compatibility = float(features.get("land_use_compatibility") or 0)
-    if compatibility < constraint_set.min_land_use_compatibility:
+    # `None` significa que no hay dato de uso de suelo para este sitio, y eso
+    # NO es incompatibilidad. Excluir por falta de dato convierte una laguna
+    # de cobertura en un veredicto, que es el error contrario al que una
+    # restriccion dura existe para evitar. El sitio sigue vivo y la feature
+    # queda declarada como no disponible, penalizando su confianza.
+    compatibility = features.get("land_use_compatibility")
+    if (
+        compatibility is not None
+        and float(compatibility) < constraint_set.min_land_use_compatibility
+    ):
         exclusions.append(
             Exclusion(
                 constraint_id="land_use_incompatible",
                 reason=(
-                    f"Compatibilidad de uso de suelo {compatibility:.2f} por debajo de "
+                    f"Compatibilidad de uso de suelo {float(compatibility):.2f} por debajo de "
                     f"{constraint_set.min_land_use_compatibility:.2f}"
                 ),
             )
@@ -120,7 +128,8 @@ def evaluate_penalties(
         magnitude = constraint_set.soft["moderate_risk"] * (risk - 0.4) / 0.35
         penalties.append(Penalty("moderate_risk", magnitude, f"Riesgo moderado ({risk:.2f})"))
 
-    compatibility = float(features.get("land_use_compatibility") or 0)
+    compatibility = features.get("land_use_compatibility")
+    compatibility = 0.6 if compatibility is None else float(compatibility)
     if compatibility < 0.6:
         magnitude = constraint_set.soft["low_land_use_compatibility"] * (0.6 - compatibility) / 0.6
         penalties.append(

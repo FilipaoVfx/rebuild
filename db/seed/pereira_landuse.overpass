@@ -1,0 +1,6 @@
+[out:json][timeout:180];
+(
+  nwr["landuse"](4.7850,-75.7280,4.8260,-75.6720);
+  nwr["natural"~"^(wood|scrub|water|wetland)$"](4.7850,-75.7280,4.8260,-75.6720);
+);
+out geom;

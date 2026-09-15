@@ -77,7 +77,8 @@ def build_provenance(conn, *, include_constraints: bool = False) -> Provenance:
             SELECT DISTINCT source FROM core.damage_evidence
             UNION SELECT DISTINCT original_source FROM core.damage_evidence
             UNION SELECT 'osm' WHERE EXISTS (SELECT 1 FROM osm_raw.road)
-            UNION SELECT 'synthetic' WHERE EXISTS (SELECT 1 FROM core.population_cell)
+            UNION SELECT 'microsoft_buildings'
+                WHERE EXISTS (SELECT 1 FROM core.building_footprint)
         )
         SELECT DISTINCT ON (sr.source_id)
                sr.source_id, sr.display_name, sr.license_class, sr.attribution_text,

@@ -66,15 +66,15 @@ jobs:
             || { echo "::error::falta db/seed/osm_pereira.json.gz"; exit 1; }
           echo "extracto OSM: $(du -h db/seed/osm_pereira.json.gz | cut -f1)"
 
-      # El sitio publicado corre sobre DAÑO SINTÉTICO, no sobre la evidencia
-      # satelital real. No es una simplificación: la evidencia de ICube-SERTIT
-      # está registrada con `redistribution_allowed = false`, y publicar un
-      # sitio web es redistribuir. El paso siguiente lo verifica y falla si
-      # alguna fuente no redistribuible llegó a contribuir.
-      - name: Migraciones y pipeline (daño sintético)
+      # El sitio publicado corre sobre DATOS REALES: daño de Copernicus EMS
+      # (EMSR916, CC BY 4.0), huellas de Microsoft, amenaza del SGC y contexto
+      # de OSM. Ya no hay capas simuladas — la migración 006 las prohíbe en la
+      # base. El paso siguiente verifica que ninguna fuente no redistribuible
+      # llegó a contribuir.
+      - name: Migraciones y pipeline
         run: |
           python scripts/migrate.py
-          python scripts/run_pipeline.py --synthetic-damage
+          python scripts/run_pipeline.py
 
       - name: Construir paquete estático (con puerta de licencia)
         run: python scripts/build_static.py --profile PUBLIC

@@ -50,8 +50,8 @@ const LAYERS = [
   { id: "green", label: "Espacio verde (OSM)", origin: "real", on: true },
   { id: "facilities", label: "Equipamientos (OSM)", origin: "real", on: false },
   { id: "catchments", label: "Catchment 10 min del sitio", origin: "real", on: false },
-  { id: "risk", label: "Zonas de riesgo alto", origin: "simulada", on: false },
-  { id: "population", label: "Malla de población", origin: "simulada", on: false },
+  { id: "risk", label: "Amenaza sísmica (SGC)", origin: "real", on: false },
+  { id: "population", label: "Población (dasimétrica)", origin: "derivada", on: false },
 ];
 
 const state = {
@@ -795,11 +795,11 @@ function renderDetail(detail) {
     ${
       recommendations.length
         ? `<div class="section">
-             <h2>Recomendaciones <span class="origin simulada">provisional</span></h2>
+             <h2>Recomendaciones</h2>
              <p class="note warn">
-               El orden entre sitios depende de capas simuladas: al cambiar la semilla
-               del generador, el top-20 conserva 3 de 20. Léase como estructura del
-               modelo, no como prioridad de inversión.
+               Calculado sobre datos reales. Dos features del vector no están
+               disponibles —uso de suelo normativo (IDE AMCO) y vulnerabilidad
+               social (DANE)— y se declaran como tales en lugar de rellenarse.
              </p>
              ${recBlocks}
            </div>`
@@ -881,7 +881,7 @@ function renderPortfolio(scenario) {
           <div class="u">COP · estimada (OI-05)</div></div>
         <div class="stat"><div class="k">Población servida</div>
           <div class="v">${fmt(scenario.total_population)}</div>
-          <div class="u">simulada · catchment 10 min</div></div>
+          <div class="u">catchment 10 min</div></div>
         <div class="stat"><div class="k">Gini de acceso</div>
           <div class="v">${scenario.equity_after.gini_access.toFixed(4)}</div>
           <div class="u">antes ${scenario.equity_before.gini_access.toFixed(4)} ·

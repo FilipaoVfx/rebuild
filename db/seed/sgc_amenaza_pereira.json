@@ -1,0 +1,40 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": 940,
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -75.69083796000001,
+     4.80869158184215
+    ]
+   },
+   "properties": {
+    "OBJECTID": 940,
+    "NOMDEPTO": "RISARALDA",
+    "NOMMUN": "Pereira",
+    "NOMCAB": " ",
+    "POINT_X": -75.69083499999999,
+    "POINT_Y": 4.8086839999999995,
+    "PGA75": 70,
+    "PGA225": 100,
+    "PGA475": 140,
+    "PGA975": 180,
+    "PGA2475": 250,
+    "ESPECTRO_U": "http://criolita.sgc.gov.co/amenaza-sis/IMG_ESPECTRO/RISARALDA%20Pereira.png",
+    "CURVAS_DE": "http://criolita.sgc.gov.co/amenaza-sis/IMG_EXCEDENCIA/RISARALDA%20Pereira.png",
+    "DESAGREGAC": " ",
+    "NIVEL": "Alta",
+    "AA": 0.25,
+    "AV": 0.25,
+    "AE": 0.2,
+    "AD": 0.1,
+    "PROYECCION": 467185,
+    "TIPO_1": null,
+    "RULEID": 1
+   }
+  }
+ ]
+}

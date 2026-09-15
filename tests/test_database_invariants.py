@@ -158,3 +158,48 @@ def test_la_evidencia_no_puede_observarse_despues_de_adquirirse(db_conn, throwaw
             (throwaway_version,),
         )
     db_conn.rollback()
+
+
+def test_la_base_rechaza_una_capa_sintetica(db_conn, throwaway_version):
+    """La prohibición de datos sintéticos no es una convención.
+
+    Está en la base: `is_synthetic = true` en una capa de contexto viola un
+    CHECK. Sin esto, "prohibido usar datos sintéticos" sería una frase en un
+    documento que nada obliga a cumplir.
+    """
+    with (
+        pytest.raises(psycopg.errors.CheckViolation),
+        db_conn.cursor() as cur,
+    ):
+        cur.execute(
+            """
+            INSERT INTO core.population_cell
+                (geometry, population, households, vulnerability, is_synthetic, data_version)
+            VALUES (ST_GeomFromText('POLYGON((-75.7 4.8, -75.69 4.8, -75.69 4.81,
+                                              -75.7 4.81, -75.7 4.8))', 4326),
+                    100, 30, 0.5, true, %s)
+            """,
+            (throwaway_version,),
+        )
+    db_conn.rollback()
+
+
+def test_la_base_rechaza_evidencia_de_dano_sintetica(db_conn, throwaway_version):
+    with (
+        pytest.raises(psycopg.errors.CheckViolation),
+        db_conn.cursor() as cur,
+    ):
+        cur.execute(
+            """
+            INSERT INTO core.damage_evidence
+                (source, original_source, geometry, positional_accuracy_m,
+                 observation_date, acquisition_date, damage_class, raw_damage_label,
+                 method, confidence, is_synthetic, data_version)
+            VALUES ('fixture_prueba', 'fixture_prueba',
+                    ST_GeomFromText('POINT(-75.69 4.81)', 4326), 5,
+                    '2026-08-11', '2026-08-12', 'DAMAGED', 'x', 'SYNTHETIC',
+                    0.5, true, %s)
+            """,
+            (throwaway_version,),
+        )
+    db_conn.rollback()

@@ -12,7 +12,6 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from uri import pipeline  # noqa: E402
 from uri.db import worker_connection  # noqa: E402
-from uri.settings import settings  # noqa: E402
 
 RAW = ROOT / "data" / "raw"
 SEED = ROOT / "db" / "seed"
@@ -29,17 +28,11 @@ def osm_extract() -> Path:
     )
 
 
-def main(synthetic_damage: bool = False) -> int:
+def main() -> int:
     started = time.time()
     with worker_connection() as conn:
         print("== ingesta ==")
-        report = pipeline.run_ingestion(
-            conn,
-            sertit_path=RAW / "sertit_damage.geojson",
-            osm_path=osm_extract(),
-            seed=settings.synthetic_seed,
-            synthetic_damage=synthetic_damage,
-        )
+        report = pipeline.run_ingestion(conn, osm_path=osm_extract())
         conn.commit()
         print(f"   versiones: {report.versions}")
         print(f"   conteos  : {report.counts}")
@@ -98,6 +91,4 @@ def main(synthetic_damage: bool = False) -> int:
 
 
 if __name__ == "__main__":
-    # `--synthetic-damage` sustituye la evidencia satelital por la generada.
-    # Es el unico modo publicable: SERTIT no permite redistribucion.
-    raise SystemExit(main("--synthetic-damage" in sys.argv))
+    raise SystemExit(main())

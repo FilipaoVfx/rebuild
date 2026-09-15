@@ -141,3 +141,26 @@ def test_copernicus_es_redistribuible_y_sertit_no():
     """
     assert SOURCES_BY_ID["copernicus_ems"].redistribution_allowed is True
     assert SOURCES_BY_ID["sertit"].redistribution_allowed is False
+
+
+def test_el_generador_sintetico_esta_retirado():
+    """Solo el diagnóstico puede invocarlo, y únicamente para medir la
+    dependencia histórica que motivó retirarlo."""
+    from uri.ingestion.synthetic import SyntheticDataProhibited, _guard
+
+    with pytest.raises(SyntheticDataProhibited, match="retirado"):
+        _guard("pipeline")
+    _guard("signal_check")
+
+
+def test_copernicus_sustituye_a_sertit_como_fuente_de_dano():
+    """La capa de daño publicable es la de Copernicus, no la de SERTIT."""
+    copernicus = SOURCES_BY_ID["copernicus_ems"]
+    assert copernicus.license_class is LicenseClass.ATTRIBUTION
+    assert copernicus.redistribution_allowed is True
+    assert "European Union" in copernicus.attribution_text
+
+
+def test_el_generador_ya_no_esta_registrado_como_fuente():
+    assert "synthetic" not in SOURCES_BY_ID
+    assert "microsoft_buildings" in SOURCES_BY_ID

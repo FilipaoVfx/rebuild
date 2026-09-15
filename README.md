@@ -19,8 +19,8 @@ ICube-SERTIT en Pereira a un portafolio de inversión explicado y exportable, en
 ~12 s.
 
 ```
-252 observaciones  →  113 sitios  →  72 candidatos  →  12 proyectos
-   (evidencia)        (agrupadas)    (41 excluidos)     (10,2 MM COP)
+182 observaciones  →  115 sitios  →  105 candidatos  →  19 proyectos
+  Copernicus EMS      (agrupadas)     (10 excluidos)      (5,2 MM COP)
 ```
 
 Lo que ya corre: ingesta versionada con registro de licencias · fusión de
@@ -33,26 +33,33 @@ denso en datos · exportes con puerta de licencia por perfil.
 98 pruebas, lint y fronteras de módulo verificadas en CI. Arranque en
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
-### ¿Es esto accionable hoy?
+### Sin datos sintéticos
 
-En parte, y el sistema lo mide en vez de opinarlo (`scripts/checks/signal_check.py`):
+El generador está retirado y la base lo impone: `is_synthetic = true` en una
+capa de contexto viola un `CHECK` (migración 006). Todo corre sobre fuentes
+reales, verificado por `scripts/checks/signal_check.py`:
 
-- ✅ **El inventario de evidencia de daño sí.** 113 sitios derivados de 252
-  observaciones reales, cada una con fuente, método, fecha y licencia.
-- ❌ **El orden de prioridad no.** Al regenerar las capas simuladas con otra
-  semilla, el top-20 conserva 3 de 20 sitios: hoy el ranking describe el
-  generador, no Pereira.
+| Capa | Fuente |
+|---|---|
+| Daño | Copernicus EMS `EMSR916/AOI02` — 182 edificaciones, CC BY 4.0 |
+| Edificación | Microsoft Building Footprints — 15.024 huellas |
+| Población | Total publicado del AOI, repartido dasimétricamente sobre huellas |
+| Amenaza sísmica | SGC — PGA475 para Pereira |
+| Red peatonal, parques, equipamientos, uso de suelo | OpenStreetMap |
 
-Detalle y qué haría falta para cambiarlo, en [estado actual](docs/plan/estado-actual.md).
+**Lo que falta se declara en vez de rellenarse.** Dos features del vector no
+tienen fuente alcanzable y quedan nulas: uso de suelo normativo (IDE AMCO,
+cubierto al 1%) y vulnerabilidad social (DANE, 0%). Ver
+[estado actual](docs/plan/estado-actual.md).
 
 Siguen abiertas **ocho decisiones con dueño** en
 [antes de empezar](docs/plan/antes-de-empezar.md), varias de las cuales cambian
 premisas del PRD.
 
-> Las capas de población, riesgo y uso de suelo son **simuladas**: no existen
-> como capa publicada para Pereira. La evidencia de daño y el contexto urbano
-> de OSM son reales. El sistema lo declara capa por capa en cada respuesta, en
-> cada export y en el propio mapa.
+> La amenaza sísmica del SGC es **un valor por municipio**: no hay
+> microzonificación de Pereira, así que el riesgo no varía entre sitios y la
+> restricción dura correspondiente no discrimina. El sistema lo declara en vez
+> de fabricar una variación que nadie observó.
 
 La V1 **no entrega una aplicación web de propósito general**: entrega una API versionada, un paquete de evidencia exportable y un único visor cartográfico hecho a medida. El razonamiento está en [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md).
 

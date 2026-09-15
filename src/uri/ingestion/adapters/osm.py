@@ -64,6 +64,13 @@ class OsmGreenSpace:
 
 
 @dataclass(frozen=True)
+class OsmLandUse:
+    osm_id: int
+    category: str
+    wkt: str
+
+
+@dataclass(frozen=True)
 class OsmFacility:
     osm_id: int
     amenity: str
@@ -173,3 +180,26 @@ def load_overpass(path: Path) -> tuple[list[OsmRoad], list[OsmGreenSpace], list[
             )
 
     return roads, greens, facilities
+
+
+def load_landuse(path: Path) -> list[OsmLandUse]:
+    """Usos de suelo de OSM.
+
+    Es un PROXY del POT, no el POT. IDE AMCO publica la capa normativa en un
+    GeoServer que esta sesión no alcanza (puerto 8443 fuera de la política de
+    red), así que mientras tanto se usa dato real de OSM con esa limitación
+    declarada — no una capa inventada.
+    """
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8") as handle:
+        elements = json.load(handle)["elements"]
+
+    out: list[OsmLandUse] = []
+    for element in elements:
+        tags = element.get("tags") or {}
+        geometry = element.get("geometry")
+        category = tags.get("landuse") or tags.get("natural")
+        if not category or not geometry or len(geometry) < 3:
+            continue
+        out.append(OsmLandUse(osm_id=element["id"], category=category, wkt=_ring_wkt(geometry)))
+    return out

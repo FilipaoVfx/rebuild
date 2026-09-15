@@ -176,22 +176,28 @@ SOURCES: list[SourceRegistration] = [
         ),
     ),
     SourceRegistration(
-        source_id="synthetic",
-        display_name="Generador sintetico (URI)",
+        source_id="microsoft_buildings",
+        display_name="Microsoft Building Footprints",
         tier="A",
-        source_url="urn:uri:synthetic-generator",
-        access_method="generated",
+        source_url="https://minedbuildings.z5.web.core.windows.net/global-buildings/",
+        access_method="download",
         spatial_reference="EPSG:4326",
-        license_class=LicenseClass.COMMERCIAL_SAFE,
-        license_name="Produccion propia",
-        attribution_text="Capa simulada — Urban Recovery Intelligence",
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="Open Data Commons Open Database License (ODbL)",
+        license_url="https://opendatacommons.org/licenses/odbl/",
+        attribution_text="Microsoft Building Footprints",
         redistribution_allowed=True,
         derivatives_allowed=True,
-        quality_score=0.50,
-        terms_verified_at=VERIFIED,
+        share_alike=True,
+        quality_score=0.75,
+        terms_verified_at=date(2026, 9, 15),
         terms_verified_by="equipo",
-        terms_snapshot_path="urn:uri:internal",
-        verification_notes="FR-SYN-04: is_synthetic propaga a todo artefacto derivado.",
+        terms_snapshot_path="storage://terms/ms_building_footprints_20260915.html",
+        verification_notes=(
+            "15.024 huellas dentro del AOI de EMSR916. Base dasimetrica del "
+            "reparto de poblacion y fuente de densidad construida. Sustituye "
+            "al generador sintetico, que queda retirado."
+        ),
     ),
 ]
 

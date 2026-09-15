@@ -25,21 +25,17 @@ así que el extracto archivado es lo único que permite reconstruir una
 `data_version` (`fuentes.md` §11, regla 3). También evita que cada ejecución
 dependa de que Overpass esté en pie.
 
-La evidencia de daño **real** no está versionada — ICube-SERTIT no permite
-redistribución. Para trabajar con ella:
+**Todas las fuentes están versionadas** en `db/seed/`: daño de Copernicus EMS,
+huellas de Microsoft, amenaza del SGC, uso de suelo y red de OSM, estaciones
+de Megabús. El pipeline corre sin descargar nada.
 
 ```bash
-mkdir -p data/raw
-curl -o data/raw/sertit_damage.geojson https://datosdelterremoto.org/data/public/sertit_damage.geojson
-curl -o data/raw/unosat_damage.geojson https://datosdelterremoto.org/data/public/unosat_damage.geojson
 .venv/bin/python scripts/run_pipeline.py
 ```
 
-Sin esos archivos, use daño sintético — el único modo publicable:
-
-```bash
-.venv/bin/python scripts/run_pipeline.py --synthetic-damage
-```
+**No se admiten datos sintéticos.** El generador está retirado y la migración
+006 lo impone con un `CHECK` en la base: una fila con `is_synthetic = true` en
+una capa de contexto falla al insertarse.
 
 ## Comprobaciones
 
@@ -51,9 +47,9 @@ Sin esos archivos, use daño sintético — el único modo publicable:
 .venv/bin/python scripts/checks/signal_check.py    # ¿señal o ruido? cinco mediciones
 ```
 
-`signal_check.py` es el semáforo del proyecto. Su prueba 4 regenera las capas
-simuladas con otra semilla y recalcula todo: si el top-20 cambia, el ranking
-describe el generador y no el territorio. Hoy conserva 3 de 20.
+`signal_check.py` es el semáforo del proyecto. Sus pruebas 4 y 5 comprueban
+que no queda ninguna capa simulada en el resultado y qué fracción del vector
+de features está realmente poblada.
 
 ## Paquete estático (GitHub Pages)
 

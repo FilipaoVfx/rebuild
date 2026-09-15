@@ -58,7 +58,8 @@ def assert_publishable(profile: str) -> None:
                 SELECT DISTINCT source AS source_id FROM core.damage_evidence
                 UNION SELECT DISTINCT original_source FROM core.damage_evidence
                 UNION SELECT 'osm' WHERE EXISTS (SELECT 1 FROM osm_raw.road)
-                UNION SELECT 'synthetic' WHERE EXISTS (SELECT 1 FROM core.population_cell)
+                UNION SELECT 'microsoft_buildings'
+                    WHERE EXISTS (SELECT 1 FROM core.building_footprint)
             )
             SELECT sr.source_id, sr.license_class::text AS license_class
             FROM core.source_register sr
@@ -73,9 +74,8 @@ def assert_publishable(profile: str) -> None:
         raise PublicationBlocked(
             f"El perfil {profile} no puede publicarse: contribuyen fuentes que no "
             f"permiten redistribucion — {names}.\n"
-            "Publicar un sitio web es redistribuir. Para un demo publico, "
-            "reconstruya el pipeline con daño sintetico:\n"
-            "  python scripts/run_pipeline.py --synthetic-damage"
+            "Publicar un sitio web es redistribuir. La capa de daño publicable "
+            "es la de Copernicus EMS (EMSR916), no la de SERTIT."
         )
 
 
