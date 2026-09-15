@@ -67,6 +67,7 @@ Estado actual, con la distinción entre lo verificado y lo asumido marcada expl�
 | CARDER | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** — por dataset |
 | Megabús | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** |
 | Copernicus EMS | `ATTRIBUTION` | ✅ | ✅ | ✅ | **Verificado 2026-09-15** — CC BY 4.0 según el manual de producto del JRC; falta abrir el paquete de EMSR916 |
+| Copernicus Sentinel (CDSE) | `ATTRIBUTION` | ✅ | ✅ | ✅ | **Verificado 2026-09-15** — «free, full and open access», Reg. UE 1159/2013 art. 7. Ver §7.16 |
 | International Charter | `UNCLEAR` | ⚠️ | ❌ probable | ⚠️ | **POR VERIFICAR** — ver §7.11, hay un problema anterior al de licencia |
 | SERTIT | `NON_COMMERCIAL` | ❌ | ❌ | ⚠️ | **Verificado 2026-09-15** — "reproduction […] interdite, sauf autorisation écrite préalable" |
 | UNOSAT | `UNCLEAR` | ⚠️ | ⚠️ | ⚠️ | **POR VERIFICAR por producto** |
@@ -423,6 +424,26 @@ afirmar «ICube-SERTIT clasificó 252 estructuras dañadas en Pereira el
 **Estaba clasificada `ATTRIBUTION` y es `SHARE_ALIKE`.** El registro declaraba `license_name = "ODbL"` y `share_alike = true`, pero la clase era `ATTRIBUTION`, mientras `osm` —**la misma licencia**— estaba en `SHARE_ALIKE`. La clase es lo que lee la puerta de perfiles de §6, así que la obligación de compartir igual pasaba sin aplicarse. Corregido, con una prueba que exige que toda fuente cuyo `license_name` contenga `ODbL` se clasifique igual.
 
 La consecuencia práctica es la de §8: el share-alike llega ahora por **dos** fuentes, no solo por OSM, y el aislamiento de esquemas que acota la obligación tiene que cubrir también `core.building_footprint` y lo derivado de él — que incluye `core.population_cell`.
+
+---
+
+### 7.16 Copernicus Sentinel (CDSE) — imagen cruda S1 GRD y S2 L2A · Tier A
+
+| | |
+|---|---|
+| **Aporta** | Evidencia de **cambio** pre/post del sismo: retrodispersión VV/VH y los índices NDVI, NDBI, NDWI. No aporta daño |
+| **Acceso** | OAuth2 client_credentials contra CDSE; catálogo STAC en `/catalog/v1/search`, recorte en `/process/v1`. Endpoints verificados alcanzables (401 y 400 respectivamente, o sea responden) |
+| **Licencia** | `ATTRIBUTION` — aviso legal de Copernicus, Reg. UE 1159/2013 |
+| **Términos, verbatim** | «users shall have a **free, full and open access** to Copernicus Sentinel Data», con los usos concedidos enumerados: reproducción, distribución, comunicación al público, adaptación y modificación (art. 7). Sin restricción comercial |
+| **Atribución** | `Contains modified Copernicus Sentinel data 2026`. La forma de dato **modificado**, no la de crudo (art. 8): todo lo que produce el pipeline está recortado al AOI |
+| **Copia archivada** | `db/terms/copernicus_sentinel_legal_notice_20260915.txt` y `db/terms/cdse_terminos_20260915.txt` |
+| **Modo degradado** | Sin credenciales el pipeline no corre y las tablas quedan **vacías**. No se siembran con escenas inventadas ([ADR-17](../adr/ADR-17-prohibicion-de-datos-sinteticos.md)) |
+
+**La distinción que hay que leer dos veces.** Es la misma que hundió al SGC (§7.5), pero al revés. Los términos de CDSE separan el **dato** del **portal**: el dato Sentinel es libre y abierto, mientras que «any other contents of the Copernicus Data Space Ecosystem portal are intended for non-commercial use» y ESA «do not grant the right to resell or redistribute» **eso**. Documentación, imágenes del sitio y material del portal no son redistribuibles; las escenas sí.
+
+**No confundir con `copernicus_ems` (§7.10).** Aquella es cartografía rápida ya elaborada por foto-intérpretes (EMSR916); esta es imagen cruda. Comparten programa y no comparten producto.
+
+**Y lo que no es.** Un cambio de retrodispersión no es daño. Ver [ADR-19](../adr/ADR-19-cambio-satelital-no-es-dano.md): la banda no puede llamarse como un veredicto, y la base lo impone con un `CHECK`.
 
 ---
 

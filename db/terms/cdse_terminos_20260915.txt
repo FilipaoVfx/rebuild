@@ -1,0 +1,120 @@
+Fuente:   https://dataspace.copernicus.eu/terms-and-conditions
+Obtenido: 2026-09-15
+Metodo:   curl -L, extraccion de texto del HTML servido
+========================================================================
+
+1.
+
+Introduction The Copernicus programme (Copernicus) is based on a partnership between the European Union, ESA and the Member States.
+
+ESA coordinates the acquisition and delivery of Earth observation data from space.
+
+Starting with the successful launch of Sentinel-1A in 2014, the series of Sentinel satellites have been delivering a wide range of EO data to diverse user communities worldwide.
+
+The Copernicus Data Space Ecosystem and Data supply falls under the Copernicus Programme evolution, as established with the entry into force of the “Contribution Agreement between the European Commission, representing the European Union, and the European Space Agency on the Implementation of the Union Space Programme and Horizon Europe (Pillar II, Cluster “Digital, Industry and Space”, Space Section)” (in the following referred to as ‘EU-ESA Contribution Agreement') under the “Financial Framework Partnership Agreement between the European Commission, representing the European Union and the European Union Agency for the Space Programme and the European Space Agency on the Implementation of the Union Space Programme and Horizon Europe (Pillar II, Cluster “Digital, Industry and Space”, Space Section)” (FFPA) for the period 2021-2027, and in line with the Regulation (EU)2021/696 of the European Parliament and of the Council of 28 April 2021 establishing the Union Space Programme (the “Space Programme Regulation”).
+
+2.
+
+Data supply The Copernicus Data Space Ecosystem and its online web portal, make Earth observation data available to individuals and entities worldwide.
+
+The web portal allows for the visualisation, searching, processing and download of EO data.
+
+3.
+
+Copyrights The access and use of Copernicus Sentinel data is available on a free, full and open basis through the Copernicus Data Space Ecosystem and shall be governed by the Legal Notice on the use of Copernicus Sentinel Data and Service published here: https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice Any other contents of the Copernicus Data Space Ecosystem portal are intended for non-commercial use.
+
+ESA and T-Systems grant the permission to users to visit the site, and to download and copy information, images, documents and materials from the web portal for non-commercial use.
+
+ESA and T-Systems do not grant the right to resell or redistribute any information, documents, images or material from its web portal or to compile or create derivative works from material on its web portal.
+
+Copyright of information, images, documents and materials from the web portal must be recognized by an appropriate credit. ‍ Any other content published on the Copernicus Data Space Ecosystem portal is protected by copyright and owned or controlled by ESA or the party credited as the provider of the content, software, or other material.
+
+4.
+
+User registration To access Earth observation data at the Copernicus Data Space Ecosystem, individuals and entities need to register as a user and provide the requested information.
+
+Through the registration, the user will be granted a password to access EO data.
+
+5.
+
+Personal data privacy When the user accesses the Copernicus Data Space Ecosystem web portal, registers as a user or downloads content, certain information about users, such as internet protocol (IP) addresses, data downloaded, pages visited, software used and time spent, as well as other similar information, will be stored on the servers of Level27 based in Hasselt, Belgium, Kunstlaan 18/4, 3500 and CloudFerro based in Fabryczna 5, 00-511 Warszawa, Poland.
+
+The data centre of Level27 is located in Zaventem, Belgium, the data centre of CloudFerro in Warszawa, Poland.
+
+All data processing facilities and data centers are based in the European Union.
+
+The collected information will be used in accordance with the privacy policy on this web portal.
+
+Whenever sharing user information with individuals or entities other than the parties referred to in the Privacy policy, the data will be dealt with anonymously.
+
+For more information on the Privacy policy please refer to https://dataspace.copernicus.eu/privacy-policy .
+
+6.
+
+Use of cookies Cookies are pieces of information that a web portal transfers to an individual hard drive for record-keeping purposes; passwords are not saved in cookies.
+
+Cookies help to know which pages are visited most often and help to ensure that the web portal responds to users' needs.
+
+If you do not wish to receive a cookie, or if you wish your browser to notify you when you receive a cookie, you may use the option on your web browser to disable cookies.
+
+Click on the 'help' section of your browser to learn how to change cookie preferences.
+
+However, please note that if you disable all cookies, you may not be able to take advantage of all the features available on this web portal.
+
+ESA and T-Systems do not use personal identification details transferred through cookies either for promotion or marketing purposes.
+
+T-Systems will make use of a third-party provider, Piwik Pro, to place cookies on this web portal.
+
+For more information on the Cookie Privacy policy please refer to https://dataspace.copernicus.eu/privacy-policy .
+
+7.
+
+Availability of the Service ESA will make best efforts to provide the data access services through the Copernicus Data Space Ecosystem.
+
+It is understood and recognised by all individuals and entities having accepted these Terms and Conditions, that ESA is not in a position to guarantee the availability of Earth observation data through the Copernicus Data Space Ecosystem.
+
+In particular, ESA reserves the right to review, modify, suspend or terminate the provision of Earth observation data through the Copernicus Data Space Ecosystem at any time in the event: of technical capacity constraints due to the number of user requests of lack of sufficient funding for sustaining Sentinel missions, and associated facilities and activities that satellite or ground system failure occurs that planned activities of related Sentinel systems and facilities are suspended or cancelled for ESA to carry out activities considered of a higher priority.
+
+The operating entities of the Earth observation data provided through the Copernicus Data Space Ecosystem e.g., ESA, may modify their satellite operations plans at any time, should they consider such corrective action necessary for ensuring the missions safety and success.
+
+8.
+
+Waiver of Liability With regard to the service offered by ESA and T-Systems through the Copernicus Data Space Ecosystem the user shall have no claim against ESA and T-Systems, its employees, related entities or employees of such entities, with respect to any injury to, or death of its own employees or employees of related entities or for damage to or loss of its own property or that of its related entities, whether such injury, death, damage or loss arise through negligence or otherwise, except in the case of gross negligence or wilful misconduct.
+
+9.
+
+Use of the Copernicus Data Space Ecosystem By registering at the Copernicus Data Space Ecosystem, accessing, processing and\or downloading available Earth observation data, the user shall act in good faith and shall not misuse or interfere the service of the portals.
+
+The Copernicus Data Space Ecosystem uses map layers as reference information for assisting data selection, ESA, T-Systems, and their suppliers offer no guarantees of any kind in connection to their accuracy or completeness.
+
+In order to secure efficient data access and ensure fair use of the services to all users, one legal entity or organization, or individual person who intends to access or copy amounts of data greatly exceeding the limitations set out in https://documentation.dataspace.copernicus.eu/Quotas.html should not bypass such limitations by creating multiple user accounts (in tens, hundreds or thousands).
+
+Such activity could be treated as a breach of these Terms and Conditions and may result in an immediate cessation or limitation of the services.
+
+10.
+
+Use of the Copernicus Data Space Ecosystem Community forum The use of the Copernicus Data Space Ecosystem community forum is subject to the above mentioned terms and conditions.
+
+In addition, the following conditions must be followed to make use of the forum:
+
+You must be at least 18 years old.
+
+1.
+
+By using the forum and its associated services you confirm you are above the age of 18 years.
+
+You may no longer use the forum if we contact you directly to say that you may not.
+
+You must use the forum in accordance with the following acceptable use and content standards:
+
+1.
+
+You may not break the law using the forum and you may not submit content to the forum that is illegal, offensive, or otherwise harmful to others.
+
+This includes content that is harassing, inappropriate, or abusive.
+
+You may not submit content to the forum that violates the law, infringes anyone’s intellectual property rights, violates anyone’s privacy, or breaches agreements you have with others.
+
+2.
+
+You may not use or try to use anothe

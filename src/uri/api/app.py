@@ -620,6 +620,120 @@ def site_tiles(conn: Conn, z: int, x: int, y: int) -> Response:
     return Response(content=bytes(row["tile"]), media_type="application/vnd.mapbox-vector-tile")
 
 
+@app.get(f"{API_PREFIX}/scenarios/{{scenario_id}}/coverage")
+def scenario_coverage(conn: Conn, scenario_id: str) -> dict:
+    """Quien queda dentro del alcance del portafolio, y quien no.
+
+    Es la vista que hace visible la saturacion que `stop_reason` solo nombra.
+    Devuelve dos cosas, y la segunda es la interesante:
+
+    - `cells`: las celdas de poblacion con su altura real y si algun proyecto
+      del escenario las alcanza. Las que nadie alcanza son el dato.
+    - `arcs`: UN arco por proyecto, no uno por par sitio-celda. El destino es
+      el centroide ponderado por poblacion de las celdas que ese proyecto
+      aporta POR PRIMERA VEZ, en el orden en que el greedy las eligio. Un
+      arco por par serian miles de lineas cruzadas que no dicen nada; uno por
+      proyecto dice exactamente lo que el optimizador decidio.
+    """
+    scenario = fetch_one(
+        conn, "SELECT scenario_id FROM core.scenario WHERE scenario_id = %s", (scenario_id,)
+    )
+    if scenario is None:
+        raise HTTPException(404, f"escenario {scenario_id} no encontrado")
+
+    cells = fetch_all(
+        conn,
+        """
+        SELECT p.cell_id, p.population,
+               ST_X(ST_Centroid(p.geometry)) AS lon,
+               ST_Y(ST_Centroid(p.geometry)) AS lat
+        FROM core.population_cell p
+        ORDER BY p.cell_id
+        """,
+    )
+    # Pares sitio-celda de los proyectos del escenario, en orden de seleccion.
+    pairs = fetch_all(
+        conn,
+        """
+        SELECT ss.site_id, ss.rank, p.cell_id, p.population,
+               ST_X(s.centroid) AS site_lon, ST_Y(s.centroid) AS site_lat,
+               ST_X(ST_Centroid(p.geometry)) AS cell_lon,
+               ST_Y(ST_Centroid(p.geometry)) AS cell_lat
+        FROM core.scenario_site ss
+        JOIN core.site s USING (site_id)
+        JOIN analytics.site_catchment c
+          ON c.site_id = ss.site_id AND c.minutes = 10 AND c.feature_version = %s
+        JOIN core.population_cell p ON ST_Intersects(p.geometry, c.geometry)
+        WHERE ss.scenario_id = %s
+        ORDER BY ss.rank
+        """,
+        (pipeline.FEATURE_VERSION, scenario_id),
+    )
+
+    # El mismo criterio de marginalidad que el optimizador: una celda ya
+    # cubierta no vuelve a contar. Recorrer por `rank` reproduce el orden del
+    # greedy, asi que "primera vez" aqui significa lo mismo que alli.
+    claimed: dict[int, str] = {}
+    accrual: dict[str, dict] = {}
+    for row in pairs:
+        site_id = row["site_id"]
+        slot = accrual.setdefault(
+            site_id,
+            {
+                "site_id": site_id,
+                "rank": row["rank"],
+                "from": [float(row["site_lon"]), float(row["site_lat"])],
+                "_lon": 0.0,
+                "_lat": 0.0,
+                "population": 0.0,
+                "cells": 0,
+            },
+        )
+        if row["cell_id"] in claimed:
+            continue
+        claimed[row["cell_id"]] = site_id
+        population = float(row["population"])
+        slot["_lon"] += float(row["cell_lon"]) * population
+        slot["_lat"] += float(row["cell_lat"]) * population
+        slot["population"] += population
+        slot["cells"] += 1
+
+    arcs = []
+    for slot in sorted(accrual.values(), key=lambda s: s["rank"]):
+        if slot["population"] <= 0:
+            # Un proyecto que no aporta cobertura nueva no dibuja arco: su
+            # aporte fue cero y una linea sugeriria lo contrario.
+            continue
+        arcs.append(
+            {
+                "site_id": slot["site_id"],
+                "rank": slot["rank"],
+                "from": slot["from"],
+                "to": [slot["_lon"] / slot["population"], slot["_lat"] / slot["population"]],
+                "population": round(slot["population"], 2),
+                "cells": slot["cells"],
+            }
+        )
+
+    return {
+        "scenario_id": scenario_id,
+        "cells": [
+            {
+                "cell_id": row["cell_id"],
+                "lon": float(row["lon"]),
+                "lat": float(row["lat"]),
+                "population": float(row["population"]),
+                "covered_by": claimed.get(row["cell_id"]),
+            }
+            for row in cells
+        ],
+        "arcs": arcs,
+        "reached": len(claimed),
+        "total_cells": len(cells),
+        "provenance": build_provenance(conn, include_constraints=True),
+    }
+
+
 @app.get(f"{API_PREFIX}/geojson/{{layer}}")
 def layer_geojson(conn: Conn, layer: str) -> Response:
     """Capas ligeras para el visor. Las pesadas van por tiles (FR-API-03).

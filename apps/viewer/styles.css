@@ -330,8 +330,19 @@ tbody tr[aria-selected="true"] td:first-child { box-shadow: inset 2px 0 0 var(--
 }
 
 .export-row { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; }
+/* Leyenda y nota del relieve se apilan en FLUJO, no con offsets fijos: el
+   alto de la leyenda depende de cuantos tramos tenga la escala, asi que
+   cualquier `bottom` calculado a mano se rompe al cambiarla. `column-reverse`
+   deja la leyenda abajo y la nota encima sin que ninguna sepa el alto de la
+   otra. */
+.map-bottom {
+  position: absolute; bottom: 24px; left: 12px; right: 256px; z-index: 5;
+  display: flex; flex-direction: column-reverse; gap: 8px; align-items: flex-start;
+  pointer-events: none;
+}
+.map-bottom > * { pointer-events: auto; }
+
 .map-legend {
-  position: absolute; bottom: 24px; left: 12px; z-index: 5;
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 4px;
   padding: 8px 10px; font-size: 11px;
 }
@@ -362,3 +373,23 @@ td.absent {
   color: var(--muted); font-size: 10px; font-style: italic;
   text-transform: lowercase; letter-spacing: 0.02em;
 }
+
+/* Nota del relieve. Va abajo del mapa y no arriba: lo que explica es la
+   vista completa, no un elemento concreto, y arriba competiría con el
+   caveat de procedencia. */
+.relief-note {
+  align-self: stretch; margin: 0;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-left: 2px solid var(--s1); border-radius: 4px;
+  padding: 8px 10px; font-size: 11px; line-height: 1.5; color: var(--ink-2);
+}
+@media (max-width: 1100px) {
+  .map-bottom { right: 12px; }
+}
+
+button.ghost {
+  margin-top: 8px; width: 100%; padding: 5px 8px; font: inherit; font-size: 11px;
+  background: var(--surface-2, transparent); color: var(--ink-2);
+  border: 1px solid var(--border); border-radius: 3px; cursor: pointer;
+}
+button.ghost:hover { color: var(--ink-1); border-color: var(--s1); }

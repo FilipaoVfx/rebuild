@@ -76,6 +76,73 @@ async def main(base: str, prefix: str) -> int:
                 errors.append(f"la atribucion nombra a '{gone}', que no aporta dato")
         print("atribucion:", attribution.strip())
 
+        # ── Relieve 3D (deck.gl) ─────────────────────────────────────────
+        #
+        # deck.gl se carga en diferido, asi que hasta aqui NO debe estar en la
+        # pagina: si lo estuviera, el arranque pagaria 575 KB comprimidos por
+        # una vista que nadie pidio.
+        if await page.evaluate("() => !!window.deck"):
+            errors.append("deck.gl se cargo en el arranque; debia ser en diferido")
+
+        await page.click('#layer-control input[data-layer="relief"]')
+        try:
+            await page.wait_for_function("() => !!window.deck", timeout=60000)
+            await page.wait_for_function(
+                "() => { const n = document.querySelector('#relief-note');"
+                " return n && !n.hidden && n.textContent.includes('Altura'); }",
+                timeout=60000,
+            )
+        except Exception as exc:  # noqa: BLE001 - se reporta, no se traga
+            errors.append(f"el relieve 3D no se activo: {exc}")
+
+        await page.wait_for_timeout(3500)
+        relief = await page.evaluate(
+            "() => ({"
+            " canvases: document.querySelectorAll('#map canvas').length,"
+            " pitch: window.__uriPitch ? window.__uriPitch() : null,"
+            " nota: (document.querySelector('#relief-note') || {}).textContent || ''"
+            "})"
+        )
+        print("lienzos tras activar 3D:", relief["canvases"])
+        print("nota del relieve:", " ".join(relief["nota"].split())[:150])
+        # deck.gl dibuja en su propio lienzo sobre el de MapLibre.
+        if relief["canvases"] < 2:
+            errors.append("deck.gl no anadio su lienzo al mapa")
+        # La nota tiene que llevar numeros medidos, no una frase generica.
+        if "%" not in relief["nota"] or "personas" not in relief["nota"]:
+            errors.append("la nota del relieve no reporta la cobertura medida")
+        await page.screenshot(path=f"/tmp/{prefix}_relieve3d.png")
+
+        # La nota explica los colores que la leyenda define: si se superponen,
+        # la vista pierde justo lo que la hace legible.
+        boxes = await page.evaluate(
+            "() => { const r = (s) => { const e = document.querySelector(s);"
+            " return e && !e.hidden ? e.getBoundingClientRect().toJSON() : null; };"
+            " return { nota: r('#relief-note'), leyenda: r('.map-legend') }; }"
+        )
+        nota, leyenda = boxes["nota"], boxes["leyenda"]
+        if nota and leyenda:
+            solapa = (
+                nota["left"] < leyenda["right"]
+                and leyenda["left"] < nota["right"]
+                and nota["top"] < leyenda["bottom"]
+                and leyenda["top"] < nota["bottom"]
+            )
+            if solapa:
+                errors.append("la nota del relieve se superpone con la leyenda del mapa")
+
+        # El recorrido mueve la camara: si no, es un boton que no hace nada.
+        antes = await page.evaluate("() => window.__uriCenter()")
+        await page.click("#tour")
+        await page.wait_for_timeout(4000)
+        despues = await page.evaluate("() => window.__uriCenter()")
+        if antes == despues:
+            errors.append("el recorrido del portafolio no movio la camara")
+        print("recorrido movio la camara:", antes != despues)
+
+        await page.click('#layer-control input[data-layer="relief"]')
+        await page.wait_for_timeout(1200)
+
         # Seleccion desde el mapa -> panel de detalle.
         box = await page.locator("#map").bounding_box()
         await page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)

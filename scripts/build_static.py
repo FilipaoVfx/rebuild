@@ -137,6 +137,17 @@ def main(profile: str) -> int:
         print(f"  {mmm} MM COP → {len(scenario['items'])} proyectos")
     write(data / "scenarios.json", scenarios)
 
+    # La cobertura del relieve 3D: que celdas alcanza cada escenario y cual
+    # es el aporte marginal de cada proyecto. Sin backend no se puede pedir
+    # bajo demanda, asi que se vuelca junto al escenario que la produjo.
+    print("volcando cobertura")
+    coverage = {}
+    for scenario in scenarios:
+        response = client.get(f"/api/v1/scenarios/{scenario['scenario_id']}/coverage")
+        response.raise_for_status()
+        coverage[scenario["scenario_id"]] = response.json()
+    write(data / "coverage.json", coverage)
+
     total = sum(f.stat().st_size for f in DIST.rglob("*") if f.is_file())
     print(f"\ndist/ listo — {total / 1024 / 1024:.1f} MB")
     return 0

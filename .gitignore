@@ -8,3 +8,8 @@ dist/
 data/raw/*
 !data/raw/.gitkeep
 dist/
+
+# Recortes Sentinel: se reconstruyen desde scene_id + request_parameters
+# (data/sentinel/README.md). Un binario por escena no anade reproducibilidad.
+data/sentinel/**/*.tif
+data/sentinel/**/*.tiff

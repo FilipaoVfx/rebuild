@@ -117,6 +117,48 @@ SOURCES: list[SourceRegistration] = [
         ),
     ),
     SourceRegistration(
+        source_id="copernicus_sentinel",
+        display_name="Copernicus Sentinel (CDSE)",
+        tier="A",
+        source_url="https://sh.dataspace.copernicus.eu/",
+        access_method="api",
+        spatial_reference="EPSG:4326",
+        # La fuente mas limpia del registro, y por una vez la auditoria salio
+        # en la direccion permisiva. El Reglamento (UE) 1159/2013, art. 7,
+        # concede reproduccion, distribucion, comunicacion publica y
+        # modificacion; el art. 8 exige la nota de atribucion, y nada mas.
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="Legal notice on the use of Copernicus Sentinel Data (Reg. UE 1159/2013)",
+        license_url="https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice",
+        # Art. 8: el texto exacto depende de si el dato se modifico. Todo lo
+        # que este sistema publica esta recortado y reproyectado al AOI, asi
+        # que la forma correcta es la de dato MODIFICADO, no la de dato crudo.
+        attribution_text="Contains modified Copernicus Sentinel data 2026",
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        share_alike=False,
+        quality_score=0.80,
+        terms_verified_at=date(2026, 9, 15),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/copernicus_sentinel_legal_notice_20260915.txt",
+        verification_notes=(
+            "Aviso legal verificado verbatim: 'users shall have a free, full and "
+            "open access to Copernicus Sentinel Data', con los usos concedidos "
+            "enumerados — reproduccion, distribucion, comunicacion al publico, "
+            "adaptacion y modificacion. Sin restriccion comercial. Copia en "
+            "db/terms/copernicus_sentinel_legal_notice_20260915.txt. "
+            "OJO CON LA DISTINCION, que es la misma que hundio al SGC pero al "
+            "reves: los terminos de CDSE separan el DATO del PORTAL. El dato es "
+            "libre; 'any other contents of the Copernicus Data Space Ecosystem "
+            "portal are intended for non-commercial use' y ESA 'do not grant the "
+            "right to resell or redistribute' ESO. Documentacion, imagenes del "
+            "sitio y material del portal NO son redistribuibles; las escenas si. "
+            "Copia de los terminos del portal en db/terms/cdse_terminos_20260915.txt. "
+            "Distinta de `copernicus_ems`: aquella es cartografia rapida ya "
+            "elaborada (EMSR916), esta es imagen cruda S1 GRD y S2 L2A."
+        ),
+    ),
+    SourceRegistration(
         source_id="osm",
         display_name="OpenStreetMap",
         tier="A",
