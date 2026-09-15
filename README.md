@@ -14,9 +14,11 @@ No es una IA que decide qué debe construir una ciudad. Es una capa de soporte a
 
 ## Estado
 
-Slice vertical funcionando sobre datos reales: de 252 observaciones de daño de
-ICube-SERTIT en Pereira a un portafolio de inversión explicado y exportable, en
-~12 s.
+Slice vertical funcionando sobre datos reales: de 182 observaciones de daño de
+Copernicus EMS en el AOI de Pereira a un portafolio de inversión explicado y
+exportable, en ~12 s. ICube-SERTIT ya no alimenta nada: sigue en el registro de
+fuentes con `redistribution_allowed = false`, y la puerta de publicación lo
+bloquearía si volviera a contribuir.
 
 ```
 182 observaciones  →  115 sitios  →  105 candidatos  →  19 proyectos
@@ -30,7 +32,7 @@ descomposición exacta y contrafactuales · optimizador greedy con redundancia y
 equidad · API versionada con procedencia obligatoria · visor cartográfico
 denso en datos · exportes con puerta de licencia por perfil.
 
-98 pruebas, lint y fronteras de módulo verificadas en CI. Arranque en
+109 pruebas, lint y fronteras de módulo verificadas en CI. Arranque en
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Sin datos sintéticos
@@ -44,22 +46,33 @@ reales, verificado por `scripts/checks/signal_check.py`:
 | Daño | Copernicus EMS `EMSR916/AOI02` — 182 edificaciones, CC BY 4.0 |
 | Edificación | Microsoft Building Footprints — 15.024 huellas |
 | Población | Total publicado del AOI, repartido dasimétricamente sobre huellas |
-| Amenaza sísmica | SGC — PGA475 para Pereira |
 | Red peatonal, parques, equipamientos, uso de suelo | OpenStreetMap |
+| Amenaza sísmica | **ninguna** — la del SGC se retiró por licencia ([ADR-18](docs/adr/ADR-18-retirada-de-la-capa-del-sgc.md)) |
 
-**Lo que falta se declara en vez de rellenarse.** Dos features del vector no
-tienen fuente alcanzable y quedan nulas: uso de suelo normativo (IDE AMCO,
-cubierto al 1%) y vulnerabilidad social (DANE, 0%). Ver
+**Lo que falta se declara en vez de rellenarse.** Tres features del vector no
+tienen fuente utilizable y quedan nulas: amenaza sísmica (SGC, retirada por
+licencia), uso de suelo normativo (IDE AMCO, cubierto al 1 %) y vulnerabilidad
+social (DANE, 0 %). En la tabla se leen como `sin fuente`, no como una barra en
+cero: el cero es el valor más favorable en esas escalas. Ver
 [estado actual](docs/plan/estado-actual.md).
 
 Siguen abiertas **ocho decisiones con dueño** en
 [antes de empezar](docs/plan/antes-de-empezar.md), varias de las cuales cambian
 premisas del PRD.
 
-> La amenaza sísmica del SGC es **un valor por municipio**: no hay
-> microzonificación de Pereira, así que el riesgo no varía entre sitios y la
-> restricción dura correspondiente no discrimina. El sistema lo declara en vez
-> de fabricar una variación que nadie observó.
+> **La amenaza sísmica del SGC se retiró.** Sus términos prohíben reproducir,
+> publicar o distribuir sin consentimiento previo por escrito, y se estaba
+> publicando sellada con la versión de otra fuente, donde la puerta de licencia
+> no podía verla. Retirarla no costó una sola decisión: era un valor por
+> municipio —0,28 en los 115 sitios— que no excluía ni penalizaba a nadie.
+> Detalle en [ADR-18](docs/adr/ADR-18-retirada-de-la-capa-del-sgc.md).
+
+> **El presupuesto no es lo que limita el portafolio.** Los escenarios de 10,
+> 25, 50 y 100 MM COP devuelven el mismo resultado: 19 proyectos por 5,19 MM
+> COP. El objetivo es de cobertura y satura — tras 19 sitios ningún candidato
+> restante alcanza población nueva. La respuesta lo declara (`stop_reason`,
+> `budget_binding`) en vez de dejar que el control parezca roto. Ver
+> [estado actual](docs/plan/estado-actual.md) §3.
 
 La V1 **no entrega una aplicación web de propósito general**: entrega una API versionada, un paquete de evidencia exportable y un único visor cartográfico hecho a medida. El razonamiento está en [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md).
 
@@ -91,6 +104,8 @@ La V1 **no entrega una aplicación web de propósito general**: entrega una API 
 |---|---|
 | [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md) | La V1 no entrega una aplicación web de propósito general |
 | [ADR-16](docs/adr/ADR-16-evidencia-de-dano-multifuente.md) | El daño es evidencia multifuente, no un atributo del sitio |
+| [ADR-17](docs/adr/ADR-17-prohibicion-de-datos-sinteticos.md) | Se prohíben los datos sintéticos, y la base lo impone |
+| [ADR-18](docs/adr/ADR-18-retirada-de-la-capa-del-sgc.md) | Se retira la capa del SGC, y la procedencia se sella por fuente |
 
 ## Principios que gobiernan el diseño
 

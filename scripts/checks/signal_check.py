@@ -27,11 +27,14 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from uri import pipeline  # noqa: E402
+from uri.contracts import CONTRIBUTING_SOURCES_SQL  # noqa: E402
 from uri.db import worker_connection  # noqa: E402
 from uri.scoring.model import DEFAULT_WEIGHTS  # noqa: E402
 
 TOP_N = 20
 PORTFOLIO_BUDGET = 25_000_000_000
+#: La fuente que sella la corrida, la misma que usa scripts/run_pipeline.py.
+DAMAGE_SOURCE = "copernicus_ems"
 
 #: De que capa proviene cada factor del modelo. Tras retirar el generador,
 #: todas son reales o derivadas de un dato real por un metodo declarado.
@@ -61,10 +64,30 @@ def overlap(a: list[str], b: list[str]) -> float:
 
 
 def recompute(conn) -> tuple[dict, list[str]]:
-    """Recalcula features, restricciones, scoring y portafolio."""
+    """Recalcula features, restricciones, scoring y portafolio.
+
+    La version se resuelve por FUENTE y no con `max(data_version)`. El maximo
+    es de quien escribio ultimo: las fixtures de prueba publican versiones
+    propias que no se pueden borrar (la tabla es inmutable por trigger), y el
+    diagnostico acababa sellando cada fila de `site_feature` con la procedencia
+    de una prueba. Un diagnostico que corrompe la procedencia de lo que mide no
+    es un diagnostico.
+    """
     with conn.cursor() as cur:
-        cur.execute("SELECT max(data_version) AS v FROM core.dataset_version")
+        cur.execute(
+            """
+            SELECT max(data_version) AS v
+            FROM core.dataset_version
+            WHERE source_id = %s
+            """,
+            (DAMAGE_SOURCE,),
+        )
         version = cur.fetchone()["v"]
+    if version is None:
+        raise SystemExit(
+            f"No hay ninguna version de dataset para {DAMAGE_SOURCE}: "
+            "corre scripts/run_pipeline.py primero."
+        )
 
     pipeline.run_features(conn, data_version=version)
     pipeline.apply_constraints(conn)
@@ -144,11 +167,18 @@ def main() -> int:
 
         # ── 4. Dependencia de lo simulado ──────────────────────────────────
         with conn.cursor() as cur:
+            # Una version sintetica que no alimenta ninguna fila no esta "en
+            # el resultado": es una fila huerfana en un catalogo inmutable —
+            # las fixtures de prueba dejan varias, y no se pueden borrar. La
+            # medicion es sobre lo que las capas referencian, no sobre lo que
+            # existe en la tabla.
             cur.execute(
-                """
-                SELECT sr.source_id, dv.is_synthetic, count(*) OVER () AS total
+                CONTRIBUTING_SOURCES_SQL
+                + """
+                SELECT DISTINCT dv.source_id
                 FROM core.dataset_version dv
-                JOIN core.source_register sr USING (source_id)
+                JOIN contributing c USING (source_id)
+                JOIN referenciada r USING (data_version)
                 WHERE dv.is_synthetic
                 """
             )
@@ -178,33 +208,59 @@ def main() -> int:
             )
         )
 
-        # ── 5. Cobertura de features ───────────────────────────────────────
+        # ── 5. Cobertura y poder de discriminacion de features ─────────────
+        #
+        # La cobertura sola engaña: una feature presente en el 100% de los
+        # sitios con UN solo valor distinto esta poblada y no discrimina nada.
+        # Cuenta como dato disponible en cualquier tabla de cobertura y como
+        # cero informacion en el score. Por eso se miden las dos cosas.
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT
                     count(*) AS sitios,
                     count(risk_score) AS risk,
+                    count(DISTINCT risk_score) AS risk_d,
                     count(land_use_compatibility) AS land_use,
+                    count(DISTINCT land_use_compatibility) AS land_use_d,
                     count(population_10min) AS poblacion,
+                    count(DISTINCT population_10min) AS poblacion_d,
                     count(social_vulnerability) AS vulnerabilidad,
+                    count(DISTINCT social_vulnerability) AS vulnerabilidad_d,
                     count(park_deficit) AS deficit,
+                    count(DISTINCT park_deficit) AS deficit_d,
                     count(building_density) AS densidad,
-                    count(*) FILTER (WHERE catchment_method = 'NETWORK') AS red
+                    count(DISTINCT building_density) AS densidad_d,
+                    count(*) FILTER (WHERE catchment_method = 'NETWORK') AS red,
+                    2 AS red_d
                 FROM analytics.site_feature
                 """
             )
             cov = cur.fetchone()
 
-        print("\n5. COBERTURA DE FEATURES")
+        print("\n5. COBERTURA Y DISCRIMINACION DE FEATURES")
         sitios = cov["sitios"] or 1
         tracked = ("risk", "land_use", "poblacion", "vulnerabilidad", "deficit", "densidad", "red")
+        constantes = []
         for key in tracked:
-            print(f"   {key:16} {cov[key]:5}/{sitios}  {cov[key] / sitios:6.0%}")
+            distintos = cov[f"{key}_d"]
+            marca = ""
+            if cov[key] and distintos <= 1:
+                marca = "  ← CONSTANTE: no discrimina"
+                constantes.append(key)
+            print(
+                f"   {key:16} {cov[key]:5}/{sitios}  {cov[key] / sitios:6.0%}"
+                f"   {distintos:4} {'valor ' if distintos == 1 else 'valores'}{marca}"
+            )
         print(
             "   → las features al 0 por ciento se declaran no disponibles; "
             "no se rellenan con un valor inventado"
         )
+        if constantes:
+            print(
+                f"   → {', '.join(constantes)}: un solo valor en toda la tabla. "
+                "Entra al score sin ordenar nada"
+            )
 
         print("\n" + "=" * 72)
         return 0

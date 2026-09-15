@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from fastapi.testclient import TestClient  # noqa: E402
 
 from uri.api.app import app  # noqa: E402
+from uri.contracts import CONTRIBUTING_SOURCES_SQL  # noqa: E402
 from uri.db import worker_connection  # noqa: E402
 
 VIEWER = ROOT / "apps" / "viewer"
@@ -35,7 +36,10 @@ DIST = ROOT / "dist"
 #: Presupuestos precalculados, en miles de millones de COP.
 BUDGETS_MMM = (10, 25, 50, 100)
 
-LAYERS = ("sites", "evidence", "green", "facilities", "risk", "population", "catchments")
+#: Sin "risk": retirada la capa del SGC por licencia (ADR-18) no hay
+#: amenaza que servir, y publicar una coleccion vacia solo produce un
+#: control de capa que no enciende nada.
+LAYERS = ("sites", "evidence", "green", "facilities", "population", "catchments")
 
 
 class PublicationBlocked(RuntimeError):
@@ -53,14 +57,8 @@ def assert_publishable(profile: str) -> None:
         return
     with worker_connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """
-            WITH contributing AS (
-                SELECT DISTINCT source AS source_id FROM core.damage_evidence
-                UNION SELECT DISTINCT original_source FROM core.damage_evidence
-                UNION SELECT 'osm' WHERE EXISTS (SELECT 1 FROM osm_raw.road)
-                UNION SELECT 'microsoft_buildings'
-                    WHERE EXISTS (SELECT 1 FROM core.building_footprint)
-            )
+            CONTRIBUTING_SOURCES_SQL
+            + """
             SELECT sr.source_id, sr.license_class::text AS license_class
             FROM core.source_register sr
             JOIN contributing c USING (source_id)

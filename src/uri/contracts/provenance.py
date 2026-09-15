@@ -42,3 +42,48 @@ class Provenance(BaseModel):
     @property
     def synthetic_layers(self) -> list[str]:
         return [layer.layer for layer in self.layers if layer.is_synthetic]
+
+
+#: Las tablas que contienen dato publicable y su version de dataset. Es la
+#: definicion unica de "que alimenta el resultado": la puerta de publicacion,
+#: la puerta de export y el panel de procedencia la comparten, porque tres
+#: listas escritas a mano se desincronizan y la que se queda corta es la que
+#: deja pasar una fuente sin evaluar.
+PUBLISHED_LAYER_TABLES = (
+    "core.damage_evidence",
+    "core.site",
+    "core.population_cell",
+    "core.risk_zone",
+    "core.land_use",
+    "core.building_footprint",
+    "osm_raw.road",
+    "osm_raw.green_space",
+    "osm_raw.facility",
+    "analytics.site_feature",
+)
+
+#: SQL que resuelve las fuentes que contribuyen al resultado.
+#:
+#: Dos vias, y hacen falta las dos. Por VERSION: cada capa referencia la
+#: version de su propia fuente, asi que basta con seguir la referencia — sin
+#: nombres magicos que alguien tenga que acordarse de añadir al cargar una capa
+#: nueva. Por `original_source`: un agregador entrega dato que no produjo, y
+#: mirar solo la version lo dejaria escondido detras de quien lo publico
+#: (ADR-16). Quitar cualquiera de las dos reabre una fuga de licencia que ya
+#: ocurrio una vez.
+CONTRIBUTING_SOURCES_SQL = """
+WITH referenciada AS (
+    {unions}
+),
+contributing AS (
+    SELECT DISTINCT dv.source_id
+    FROM core.dataset_version dv
+    JOIN referenciada r USING (data_version)
+    UNION
+    SELECT DISTINCT original_source FROM core.damage_evidence
+)
+""".format(
+    unions="\n    UNION ".join(
+        f"SELECT data_version FROM {table}" for table in PUBLISHED_LAYER_TABLES
+    )
+)

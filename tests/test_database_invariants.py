@@ -18,6 +18,11 @@ def throwaway_version(db_conn) -> int:
     depender de que alguien haya corrido el pipeline las convierte en pruebas
     que se saltan en CI, y un invariante que solo se comprueba en la maquina de
     quien lo escribio no esta comprobado.
+
+    La version se marca `is_synthetic = false` a proposito. `dataset_version`
+    es inmutable por trigger: una fila sintetica escrita aqui no se puede
+    borrar despues, y quedaria contando como dependencia simulada en el
+    diagnostico de señal sobre la base de trabajo.
     """
     with db_conn.cursor() as cur:
         cur.execute(
@@ -32,7 +37,7 @@ def throwaway_version(db_conn) -> int:
             """
             INSERT INTO core.dataset_version
                 (source_id, retrieved_at, record_count, content_hash, is_synthetic)
-            VALUES ('fixture_prueba', now(), 1, %s, true)
+            VALUES ('fixture_prueba', now(), 1, %s, false)
             ON CONFLICT (source_id, content_hash) DO NOTHING
             RETURNING data_version
             """,

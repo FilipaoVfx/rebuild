@@ -53,6 +53,8 @@ Convención de tamaño: **S** ≤ 2 días · **M** 3-5 días · **L** 1-2 semana
 
 ## E2 — Daño sintético · M2
 
+> **DEROGADO por [ADR-17](../adr/ADR-17-prohibicion-de-datos-sinteticos.md) (2026-09-15).** El generador sintético se retiró: la prueba de estabilidad ante la semilla dio 15 % y el ranking resultó ser una propiedad del generador. La migración 006 prohíbe `is_synthetic = true` en la base. Esta sección queda como registro de lo que se planeó, no de lo que se hace.
+
 | # | Trabajo | Traza | Tamaño |
 |---|---|---|---|
 | E2-1 | Generador determinista por semilla | `FR-SYN-01` | M |

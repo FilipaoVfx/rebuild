@@ -19,7 +19,12 @@ from fastapi.staticfiles import StaticFiles
 
 from uri import pipeline
 from uri.api import schemas
-from uri.contracts import InterventionType, LayerProvenance, Provenance
+from uri.contracts import (
+    CONTRIBUTING_SOURCES_SQL,
+    InterventionType,
+    LayerProvenance,
+    Provenance,
+)
 from uri.contracts.enums import PROFILE_ALLOWS, ExportProfile, LicenseClass
 from uri.db import api_connection, close_pool, fetch_all, fetch_one, open_pool
 from uri.reporting.exports import (
@@ -72,20 +77,14 @@ def build_provenance(conn, *, include_constraints: bool = False) -> Provenance:
     """
     rows = fetch_all(
         conn,
-        """
-        WITH contributing AS (
-            SELECT DISTINCT source FROM core.damage_evidence
-            UNION SELECT DISTINCT original_source FROM core.damage_evidence
-            UNION SELECT 'osm' WHERE EXISTS (SELECT 1 FROM osm_raw.road)
-            UNION SELECT 'microsoft_buildings'
-                WHERE EXISTS (SELECT 1 FROM core.building_footprint)
-        )
+        CONTRIBUTING_SOURCES_SQL
+        + """
         SELECT DISTINCT ON (sr.source_id)
                sr.source_id, sr.display_name, sr.license_class, sr.attribution_text,
                dv.data_version, dv.is_synthetic, dv.retrieved_at
         FROM core.dataset_version dv
         JOIN core.source_register sr USING (source_id)
-        WHERE sr.source_id IN (SELECT source FROM contributing)
+        WHERE sr.source_id IN (SELECT source_id FROM contributing)
         ORDER BY sr.source_id, dv.data_version DESC
         """,
     )
@@ -428,6 +427,9 @@ def create_scenario(conn: Conn, request: schemas.ScenarioRequest) -> schemas.Sce
         total_population=result.total_population,
         objective_value=result.objective_value,
         considered=result.considered,
+        stop_reason=result.stop_reason,
+        budget_binding=result.budget_binding,
+        skipped_over_budget=result.skipped_over_budget,
         equity_before=result.equity_before,
         equity_after=result.equity_after,
         candidate_set_hash=candidate_hash,

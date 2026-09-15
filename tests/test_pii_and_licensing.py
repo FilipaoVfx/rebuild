@@ -85,7 +85,7 @@ def test_una_fuente_clasificada_sin_evidencia_es_rechazada():
 def test_unclear_bloquea_el_uso_de_la_fuente():
     """Control C1 — `UNCLEAR` no alimenta una feature."""
     with pytest.raises(ValueError, match="UNCLEAR"):
-        assert_source_usable("sgc")
+        assert_source_usable("unosat")
     assert_source_usable("osm")
 
 
@@ -109,6 +109,34 @@ def test_sertit_esta_clasificada_como_no_comercial():
     assert SOURCES_BY_ID["sertit"].redistribution_allowed is False
 
 
+def test_el_sgc_no_es_redistribuible():
+    """OI-F2 cerrado, y en la direccion restrictiva.
+
+    Los terminos del portal del SGC prohiben reproducir, publicar o distribuir
+    sin consentimiento previo por escrito. Clasificarlo asi es lo que hace que
+    la puerta de publicacion lo vea; mientras estuvo en `UNCLEAR` y sellado con
+    la version de otra fuente, se publicaba sin que nadie lo evaluara.
+    """
+    sgc = SOURCES_BY_ID["sgc"]
+    assert sgc.license_class is LicenseClass.NON_COMMERCIAL
+    assert sgc.redistribution_allowed is False
+    assert sgc.terms_snapshot_path
+
+
+def test_odbl_se_clasifica_share_alike_venga_de_donde_venga():
+    """Microsoft Building Footprints se publica bajo ODbL, igual que OSM.
+
+    Clasificarla `ATTRIBUTION` dejaba pasar la obligacion de compartir igual
+    por la puerta de perfiles: dos fuentes con la MISMA licencia no pueden
+    tener clases distintas.
+    """
+    for source_id in ("osm", "microsoft_buildings"):
+        source = SOURCES_BY_ID[source_id]
+        assert "ODbL" in (source.license_name or ""), source_id
+        assert source.license_class is LicenseClass.SHARE_ALIKE, source_id
+        assert source.share_alike is True, source_id
+
+
 def test_osm_arrastra_share_alike():
     """OI-F1 sigue abierto; mientras tanto la marca viaja en el registro."""
     osm = SOURCES_BY_ID["osm"]
@@ -129,7 +157,7 @@ def test_las_fuentes_sin_verificar_siguen_en_unclear():
     """Si alguna de estas cambia, es porque alguien hizo la auditoria de
     fuentes.md §10 — y entonces esta prueba debe actualizarse a mano."""
     sin_verificar = {s.source_id for s in SOURCES if s.license_class is LicenseClass.UNCLEAR}
-    assert sin_verificar == {"sgc", "unosat"}
+    assert sin_verificar == {"unosat"}
 
 
 def test_copernicus_es_redistribuible_y_sertit_no():

@@ -54,13 +54,27 @@ async def main(base: str, prefix: str) -> int:
         print("capas en el control:", await page.locator("#layer-control input").count())
         await page.screenshot(path=f"/tmp/{prefix}_mapa.png")
 
-        # Activar las capas simuladas para comprobar que existen y se pintan.
-        for layer in ("risk", "population", "catchments", "facilities"):
+        # Activar las capas opcionales para comprobar que existen y se pintan.
+        # Sin "risk": la capa del SGC se retiro por licencia (ADR-18).
+        optional = ("population", "catchments", "facilities")
+        for layer in optional:
             await page.click(f'#layer-control input[data-layer="{layer}"]')
         await page.wait_for_timeout(2500)
         await page.screenshot(path=f"/tmp/{prefix}_mapa_capas.png")
-        for layer in ("risk", "population", "catchments", "facilities"):
+        for layer in optional:
             await page.click(f'#layer-control input[data-layer="{layer}"]')
+
+        # Ninguna fuente retirada puede quedar anunciada en el control de capas
+        # ni en la atribucion: un control que no enciende nada, o un credito a
+        # quien no aporto, son la misma clase de mentira pequeña.
+        for gone in ("risk",):
+            if await page.locator(f'#layer-control input[data-layer="{gone}"]').count():
+                errors.append(f"la capa retirada '{gone}' sigue en el control")
+        attribution = await page.locator(".maplibregl-ctrl-attrib-inner").inner_text()
+        for gone in ("SERTIT", "SGC", "Servicio Geologico"):
+            if gone.lower() in attribution.lower():
+                errors.append(f"la atribucion nombra a '{gone}', que no aporta dato")
+        print("atribucion:", attribution.strip())
 
         # Seleccion desde el mapa -> panel de detalle.
         box = await page.locator("#map").bounding_box()

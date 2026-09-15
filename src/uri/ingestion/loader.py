@@ -246,8 +246,19 @@ def load_osm(conn: psycopg.Connection, overpass_path: Path) -> tuple[int, dict[s
 def load_context_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
     """Carga poblacion, edificacion, riesgo y uso de suelo desde fuentes reales.
 
-    Sustituye por completo a `load_synthetic_layers`. Cada capa declara su
-    procedencia y su metodo; ninguna inventa un valor.
+    Una version de dataset POR FUENTE, no una por corrida. Sellar el uso de
+    suelo de OSM con la version de Microsoft lo deja atribuido a quien no lo
+    produjo, y es la misma falla de forma que ADR-16 existe para evitar: la
+    puerta de publicacion resuelve por fuente, y una fuente escondida detras
+    de otra no se puede evaluar. Fue asi como la capa del SGC se publico sin
+    que la puerta llegara a verla (ADR-18).
+
+    No hay capa de amenaza sismica: la del SGC se retiro por licencia, y
+    ninguna otra la sustituye. `risk_score` queda nulo y las restricciones de
+    riesgo se saltan declarandolo, en vez de leerse como riesgo cero.
+
+    Ninguna capa inventa un valor; cada una declara su metodo y su limitacion
+    en el manifiesto de su propia version.
     """
     import json as _json
 
@@ -258,38 +269,51 @@ def load_context_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
     cells, apportionment = ctx.dasymetric_population(
         footprints, PEREIRA_BBOX, total_population=AOI_POPULATION
     )
-    hazard = ctx.load_seismic_hazard(SEED / "sgc_amenaza_pereira.json")
     landuse = osm_adapter.load_landuse(SEED / "osm_landuse_pereira.json.gz")
 
-    manifest = {
-        "population": apportionment,
-        "hazard": hazard,
-        "landuse": {
-            "source": "osm",
-            "polygons": len(landuse),
-            "limitation": (
-                "Proxy del POT. IDE AMCO publica la capa normativa en un "
-                "GeoServer no alcanzable desde este entorno (OI-F3)."
-            ),
-        },
-        "buildings": {"source": "microsoft_buildings", "footprints": len(footprints)},
-    }
-    content_hash = hashlib.sha256(_json.dumps(manifest, sort_keys=True).encode()).hexdigest()
+    def _version(source_id: str, records: int, payload: dict) -> int:
+        return _publish_version(
+            conn,
+            source_id=source_id,
+            record_count=records,
+            content_hash=hashlib.sha256(
+                _json.dumps({"source": source_id, **payload}, sort_keys=True).encode()
+            ).hexdigest(),
+            is_synthetic=False,
+            manifest=payload,
+        )
 
-    version = _publish_version(
-        conn,
-        source_id="microsoft_buildings",
-        record_count=len(cells) + len(landuse) + len(footprints),
-        content_hash=content_hash,
-        is_synthetic=False,
-        manifest=manifest,
+    # Microsoft: las huellas, y la poblacion repartida sobre ellas. El total
+    # que se reparte lo publica Copernicus, y el manifiesto lo declara; la
+    # geometria que lo soporta es de Microsoft, y por eso la capa se sella con
+    # su version. Copernicus entra a la puerta por su propia via (la evidencia
+    # de daño), asi que ninguna de las dos queda sin evaluar.
+    ms_version = _version(
+        "microsoft_buildings",
+        len(footprints) + len(cells),
+        {"buildings": {"footprints": len(footprints)}, "population": apportionment},
     )
+    # OSM: el uso de suelo, extracto aparte del de vias y equipamientos.
+    osm_landuse_version = _version(
+        "osm",
+        len(landuse),
+        {
+            "landuse": {
+                "polygons": len(landuse),
+                "limitation": (
+                    "Proxy del POT. IDE AMCO publica la capa normativa en un "
+                    "GeoServer no alcanzable desde este entorno (OI-F3)."
+                ),
+            }
+        },
+    )
+
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT count(*) AS n FROM core.population_cell WHERE data_version = %s", (version,)
+            "SELECT count(*) AS n FROM core.population_cell WHERE data_version = %s", (ms_version,)
         )
         if cur.fetchone()["n"]:
-            return version, {
+            return ms_version, {
                 "cells": len(cells),
                 "landuse": len(landuse),
                 "footprints": len(footprints),
@@ -306,34 +330,8 @@ def load_context_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
                 # OI-F4), la feature se marca no disponible en lugar de
                 # rellenarse con un numero inventado. 0.5 es el marcador que el
                 # motor de features reconoce como "sin dato".
-                (cell.wkt, cell.population, cell.households, 0.5, version),
+                (cell.wkt, cell.population, cell.households, 0.5, ms_version),
             )
-
-        # Riesgo: un unico poligono que cubre el AOI con el valor real del SGC.
-        # No hay microzonificacion de Pereira (D6), asi que no hay variacion
-        # intraurbana que representar — y fabricarla seria volver a lo sintetico.
-        min_lon, min_lat, max_lon, max_lat = PEREIRA_BBOX
-        ring = (
-            f"POLYGON(({min_lon} {min_lat}, {max_lon} {min_lat}, "
-            f"{max_lon} {max_lat}, {min_lon} {max_lat}, {min_lon} {min_lat}))"
-        )
-        level = (
-            "prohibited"
-            if hazard["risk_score"] >= 0.75
-            else "high"
-            if hazard["risk_score"] >= 0.5
-            else "medium"
-            if hazard["risk_score"] >= 0.25
-            else "low"
-        )
-        cur.execute(
-            """
-            INSERT INTO core.risk_zone
-                (geometry, risk_level, risk_score, is_synthetic, data_version)
-            VALUES (ST_GeomFromText(%s, 4326), %s, %s, false, %s)
-            """,
-            (ring, level, hazard["risk_score"], version),
-        )
 
         for parcel in landuse:
             cur.execute(
@@ -341,7 +339,7 @@ def load_context_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
                 INSERT INTO core.land_use (geometry, category, is_synthetic, data_version)
                 VALUES (ST_MakeValid(ST_GeomFromText(%s, 4326)), %s, false, %s)
                 """,
-                (parcel.wkt, parcel.category, version),
+                (parcel.wkt, parcel.category, osm_landuse_version),
             )
 
         for footprint in footprints:
@@ -350,10 +348,14 @@ def load_context_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
                 INSERT INTO core.building_footprint (geometry, area_m2, data_version)
                 VALUES (ST_MakeValid(ST_GeomFromText(%s, 4326)), %s, %s)
                 """,
-                (footprint.wkt, footprint.area_m2, version),
+                (footprint.wkt, footprint.area_m2, ms_version),
             )
 
-    return version, {"cells": len(cells), "landuse": len(landuse), "footprints": len(footprints)}
+    return ms_version, {
+        "cells": len(cells),
+        "landuse": len(landuse),
+        "footprints": len(footprints),
+    }
 
 
 def derive_sites(conn: psycopg.Connection, data_version: int) -> int:

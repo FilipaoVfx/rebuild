@@ -17,6 +17,7 @@ Tres hechos empujan en la misma dirección:
 
 1. **No hay ground truth** (PRD §22). Nadie ha validado todavía que las recomendaciones del sistema sean sensatas para Pereira. Lo que el piloto tiene que demostrar primero es que los números resisten el escrutinio de alguien que conoce el territorio.
 2. **El daño es sintético** (CON-01). Toda la V1 corre sobre datos generados. Una interfaz pulida sobre datos simulados invita exactamente al error que el PRD §5 prohíbe: presentar salidas inciertas como hechos.
+   > **Actualización (2026-09-15, [ADR-17](ADR-17-prohibicion-de-datos-sinteticos.md)).** Esta premisa ya no se sostiene: el daño es real (Copernicus EMS, activación EMSR916) y los datos sintéticos están prohibidos. La decisión no cambia, porque el argumento que la sostiene sí: tres de los cinco ejes del modelo no ordenan nada por falta de insumo (`docs/plan/estado-actual.md` §2), y una interfaz pulida sobre un vector de features con agujeros invita al mismo error que una sobre datos generados.
 3. **La superficie de interfaz es cara y su coste es continuo.** Cada pantalla añade estados vacíos, estados de carga, estados de error, responsive, accesibilidad, y una obligación legal de auditoría (Resolución 1519 de 2020). Ese coste se paga otra vez con cada cambio del modelo de datos.
 
 Contra eso: sin ninguna exploración espacial, es difícil que un planificador detecte que el modelo se equivocó. El mapa no es decoración (PRD §55, *Spatial first*). Un PDF estático no deja preguntar "¿y por qué este sitio y no aquel de al lado?".

@@ -60,6 +60,16 @@ class PortfolioResult:
     equity_before: dict[str, float] = field(default_factory=dict)
     equity_after: dict[str, float] = field(default_factory=dict)
     skipped_over_budget: int = 0
+    #: Por que se detuvo la seleccion. Un objetivo de cobertura satura: cuando
+    #: ningun candidato restante alcanza a nadie nuevo, el greedy para aunque
+    #: sobre presupuesto. Sin declararlo, subir el presupuesto devuelve el
+    #: mismo portafolio y el control parece roto en vez de saturado.
+    stop_reason: str = "cobertura_saturada"
+
+    @property
+    def budget_binding(self) -> bool:
+        """El presupuesto es lo que limita el portafolio, no la cobertura."""
+        return self.stop_reason == "presupuesto"
 
 
 def _gini(values: list[float]) -> float:
@@ -116,8 +126,10 @@ def select_portfolio(
         weighted = new_population * (1.0 + vulnerability_weight * candidate.vulnerability)
         return new_population, weighted, redundancy
 
+    stop_reason = "cobertura_saturada"
     while pool:
         if max_projects is not None and len(items) >= max_projects:
+            stop_reason = "limite_de_proyectos"
             break
 
         scored: list[tuple[float, float, float, float, Candidate]] = []
@@ -135,6 +147,9 @@ def select_portfolio(
 
         if not scored:
             skipped = sum(1 for c in pool if spent + c.cost_cop > budget)
+            # Si lo que queda fuera cabe en el presupuesto, lo que se agoto no
+            # fue el dinero sino la poblacion por alcanzar.
+            stop_reason = "presupuesto" if skipped else "cobertura_saturada"
             break
 
         scored.sort(key=lambda row: row[0], reverse=True)
@@ -185,6 +200,7 @@ def select_portfolio(
         objective_value=round(objective, 4),
         budget=budget,
         considered=len(best_per_site),
+        stop_reason=stop_reason,
         equity_before={
             "gini_access": gini_before,
             "cells_with_access": sum(1 for v in before_values if v > 0),

@@ -15,10 +15,17 @@ from uri.contracts.enums import (
     SiteState,
 )
 from uri.contracts.evidence import DamageEvidence
-from uri.contracts.provenance import LayerProvenance, Provenance
+from uri.contracts.provenance import (
+    CONTRIBUTING_SOURCES_SQL,
+    PUBLISHED_LAYER_TABLES,
+    LayerProvenance,
+    Provenance,
+)
 from uri.contracts.source import SourceRegistration
 
 __all__ = [
+    "CONTRIBUTING_SOURCES_SQL",
+    "PUBLISHED_LAYER_TABLES",
     "CatchmentMethod",
     "DamageClass",
     "DamageEvidence",

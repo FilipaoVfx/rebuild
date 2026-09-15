@@ -50,7 +50,6 @@ const LAYERS = [
   { id: "green", label: "Espacio verde (OSM)", origin: "real", on: true },
   { id: "facilities", label: "Equipamientos (OSM)", origin: "real", on: false },
   { id: "catchments", label: "Catchment 10 min del sitio", origin: "real", on: false },
-  { id: "risk", label: "Amenaza sísmica (SGC)", origin: "real", on: false },
   { id: "population", label: "Población (dasimétrica)", origin: "derivada", on: false },
 ];
 
@@ -119,10 +118,6 @@ async function staticApi(path, options) {
     const params = new URLSearchParams(path.split("?")[1] || "");
     let sites = all.sites;
     if (params.get("state")) sites = sites.filter((s) => s.state === params.get("state"));
-    if (params.get("max_risk")) {
-      const max = Number(params.get("max_risk"));
-      sites = sites.filter((s) => (s.risk_score ?? 0) <= max);
-    }
     if (params.get("min_score")) {
       const min = Number(params.get("min_score"));
       sites = sites.filter((s) => (s.top_score ?? -1) >= min);
@@ -231,9 +226,9 @@ function sitePaint() {
 
 /* FR-LIC-01 — la atribución se compone desde la procedencia que la página
  * cargó, no desde una lista escrita a mano. Una cadena fija atribuye fuentes
- * que quizá no estén en el despliegue: el paquete público corre sobre daño
- * sintético y no contiene un solo dato de ICube-SERTIT, así que nombrarlos
- * sería afirmar lo contrario de lo que la puerta de licencia garantiza. */
+ * que quizá no estén en el despliegue: el registro de fuentes cataloga ocho,
+ * el paquete público consume tres y ninguna es ICube-SERTIT, así que nombrar
+ * las demás afirmaría lo contrario de lo que la puerta de licencia garantiza. */
 function attributionFrom(provenance) {
   const seen = new Set();
   for (const layer of provenance?.layers || []) {
@@ -266,18 +261,18 @@ async function initMap(provenance) {
 
   await new Promise((resolve) => state.map.on("load", resolve));
 
-  const [sites, evidence, green, risk, catchments, facilities, population] = await Promise.all([
+  const [sites, evidence, green, catchments, facilities, population] = await Promise.all([
     geojson("sites"),
     geojson("evidence"),
     geojson("green"),
-    geojson("risk"),
     geojson("catchments"),
     geojson("facilities").catch(() => ({ type: "FeatureCollection", features: [] })),
     geojson("population").catch(() => ({ type: "FeatureCollection", features: [] })),
   ]);
 
-  // Las capas simuladas van debajo de todo: son contexto provisional, no
-  // evidencia, y no deberían competir visualmente con lo que sí se observó.
+  // Lo derivado va debajo de todo: la población dasimétrica es un reparto
+  // calculado sobre huellas de edificio, no una medición, y no debería
+  // competir visualmente con lo que sí se observó.
   state.map.addSource("population", { type: "geojson", data: population });
   state.map.addLayer({
     id: "population",
@@ -291,22 +286,6 @@ async function initMap(provenance) {
       ],
       "fill-opacity": 0.45,
     },
-  });
-
-  state.map.addSource("risk", { type: "geojson", data: risk });
-  state.map.addLayer({
-    id: "risk",
-    type: "fill",
-    source: "risk",
-    layout: { visibility: "none" },
-    paint: { "fill-color": "#d03b3b", "fill-opacity": 0.07 },
-  });
-  state.map.addLayer({
-    id: "risk-outline",
-    type: "line",
-    source: "risk",
-    layout: { visibility: "none" },
-    paint: { "line-color": "#d03b3b", "line-width": 1, "line-dasharray": [3, 2], "line-opacity": 0.6 },
   });
 
   state.map.addSource("catchments", { type: "geojson", data: catchments });
@@ -491,7 +470,6 @@ function applyLayerVisibility() {
     green: ["green"],
     facilities: ["facilities"],
     catchments: ["catchments"],
-    risk: ["risk", "risk-outline"],
     population: ["population"],
   };
   for (const [key, ids] of Object.entries(pairs)) {
@@ -579,8 +557,8 @@ const COLUMNS = [
   { key: "top_score", label: "Score", type: "bar", max: 100, digits: 1 },
   { key: "population_10min", label: "Pobl. 10 min", type: "num", digits: 0 },
   { key: "park_deficit", label: "Déficit EP", type: "bar", max: 1, digits: 2 },
-  { key: "social_vulnerability", label: "Vulnerab.", type: "bar", max: 1, digits: 2 },
-  { key: "risk_score", label: "Riesgo", type: "bar", max: 1, digits: 2 },
+  { key: "social_vulnerability", label: "Vulnerab.", type: "bar", max: 1, digits: 2, absent: "sin fuente" },
+  { key: "risk_score", label: "Riesgo", type: "bar", max: 1, digits: 2, absent: "sin fuente" },
   { key: "pedestrian_accessibility", label: "Acces. peat.", type: "bar", max: 1, digits: 2 },
   { key: "area_m2", label: "Área m²", type: "num", digits: 0 },
   { key: "catchment_method", label: "Catchment", type: "method" },
@@ -604,7 +582,13 @@ function cell(column, row) {
       return `<td><span class="tag method-${value}"><span class="dot"></span>${
         value === "BUFFER" ? "buffer (degradado)" : "red"}</span></td>`;
     case "bar": {
-      if (value === null || value === undefined) return `<td class="num">—</td>`;
+      // Un guion no distingue "no lo medimos" de "salio bajo". Una columna
+      // que declara por que falta dice lo segundo sin que nadie lo suponga.
+      if (value === null || value === undefined) {
+        return column.absent
+          ? `<td class="num absent" title="${column.label}: ${column.absent}">${column.absent}</td>`
+          : `<td class="num">—</td>`;
+      }
       const pct = Math.max(0, Math.min(100, (Number(value) / column.max) * 100));
       return `<td class="num"><span class="bar-cell">
         <span class="n">${fmt(value, column.digits)}</span>
@@ -872,13 +856,23 @@ function renderPortfolio(scenario) {
              Se muestra el de ${cop(scenario.static_note)} COP, el más cercano al pedido.</p>`
           : ""
       }
+      ${
+        scenario.stop_reason === "cobertura_saturada"
+          ? `<p class="note warn">
+              El presupuesto no es lo que limita este portafolio. La selección se detuvo
+              en ${scenario.items.length} proyectos porque ningún candidato restante alcanza
+              población nueva: el objetivo es de cobertura y satura. Subir el presupuesto
+              por encima de ${cop(scenario.total_cost)} COP devuelve exactamente esta lista.</p>`
+          : ""
+      }
       <div class="stat-row">
         <div class="stat"><div class="k">Proyectos</div>
           <div class="v">${scenario.items.length}</div>
           <div class="u">de ${scenario.considered} candidatos</div></div>
         <div class="stat"><div class="k">Inversión</div>
           <div class="v">${cop(scenario.total_cost)}</div>
-          <div class="u">COP · estimada (OI-05)</div></div>
+          <div class="u">COP · estimada (OI-05) ·
+            ${scenario.budget_binding ? "presupuesto agotado" : "presupuesto no vinculante"}</div></div>
         <div class="stat"><div class="k">Población servida</div>
           <div class="v">${fmt(scenario.total_population)}</div>
           <div class="u">catchment 10 min</div></div>
@@ -1003,8 +997,6 @@ async function loadSites() {
   const params = new URLSearchParams();
   const stateFilter = $("#f-state").value;
   if (stateFilter) params.set("state", stateFilter);
-  const risk = Number($("#f-risk").value);
-  if (risk < 1) params.set("max_risk", risk);
   const minScore = Number($("#f-score").value);
   if (minScore > 0) params.set("min_score", minScore);
   const intervention = $("#f-intervention").value;
@@ -1045,12 +1037,8 @@ async function main() {
   renderMapControls();
   renderMapLegend();
 
-  $("#f-risk").addEventListener(
-    "input",
-    (e) => ($("#f-risk-out").value = Number(e.target.value).toFixed(2))
-  );
   $("#f-score").addEventListener("input", (e) => ($("#f-score-out").value = e.target.value));
-  ["#f-state", "#f-risk", "#f-score", "#f-intervention"].forEach((sel) =>
+  ["#f-state", "#f-score", "#f-intervention"].forEach((sel) =>
     $(sel).addEventListener("change", loadSites)
   );
   $("#reset-weights").addEventListener("click", () => {

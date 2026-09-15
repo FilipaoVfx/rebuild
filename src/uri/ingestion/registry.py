@@ -164,15 +164,34 @@ SOURCES: list[SourceRegistration] = [
     SourceRegistration(
         source_id="sgc",
         display_name="Servicio Geologico Colombiano",
-        tier="A",
+        tier="C",
         source_url="https://geoportal.sgc.gov.co/arcgis/rest/services",
         access_method="wfs",
         spatial_reference="EPSG:4326",
-        license_class=LicenseClass.UNCLEAR,
+        license_class=LicenseClass.NON_COMMERCIAL,
+        license_name="Terminos y condiciones del portal SGC",
+        license_url="https://www2.sgc.gov.co/Paginas/terminos-y-condiciones.aspx",
+        attribution_text="Servicio Geologico Colombiano",
+        redistribution_allowed=False,
+        derivatives_allowed=False,
+        share_alike=False,
+        quality_score=0.6,
+        terms_verified_at=date(2026, 9, 15),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/sgc_terminos_20260915.txt",
         verification_notes=(
-            "WFS 2.0.0 verificado y operativo en /arcgis/services/. Licencia sin "
-            "auditar (OI-F2). Ademas: la amenaza publicada es nacional a escala "
-            "NSR-10, no microzonificacion de Pereira (D6)."
+            "OI-F2 cerrado. Los terminos del portal, verbatim: 'Ningun contenido "
+            "de este sitio puede ser copiado, reproducido, recopilado, cargado, "
+            "publicado, transmitido, distribuido, o utilizado para la creacion de "
+            "servicios derivados [...] sin su consentimiento previo por escrito', "
+            "y el permiso que otorgan es 'unicamente en su equipo y para su uso "
+            "personal y no comercial'. Misma forma que ICube-SERTIT. El propio "
+            "texto admite que un dataset con licencia propia se rige por ella, "
+            "pero la capa de amenaza que usabamos no declara ninguna. Copia en "
+            "db/terms/sgc_terminos_20260915.txt. Consecuencia: la capa se retiro "
+            "del pipeline (ADR-18). Ademas, la amenaza publicada es nacional a "
+            "escala NSR-10, no microzonificacion de Pereira (D6): un solo valor "
+            "para todo el AOI, que no excluia ni penalizaba a ningun sitio."
         ),
     ),
     SourceRegistration(
@@ -182,7 +201,7 @@ SOURCES: list[SourceRegistration] = [
         source_url="https://minedbuildings.z5.web.core.windows.net/global-buildings/",
         access_method="download",
         spatial_reference="EPSG:4326",
-        license_class=LicenseClass.ATTRIBUTION,
+        license_class=LicenseClass.SHARE_ALIKE,
         license_name="Open Data Commons Open Database License (ODbL)",
         license_url="https://opendatacommons.org/licenses/odbl/",
         attribution_text="Microsoft Building Footprints",

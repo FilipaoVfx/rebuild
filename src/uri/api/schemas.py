@@ -152,6 +152,12 @@ class ScenarioOut(BaseModel):
     total_population: float
     objective_value: float
     considered: int
+    #: `presupuesto`, `cobertura_saturada` o `limite_de_proyectos`. Con un
+    #: objetivo de cobertura el presupuesto casi nunca es lo que limita: sin
+    #: este campo, subirlo devuelve el mismo portafolio sin explicar por que.
+    stop_reason: str
+    budget_binding: bool
+    skipped_over_budget: int
     equity_before: dict
     equity_after: dict
     candidate_set_hash: str

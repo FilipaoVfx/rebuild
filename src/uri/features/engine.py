@@ -38,8 +38,11 @@ class BlockingLayerMissing(RuntimeError):
 
 def compute_features(conn: psycopg.Connection, *, feature_version: str, data_version: int) -> int:
     with conn.cursor() as cur:
+        # `risk` ya no esta en esta lista. Era dependencia bloqueante cuando
+        # habia una capa de amenaza; retirada la del SGC por licencia (ADR-18)
+        # no hay ninguna, y bloquear el pipeline por su ausencia solo obligaria
+        # a rellenarla. La feature queda nula y se declara.
         for layer, table in (
-            ("risk", "core.risk_zone"),
             ("land_use", "core.land_use"),
             ("population", "core.population_cell"),
         ):
@@ -71,10 +74,16 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
 
                 -- Riesgo: el maximo que toca el sitio, no el promedio.
                 -- Promediar riesgo diluye exactamente la zona que hay que evitar.
-                COALESCE((
+                --
+                -- SIN COALESCE a cero, por la misma razon que el uso de suelo:
+                -- hoy la tabla esta vacia (ADR-18) y un cero se leeria como
+                -- "medimos riesgo nulo" en vez de "no hay dato de riesgo".
+                -- Cero es ademas el valor mas favorable, asi que la ausencia
+                -- se convertiria en un aprobado silencioso.
+                (
                     SELECT max(rz.risk_score) FROM core.risk_zone rz
                     WHERE ST_Intersects(rz.geometry, s.geometry)
-                ), 0),
+                ),
 
                 -- Compatibilidad de uso de suelo.
                 --
