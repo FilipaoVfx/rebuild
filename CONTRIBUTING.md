@@ -38,6 +38,24 @@ en un repositorio público era redistribuirlo (ADR-18).
 006 lo impone con un `CHECK` en la base: una fila con `is_synthetic = true` en
 una capa de contexto falla al insertarse.
 
+## Los esquemas van prefijados
+
+Cuatro esquemas, todos con prefijo `rebuild_`:
+
+```
+rebuild_core          dominio: fuentes, evidencia, sitios, escenarios
+rebuild_analytics     derivado: features, catchments, exclusiones
+rebuild_osm_raw       OSM crudo        ─┐ aislados por el share-alike
+rebuild_osm_derived   grafo peatonal   ─┘ de ODbL (fuentes.md §8)
+```
+
+El prefijo no es decorativo: la base de producción es **compartida con otro
+producto**, que vive entero en `public`. Sin él, `core` y `analytics` son
+nombres lo bastante genéricos como para que alguien los reclame algún día.
+
+Nada usa `public`, así que la separación es total y se ve en el desplegable de
+esquemas de cualquier cliente SQL.
+
 ## Comprobaciones
 
 ```bash

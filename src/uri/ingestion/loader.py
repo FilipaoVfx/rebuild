@@ -63,7 +63,7 @@ def register_sources(conn: psycopg.Connection) -> None:
         for source in SOURCES:
             cur.execute(
                 """
-                INSERT INTO core.source_register (
+                INSERT INTO rebuild_core.source_register (
                     source_id, display_name, tier, source_url, access_method,
                     spatial_reference, license_class, license_name, license_url,
                     attribution_text, redistribution_allowed, derivatives_allowed,
@@ -102,7 +102,7 @@ def _publish_version(
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO core.dataset_version (
+            INSERT INTO rebuild_core.dataset_version (
                 source_id, retrieved_at, record_count, content_hash, is_synthetic, manifest
             ) VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (source_id, content_hash) DO NOTHING
@@ -121,7 +121,7 @@ def _publish_version(
         if row:
             return row["data_version"]
         cur.execute(
-            "SELECT data_version FROM core.dataset_version "
+            "SELECT data_version FROM rebuild_core.dataset_version "
             "WHERE source_id = %s AND content_hash = %s",
             (source_id, content_hash),
         )
@@ -146,14 +146,15 @@ def load_damage_evidence(
     )
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT count(*) AS n FROM core.damage_evidence WHERE data_version = %s", (version,)
+            "SELECT count(*) AS n FROM rebuild_core.damage_evidence WHERE data_version = %s",
+            (version,),
         )
         if cur.fetchone()["n"]:
             return version
         for item in evidence:
             cur.execute(
                 """
-                INSERT INTO core.damage_evidence (
+                INSERT INTO rebuild_core.damage_evidence (
                     source, original_source, geometry, positional_accuracy_m,
                     observation_date, acquisition_date, damage_class, raw_damage_label,
                     building_type, method, field_validated, confidence, is_synthetic,
@@ -199,7 +200,9 @@ def load_osm(conn: psycopg.Connection, overpass_path: Path) -> tuple[int, dict[s
         is_synthetic=False,
     )
     with conn.cursor() as cur:
-        cur.execute("SELECT count(*) AS n FROM osm_raw.road WHERE data_version = %s", (version,))
+        cur.execute(
+            "SELECT count(*) AS n FROM rebuild_osm_raw.road WHERE data_version = %s", (version,)
+        )
         if cur.fetchone()["n"]:
             return version, {
                 "roads": len(roads),
@@ -209,14 +212,15 @@ def load_osm(conn: psycopg.Connection, overpass_path: Path) -> tuple[int, dict[s
 
         for road in roads:
             cur.execute(
-                "INSERT INTO osm_raw.road (osm_id, highway, display_name, geometry, data_version) "
+                "INSERT INTO rebuild_osm_raw.road "
+                "(osm_id, highway, display_name, geometry, data_version) "
                 "VALUES (%s, %s, %s, ST_GeomFromText(%s, 4326), %s) ON CONFLICT DO NOTHING",
                 (road.osm_id, road.highway, road.name, road.wkt, version),
             )
         for green in greens:
             cur.execute(
                 """
-                INSERT INTO osm_raw.green_space
+                INSERT INTO rebuild_osm_raw.green_space
                     (osm_id, leisure, display_name, geometry, area_m2, data_version)
                 VALUES (%s, %s, %s, ST_GeomFromText(%s, 4326), %s, %s)
                 ON CONFLICT DO NOTHING
@@ -226,7 +230,7 @@ def load_osm(conn: psycopg.Connection, overpass_path: Path) -> tuple[int, dict[s
         for facility in facilities:
             cur.execute(
                 """
-                INSERT INTO osm_raw.facility
+                INSERT INTO rebuild_osm_raw.facility
                     (osm_id, amenity, category, display_name, geometry, data_version)
                 VALUES (%s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s)
                 ON CONFLICT DO NOTHING
@@ -310,7 +314,8 @@ def load_context_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
 
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT count(*) AS n FROM core.population_cell WHERE data_version = %s", (ms_version,)
+            "SELECT count(*) AS n FROM rebuild_core.population_cell WHERE data_version = %s",
+            (ms_version,),
         )
         if cur.fetchone()["n"]:
             return ms_version, {
@@ -322,7 +327,7 @@ def load_context_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
         for cell in cells:
             cur.execute(
                 """
-                INSERT INTO core.population_cell
+                INSERT INTO rebuild_core.population_cell
                     (geometry, population, households, vulnerability, is_synthetic, data_version)
                 VALUES (ST_GeomFromText(%s, 4326), %s, %s, %s, false, %s)
                 """,
@@ -336,7 +341,7 @@ def load_context_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
         for parcel in landuse:
             cur.execute(
                 """
-                INSERT INTO core.land_use (geometry, category, is_synthetic, data_version)
+                INSERT INTO rebuild_core.land_use (geometry, category, is_synthetic, data_version)
                 VALUES (ST_MakeValid(ST_GeomFromText(%s, 4326)), %s, false, %s)
                 """,
                 (parcel.wkt, parcel.category, osm_landuse_version),
@@ -345,7 +350,7 @@ def load_context_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
         for footprint in footprints:
             cur.execute(
                 """
-                INSERT INTO core.building_footprint (geometry, area_m2, data_version)
+                INSERT INTO rebuild_core.building_footprint (geometry, area_m2, data_version)
                 VALUES (ST_MakeValid(ST_GeomFromText(%s, 4326)), %s, %s)
                 """,
                 (footprint.wkt, footprint.area_m2, ms_version),
@@ -368,9 +373,9 @@ def derive_sites(conn: psycopg.Connection, data_version: int) -> int:
     resultante queda marcada como estimada, porque lo es.
     """
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM core.site_evidence")
-        cur.execute("DELETE FROM core.site_damage_fusion")
-        cur.execute("DELETE FROM core.site")
+        cur.execute("DELETE FROM rebuild_core.site_evidence")
+        cur.execute("DELETE FROM rebuild_core.site_damage_fusion")
+        cur.execute("DELETE FROM rebuild_core.site")
 
         cur.execute(
             """
@@ -379,14 +384,14 @@ def derive_sites(conn: psycopg.Connection, data_version: int) -> int:
                        ST_ClusterDBSCAN(ST_Transform(geometry, %(srid)s),
                                         eps := %(eps)s, minpoints := 1)
                            OVER () AS cluster_id
-                FROM core.damage_evidence
+                FROM rebuild_core.damage_evidence
             ),
             grouped AS (
                 SELECT c.cluster_id,
                        count(*) AS evidence_count,
                        ST_Collect(ST_Transform(e.geometry, %(srid)s)) AS geom_metric
                 FROM clustered c
-                JOIN core.damage_evidence e USING (evidence_id)
+                JOIN rebuild_core.damage_evidence e USING (evidence_id)
                 GROUP BY c.cluster_id
             ),
             shaped AS (
@@ -400,7 +405,7 @@ def derive_sites(conn: psycopg.Connection, data_version: int) -> int:
                        END AS footprint_metric
                 FROM grouped
             )
-            INSERT INTO core.site (
+            INSERT INTO rebuild_core.site (
                 site_id, geometry, centroid, area_m2, area_is_estimated,
                 state, evidence_count, is_synthetic, data_version
             )
@@ -426,15 +431,15 @@ def derive_sites(conn: psycopg.Connection, data_version: int) -> int:
 
         cur.execute(
             """
-            INSERT INTO core.site_evidence (site_id, evidence_id)
+            INSERT INTO rebuild_core.site_evidence (site_id, evidence_id)
             SELECT s.site_id, e.evidence_id
-            FROM core.site s
-            JOIN core.damage_evidence e
+            FROM rebuild_core.site s
+            JOIN rebuild_core.damage_evidence e
               ON ST_Intersects(s.geometry, e.geometry)
             ON CONFLICT DO NOTHING
             """
         )
-        cur.execute("SELECT count(*) AS n FROM core.site")
+        cur.execute("SELECT count(*) AS n FROM rebuild_core.site")
         return cur.fetchone()["n"]
 
 
@@ -458,13 +463,13 @@ def fuse_damage_evidence(conn: psycopg.Connection, *, as_of: date) -> int:
     esta validada en campo.
     """
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM core.site_damage_fusion")
+        cur.execute("DELETE FROM rebuild_core.site_damage_fusion")
         cur.execute(
             """
             SELECT se.site_id, e.original_source, e.damage_class, e.method,
                    e.field_validated, e.confidence, e.observation_date
-            FROM core.site_evidence se
-            JOIN core.damage_evidence e USING (evidence_id)
+            FROM rebuild_core.site_evidence se
+            JOIN rebuild_core.damage_evidence e USING (evidence_id)
             """
         )
         rows = cur.fetchall()
@@ -498,7 +503,7 @@ def fuse_damage_evidence(conn: psycopg.Connection, *, as_of: date) -> int:
 
             cur.execute(
                 """
-                INSERT INTO core.site_damage_fusion (
+                INSERT INTO rebuild_core.site_damage_fusion (
                     site_id, damage_class, damage_confidence, independent_sources,
                     contributing_sources, agreement_ratio, any_field_validated,
                     observation_age_days, drivers
@@ -542,7 +547,7 @@ def raise_coverage_alerts(conn: psycopg.Connection) -> list[str]:
             """
             SELECT ST_Area(ST_Transform(ST_ConvexHull(ST_Collect(geometry)), %s)) / 1e6 AS aoi_km2,
                    count(*) AS n
-            FROM core.damage_evidence
+            FROM rebuild_core.damage_evidence
             """,
             (METRIC_SRID,),
         )
@@ -555,7 +560,8 @@ def raise_coverage_alerts(conn: psycopg.Connection) -> list[str]:
                 "oportunidad fuera de esta ventana son invisibles para el sistema."
             )
             cur.execute(
-                "INSERT INTO core.quality_alert (severity, source_id, code, message, payload) "
+                "INSERT INTO rebuild_core.quality_alert "
+                "(severity, source_id, code, message, payload) "
                 "VALUES ('warning', 'sertit', 'AOI_COVERAGE', %s, %s::jsonb)",
                 (
                     message,
@@ -564,7 +570,9 @@ def raise_coverage_alerts(conn: psycopg.Connection) -> list[str]:
             )
             alerts.append(message)
 
-        cur.execute("SELECT count(*) AS n FROM core.damage_evidence WHERE field_validated = false")
+        cur.execute(
+            "SELECT count(*) AS n FROM rebuild_core.damage_evidence WHERE field_validated = false"
+        )
         unvalidated = cur.fetchone()["n"]
         if unvalidated:
             message = (
@@ -572,20 +580,23 @@ def raise_coverage_alerts(conn: psycopg.Connection) -> list[str]:
                 "Toda la evidencia disponible es foto-interpretacion."
             )
             cur.execute(
-                "INSERT INTO core.quality_alert (severity, source_id, code, message, payload) "
+                "INSERT INTO rebuild_core.quality_alert "
+                "(severity, source_id, code, message, payload) "
                 "VALUES ('warning', NULL, 'NO_FIELD_VALIDATION', %s, %s::jsonb)",
                 (message, json.dumps({"unvalidated": unvalidated})),
             )
             alerts.append(message)
 
         cur.execute(
-            "SELECT source_id FROM core.source_register WHERE license_class = 'UNCLEAR' ORDER BY 1"
+            "SELECT source_id FROM rebuild_core.source_register "
+            "WHERE license_class = 'UNCLEAR' ORDER BY 1"
         )
         unclear = [r["source_id"] for r in cur.fetchall()]
         if unclear:
             message = f"Fuentes sin licencia verificada (bloqueadas para features): {unclear}"
             cur.execute(
-                "INSERT INTO core.quality_alert (severity, source_id, code, message, payload) "
+                "INSERT INTO rebuild_core.quality_alert "
+                "(severity, source_id, code, message, payload) "
                 "VALUES ('error', NULL, 'UNCLEAR_LICENSE', %s, %s::jsonb)",
                 (message, json.dumps({"sources": unclear})),
             )
@@ -634,7 +645,7 @@ def record_satellite_scenes(
         for scene, window, selected, reason, params in scenes:
             cur.execute(
                 """
-                INSERT INTO core.satellite_scene (
+                INSERT INTO rebuild_core.satellite_scene (
                     scene_id, collection, event_window, acquisition_date, footprint,
                     cloud_cover, platform, processing_baseline, orbit_direction,
                     relative_orbit, selected, selection_reason, request_parameters,

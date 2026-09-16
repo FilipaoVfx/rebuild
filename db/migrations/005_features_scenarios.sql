@@ -4,10 +4,10 @@
 -- `osm_*`; las migraciones nunca crean objetos de dominio aqui.
 
 -- FR-FEAT-05 — todo vector de features lleva su version de feature y de datos.
-CREATE TABLE analytics.site_feature (
-    site_id           text NOT NULL REFERENCES core.site(site_id) ON DELETE CASCADE,
+CREATE TABLE rebuild_analytics.site_feature (
+    site_id           text NOT NULL REFERENCES rebuild_core.site(site_id) ON DELETE CASCADE,
     feature_version   text NOT NULL,
-    data_version      bigint NOT NULL REFERENCES core.dataset_version(data_version),
+    data_version      bigint NOT NULL REFERENCES rebuild_core.dataset_version(data_version),
 
     -- Bloqueantes (plan de MVP §1.3)
     risk_score              numeric,
@@ -29,7 +29,7 @@ CREATE TABLE analytics.site_feature (
     community_access        numeric,
 
     -- FR-FEAT-03 — como se calculo el catchment, y que se perdio si fue buffer.
-    catchment_method  core.catchment_method NOT NULL,
+    catchment_method  rebuild_core.catchment_method NOT NULL,
     catchment_area_m2 numeric,
 
     -- FR-FEAT-01 — una feature no calculada se declara, no se deja en NULL mudo.
@@ -46,20 +46,20 @@ CREATE TABLE analytics.site_feature (
 );
 
 -- Catchments precalculados (ADR-02: se computan en batch, no por peticion).
-CREATE TABLE analytics.site_catchment (
-    site_id          text NOT NULL REFERENCES core.site(site_id) ON DELETE CASCADE,
+CREATE TABLE rebuild_analytics.site_catchment (
+    site_id          text NOT NULL REFERENCES rebuild_core.site(site_id) ON DELETE CASCADE,
     minutes          integer NOT NULL,
-    method           core.catchment_method NOT NULL,
+    method           rebuild_core.catchment_method NOT NULL,
     geometry         geometry(Geometry, 4326) NOT NULL,
     population       numeric NOT NULL DEFAULT 0,
     households       numeric NOT NULL DEFAULT 0,
     feature_version  text NOT NULL,
     PRIMARY KEY (site_id, minutes, feature_version)
 );
-CREATE INDEX site_catchment_geom_idx ON analytics.site_catchment USING GIST (geometry);
+CREATE INDEX site_catchment_geom_idx ON rebuild_analytics.site_catchment USING GIST (geometry);
 
 -- FR-CONS-03 — las restricciones son configuracion versionada, no logica.
-CREATE TABLE core.constraint_set (
+CREATE TABLE rebuild_core.constraint_set (
     constraint_set_version text PRIMARY KEY,
     definition             jsonb NOT NULL,
     published_at           timestamptz NOT NULL DEFAULT now()
@@ -67,9 +67,9 @@ CREATE TABLE core.constraint_set (
 
 -- FR-CONS-02 — cada sitio excluido registra TODAS las restricciones que
 -- violo, no la primera que alguien evaluo.
-CREATE TABLE analytics.site_exclusion (
-    site_id                text NOT NULL REFERENCES core.site(site_id) ON DELETE CASCADE,
-    constraint_set_version text NOT NULL REFERENCES core.constraint_set(constraint_set_version),
+CREATE TABLE rebuild_analytics.site_exclusion (
+    site_id                text NOT NULL REFERENCES rebuild_core.site(site_id) ON DELETE CASCADE,
+    constraint_set_version text NOT NULL REFERENCES rebuild_core.constraint_set(constraint_set_version),
     constraint_id          text NOT NULL,
     reason                 text NOT NULL,
     is_prohibited_risk     boolean NOT NULL DEFAULT false,
@@ -77,8 +77,8 @@ CREATE TABLE analytics.site_exclusion (
 );
 
 -- PRD §16 — catalogo de intervenciones, configuracion versionada.
-CREATE TABLE core.intervention (
-    intervention_type   core.intervention_type PRIMARY KEY,
+CREATE TABLE rebuild_core.intervention (
+    intervention_type   rebuild_core.intervention_type PRIMARY KEY,
     display_name        text NOT NULL,
     minimum_area_m2     numeric NOT NULL,
     preferred_area_m2   numeric NOT NULL,
@@ -94,15 +94,15 @@ CREATE TABLE core.intervention (
 -- FR-SCEN-01 — un escenario fija pesos, restricciones, presupuesto y las
 -- versiones en vigor. ADR-06: ademas ancla un hash de lo que produjo su
 -- resultado, para que la reproducibilidad sea comprobable y no una promesa.
-CREATE TABLE core.scenario (
+CREATE TABLE rebuild_core.scenario (
     scenario_id            text PRIMARY KEY,
     display_name                   text NOT NULL,
     weights                jsonb NOT NULL,
     budget_cop             numeric NOT NULL CHECK (budget_cop >= 0),
-    allowed_interventions  core.intervention_type[] NOT NULL,
-    constraint_set_version text NOT NULL REFERENCES core.constraint_set(constraint_set_version),
+    allowed_interventions  rebuild_core.intervention_type[] NOT NULL,
+    constraint_set_version text NOT NULL REFERENCES rebuild_core.constraint_set(constraint_set_version),
     feature_version        text NOT NULL,
-    data_version           bigint NOT NULL REFERENCES core.dataset_version(data_version),
+    data_version           bigint NOT NULL REFERENCES rebuild_core.dataset_version(data_version),
     scoring_version        text NOT NULL,
     candidate_set_hash     text NOT NULL,
     feature_matrix_hash    text NOT NULL,
@@ -111,10 +111,10 @@ CREATE TABLE core.scenario (
     created_at             timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE core.scenario_site (
-    scenario_id       text NOT NULL REFERENCES core.scenario(scenario_id) ON DELETE CASCADE,
-    site_id           text NOT NULL REFERENCES core.site(site_id),
-    intervention_type core.intervention_type NOT NULL,
+CREATE TABLE rebuild_core.scenario_site (
+    scenario_id       text NOT NULL REFERENCES rebuild_core.scenario(scenario_id) ON DELETE CASCADE,
+    site_id           text NOT NULL REFERENCES rebuild_core.site(site_id),
+    intervention_type rebuild_core.intervention_type NOT NULL,
     rank              integer NOT NULL,
     score             numeric NOT NULL,
     cost_cop          numeric NOT NULL,
@@ -125,7 +125,7 @@ CREATE TABLE core.scenario_site (
 );
 
 -- FR-AUDIT-01 — registro inmutable. Sin trigger, "inmutable" es un adjetivo.
-CREATE TABLE core.audit_log (
+CREATE TABLE rebuild_core.audit_log (
     audit_id    bigserial PRIMARY KEY,
     occurred_at timestamptz NOT NULL DEFAULT now(),
     actor       text NOT NULL,
@@ -137,7 +137,7 @@ CREATE TABLE core.audit_log (
     justification text
 );
 
-CREATE OR REPLACE FUNCTION core.forbid_audit_mutation()
+CREATE OR REPLACE FUNCTION rebuild_core.forbid_audit_mutation()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     RAISE EXCEPTION 'FR-AUDIT-01: el log de auditoria no se edita ni se borra';
@@ -145,15 +145,15 @@ END;
 $$;
 
 CREATE TRIGGER audit_log_is_immutable
-    BEFORE UPDATE OR DELETE ON core.audit_log
-    FOR EACH ROW EXECUTE FUNCTION core.forbid_audit_mutation();
+    BEFORE UPDATE OR DELETE ON rebuild_core.audit_log
+    FOR EACH ROW EXECUTE FUNCTION rebuild_core.forbid_audit_mutation();
 
 -- FR-QUAL-02 — las alertas son filas consultables, no correos.
-CREATE TABLE core.quality_alert (
+CREATE TABLE rebuild_core.quality_alert (
     alert_id   bigserial PRIMARY KEY,
     raised_at  timestamptz NOT NULL DEFAULT now(),
     severity   text NOT NULL CHECK (severity IN ('info', 'warning', 'error')),
-    source_id  text REFERENCES core.source_register(source_id),
+    source_id  text REFERENCES rebuild_core.source_register(source_id),
     code       text NOT NULL,
     message    text NOT NULL,
     payload    jsonb NOT NULL DEFAULT '{}'::jsonb

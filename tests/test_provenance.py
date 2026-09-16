@@ -71,7 +71,7 @@ def test_la_cobertura_reproduce_la_marginalidad_del_optimizador(db_conn):
     # A diferencia de las pruebas de esquema, esta compara aritmetica sobre
     # datos reales: sin pipeline no hay candidatos que optimizar ni celdas que
     # cubrir, y montar unos falsos probaria la fixture, no el sistema.
-    row = fetch_one(db_conn, "SELECT count(*) AS n FROM analytics.site_feature")
+    row = fetch_one(db_conn, "SELECT count(*) AS n FROM rebuild_analytics.site_feature")
     if not row or row["n"] == 0:
         pytest.skip("sin pipeline ejecutado: corra scripts/run_pipeline.py")
 

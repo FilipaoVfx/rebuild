@@ -18,7 +18,10 @@ MIGRATIONS = Path(__file__).resolve().parents[1] / "db" / "migrations"
 def main(reset: bool = False) -> int:
     with psycopg.connect(settings.database_url, autocommit=True) as conn:
         if reset:
-            conn.execute("DROP SCHEMA IF EXISTS core, analytics, osm_raw, osm_derived CASCADE")
+            conn.execute(
+                "DROP SCHEMA IF EXISTS rebuild_core, rebuild_analytics, "
+                "rebuild_osm_raw, rebuild_osm_derived CASCADE"
+            )
             # Sin esto, el registro sigue diciendo que todo esta aplicado y
             # `--reset` deja una base vacia que se cree migrada.
             conn.execute("DROP TABLE IF EXISTS public.schema_migration")
@@ -31,7 +34,7 @@ def main(reset: bool = False) -> int:
                 "intervention_type",
                 "catchment_method",
             ):
-                conn.execute(f"DROP TYPE IF EXISTS core.{type_name} CASCADE")
+                conn.execute(f"DROP TYPE IF EXISTS rebuild_core.{type_name} CASCADE")
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS public.schema_migration ("

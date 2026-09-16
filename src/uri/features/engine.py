@@ -43,8 +43,8 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
         # no hay ninguna, y bloquear el pipeline por su ausencia solo obligaria
         # a rellenarla. La feature queda nula y se declara.
         for layer, table in (
-            ("land_use", "core.land_use"),
-            ("population", "core.population_cell"),
+            ("land_use", "rebuild_core.land_use"),
+            ("population", "rebuild_core.population_cell"),
         ):
             cur.execute(f"SELECT count(*) AS n FROM {table}")  # noqa: S608 - tabla de lista fija
             if cur.fetchone()["n"] == 0:
@@ -54,11 +54,12 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
                 )
 
         cur.execute(
-            "DELETE FROM analytics.site_feature WHERE feature_version = %s", (feature_version,)
+            "DELETE FROM rebuild_analytics.site_feature WHERE feature_version = %s",
+            (feature_version,),
         )
         cur.execute(
             """
-            INSERT INTO analytics.site_feature (
+            INSERT INTO rebuild_analytics.site_feature (
                 site_id, feature_version, data_version,
                 risk_score, land_use_compatibility, site_area,
                 population_10min, households_10min, park_deficit, park_area_per_capita,
@@ -81,7 +82,7 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
                 -- Cero es ademas el valor mas favorable, asi que la ausencia
                 -- se convertiria en un aprobado silencioso.
                 (
-                    SELECT max(rz.risk_score) FROM core.risk_zone rz
+                    SELECT max(rz.risk_score) FROM rebuild_core.risk_zone rz
                     WHERE ST_Intersects(rz.geometry, s.geometry)
                 ),
 
@@ -103,7 +104,7 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
                                     ELSE 0.2 END
                                * ST_Area(ST_Intersection(lu.geometry, s.geometry)))
                            / NULLIF(ST_Area(s.geometry), 0)
-                    FROM core.land_use lu
+                    FROM rebuild_core.land_use lu
                     WHERE ST_Intersects(lu.geometry, s.geometry)
                 ),
 
@@ -149,45 +150,45 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
                 0.5,
                 '{}'::jsonb,
                 false
-            FROM core.site s
-            LEFT JOIN analytics.site_catchment c10
+            FROM rebuild_core.site s
+            LEFT JOIN rebuild_analytics.site_catchment c10
                    ON c10.site_id = s.site_id AND c10.minutes = 10
                   AND c10.feature_version = %(fv)s
             LEFT JOIN LATERAL (
                 SELECT sum(ST_Area(ST_Transform(g.geometry, %(srid)s))) AS area_m2
-                FROM osm_raw.green_space g
+                FROM rebuild_osm_raw.green_space g
                 WHERE c10.geometry IS NOT NULL AND ST_Intersects(g.geometry, c10.geometry)
             ) green ON true
             LEFT JOIN LATERAL (
                 SELECT sum(ST_Length(ST_Transform(r.geometry, %(srid)s))) AS road_m,
                        count(*) AS segments
-                FROM osm_raw.road r
+                FROM rebuild_osm_raw.road r
                 WHERE ST_DWithin(ST_Transform(r.geometry, %(srid)s),
                                  ST_Transform(s.centroid, %(srid)s), 400)
             ) net ON true
             LEFT JOIN LATERAL (
                 SELECT sum(b.area_m2) / (pi() * 200 * 200) AS ratio
-                FROM core.building_footprint b
+                FROM rebuild_core.building_footprint b
                 WHERE ST_DWithin(ST_Transform(b.geometry, %(srid)s),
                                  ST_Transform(s.centroid, %(srid)s), 200)
             ) built ON true
             LEFT JOIN LATERAL (
                 SELECT sum(p.vulnerability * p.population) / NULLIF(sum(p.population), 0) AS value
-                FROM core.population_cell p
+                FROM rebuild_core.population_cell p
                 WHERE c10.geometry IS NOT NULL AND ST_Intersects(p.geometry, c10.geometry)
             ) vuln ON true
             LEFT JOIN LATERAL (
-                SELECT count(*) AS n FROM osm_raw.facility f
+                SELECT count(*) AS n FROM rebuild_osm_raw.facility f
                 WHERE f.category = 'education' AND c10.geometry IS NOT NULL
                   AND ST_Intersects(f.geometry, c10.geometry)
             ) edu ON true
             LEFT JOIN LATERAL (
-                SELECT count(*) AS n FROM osm_raw.facility f
+                SELECT count(*) AS n FROM rebuild_osm_raw.facility f
                 WHERE f.category = 'health' AND c10.geometry IS NOT NULL
                   AND ST_Intersects(f.geometry, c10.geometry)
             ) hea ON true
             LEFT JOIN LATERAL (
-                SELECT count(*) AS n FROM osm_raw.facility f
+                SELECT count(*) AS n FROM rebuild_osm_raw.facility f
                 WHERE f.category = 'community' AND c10.geometry IS NOT NULL
                   AND ST_Intersects(f.geometry, c10.geometry)
             ) com ON true
@@ -200,9 +201,9 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
             },
         )
 
-        cur.execute("UPDATE core.site SET state = 'EVALUATED' WHERE state = 'INGESTED'")
+        cur.execute("UPDATE rebuild_core.site SET state = 'EVALUATED' WHERE state = 'INGESTED'")
         cur.execute(
-            "SELECT count(*) AS n FROM analytics.site_feature WHERE feature_version = %s",
+            "SELECT count(*) AS n FROM rebuild_analytics.site_feature WHERE feature_version = %s",
             (feature_version,),
         )
         count = cur.fetchone()["n"]
@@ -223,8 +224,8 @@ def _compute_confidence(conn: psycopg.Connection, *, feature_version: str) -> No
             SELECT f.site_id, f.catchment_method, f.population_10min,
                    fu.damage_confidence, fu.independent_sources, fu.observation_age_days,
                    fu.any_field_validated
-            FROM analytics.site_feature f
-            LEFT JOIN core.site_damage_fusion fu USING (site_id)
+            FROM rebuild_analytics.site_feature f
+            LEFT JOIN rebuild_core.site_damage_fusion fu USING (site_id)
             WHERE f.feature_version = %s
             """,
             (feature_version,),
@@ -261,7 +262,8 @@ def _compute_confidence(conn: psycopg.Connection, *, feature_version: str) -> No
             drivers["synthetic_context_layers"] = -0.20
 
             cur.execute(
-                "UPDATE analytics.site_feature SET confidence = %s, confidence_drivers = %s::jsonb "
+                "UPDATE rebuild_analytics.site_feature "
+                "SET confidence = %s, confidence_drivers = %s::jsonb "
                 "WHERE site_id = %s AND feature_version = %s",
                 (
                     round(max(0.05, min(0.95, confidence)), 4),

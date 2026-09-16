@@ -24,23 +24,24 @@ CATCHMENT_MINUTES = (5, 10, 15)
 
 
 def build_pedestrian_graph(conn: psycopg.Connection) -> dict[str, int]:
-    """Construye la topologia del grafo desde `osm_raw.road`.
+    """Construye la topologia del grafo desde `rebuild_osm_raw.road`.
 
     El resultado vive en `osm_derived`, separado de `core`: deriva de OSM y
     por tanto hereda su regimen de licencia (fuentes.md §8).
     """
     with conn.cursor() as cur:
-        cur.execute("TRUNCATE osm_derived.pedestrian_edge RESTART IDENTITY")
+        cur.execute("TRUNCATE rebuild_osm_derived.pedestrian_edge RESTART IDENTITY")
         cur.execute(
             """
-            INSERT INTO osm_derived.pedestrian_edge (osm_id, cost, reverse_cost, length_m, geometry)
+            INSERT INTO rebuild_osm_derived.pedestrian_edge
+                (osm_id, cost, reverse_cost, length_m, geometry)
             SELECT
                 osm_id,
                 ST_Length(ST_Transform(geometry, %(srid)s)) / %(speed)s,
                 ST_Length(ST_Transform(geometry, %(srid)s)) / %(speed)s,
                 ST_Length(ST_Transform(geometry, %(srid)s)),
                 geometry
-            FROM osm_raw.road
+            FROM rebuild_osm_raw.road
             WHERE foot_access
               AND ST_Length(ST_Transform(geometry, %(srid)s)) > 0
             """,
@@ -48,12 +49,12 @@ def build_pedestrian_graph(conn: psycopg.Connection) -> dict[str, int]:
         )
         # pgr_createTopology asigna source/target a partir de los extremos.
         cur.execute(
-            "SELECT pgr_createTopology('osm_derived.pedestrian_edge', 0.00001, "
+            "SELECT pgr_createTopology('rebuild_osm_derived.pedestrian_edge', 0.00001, "
             "'geometry', 'id', 'source', 'target', clean := true)"
         )
-        cur.execute("SELECT count(*) AS n FROM osm_derived.pedestrian_edge")
+        cur.execute("SELECT count(*) AS n FROM rebuild_osm_derived.pedestrian_edge")
         edges = cur.fetchone()["n"]
-        cur.execute("SELECT count(*) AS n FROM osm_derived.pedestrian_edge_vertices_pgr")
+        cur.execute("SELECT count(*) AS n FROM rebuild_osm_derived.pedestrian_edge_vertices_pgr")
         vertices = cur.fetchone()["n"]
     return {"edges": edges, "vertices": vertices}
 
@@ -68,10 +69,12 @@ def compute_catchments(conn: psycopg.Connection, *, feature_version: str) -> dic
     network = buffer = 0
     with conn.cursor() as cur:
         cur.execute(
-            "DELETE FROM analytics.site_catchment WHERE feature_version = %s", (feature_version,)
+            "DELETE FROM rebuild_analytics.site_catchment WHERE feature_version = %s",
+            (feature_version,),
         )
         cur.execute(
-            "SELECT site_id, ST_AsText(centroid) AS centroid FROM core.site ORDER BY site_id"
+            "SELECT site_id, ST_AsText(centroid) AS centroid "
+            "FROM rebuild_core.site ORDER BY site_id"
         )
         sites = cur.fetchall()
 
@@ -82,7 +85,7 @@ def compute_catchments(conn: psycopg.Connection, *, feature_version: str) -> dic
                            ST_Transform(v.the_geom, %(srid)s),
                            ST_Transform(ST_GeomFromText(%(centroid)s, 4326), %(srid)s)
                        ) AS dist
-                FROM osm_derived.pedestrian_edge_vertices_pgr v
+                FROM rebuild_osm_derived.pedestrian_edge_vertices_pgr v
                 ORDER BY v.the_geom <-> ST_GeomFromText(%(centroid)s, 4326)
                 LIMIT 1
                 """,
@@ -97,7 +100,7 @@ def compute_catchments(conn: psycopg.Connection, *, feature_version: str) -> dic
                 if has_network:
                     cur.execute(
                         """
-                        INSERT INTO analytics.site_catchment
+                        INSERT INTO rebuild_analytics.site_catchment
                             (site_id, minutes, method, geometry, feature_version)
                         SELECT %(site_id)s, %(minutes)s, 'NETWORK',
                                ST_Transform(
@@ -107,10 +110,10 @@ def compute_catchments(conn: psycopg.Connection, *, feature_version: str) -> dic
                                %(fv)s
                         FROM pgr_drivingDistance(
                                  'SELECT id, source, target, cost, reverse_cost
-                                    FROM osm_derived.pedestrian_edge
+                                    FROM rebuild_osm_derived.pedestrian_edge
                                    WHERE source IS NOT NULL',
                                  %(anchor)s, %(minutes)s, false) d
-                        JOIN osm_derived.pedestrian_edge_vertices_pgr v ON v.id = d.node
+                        JOIN rebuild_osm_derived.pedestrian_edge_vertices_pgr v ON v.id = d.node
                         HAVING count(*) >= 3
                         """,
                         {
@@ -128,13 +131,13 @@ def compute_catchments(conn: psycopg.Connection, *, feature_version: str) -> dic
                 # FR-FEAT-03 — fallback explicito y marcado.
                 cur.execute(
                     """
-                    INSERT INTO analytics.site_catchment
+                    INSERT INTO rebuild_analytics.site_catchment
                         (site_id, minutes, method, geometry, feature_version)
                     SELECT %(site_id)s, %(minutes)s, 'BUFFER',
                            ST_Transform(
                                ST_Buffer(ST_Transform(centroid, %(srid)s), %(radius)s), 4326),
                            %(fv)s
-                    FROM core.site WHERE site_id = %(site_id)s
+                    FROM rebuild_core.site WHERE site_id = %(site_id)s
                     """,
                     {
                         "site_id": site["site_id"],
@@ -151,7 +154,7 @@ def compute_catchments(conn: psycopg.Connection, *, feature_version: str) -> dic
         # esto pasa a dasimetrico y el metodo queda declarado en la feature.
         cur.execute(
             """
-            UPDATE analytics.site_catchment c
+            UPDATE rebuild_analytics.site_catchment c
             SET population = COALESCE(agg.pop, 0), households = COALESCE(agg.hh, 0)
             FROM (
                 SELECT c2.site_id, c2.minutes,
@@ -159,8 +162,8 @@ def compute_catchments(conn: psycopg.Connection, *, feature_version: str) -> dic
                                         / NULLIF(ST_Area(p.geometry), 0)) AS pop,
                        sum(p.households * ST_Area(ST_Intersection(p.geometry, c2.geometry))
                                         / NULLIF(ST_Area(p.geometry), 0)) AS hh
-                FROM analytics.site_catchment c2
-                JOIN core.population_cell p ON ST_Intersects(p.geometry, c2.geometry)
+                FROM rebuild_analytics.site_catchment c2
+                JOIN rebuild_core.population_cell p ON ST_Intersects(p.geometry, c2.geometry)
                 WHERE c2.feature_version = %s
                 GROUP BY c2.site_id, c2.minutes
             ) agg
@@ -186,14 +189,14 @@ def network_density_by_area(conn: psycopg.Connection) -> list[dict]:
             """
             WITH grid AS (
                 SELECT (ST_SquareGrid(0.005, ST_Extent(geometry))).geom AS cell
-                FROM core.site
+                FROM rebuild_core.site
             )
             SELECT row_number() OVER () AS cell_id,
                    ST_AsGeoJSON(g.cell) AS geojson,
                    COALESCE(sum(ST_Length(ST_Transform(r.geometry, 3116))), 0) AS road_m,
                    count(r.osm_id) AS segments
             FROM grid g
-            LEFT JOIN osm_raw.road r ON ST_Intersects(r.geometry, g.cell)
+            LEFT JOIN rebuild_osm_raw.road r ON ST_Intersects(r.geometry, g.cell)
             GROUP BY g.cell
             ORDER BY 1
             """

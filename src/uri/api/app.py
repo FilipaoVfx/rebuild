@@ -82,8 +82,8 @@ def build_provenance(conn, *, include_constraints: bool = False) -> Provenance:
         SELECT DISTINCT ON (sr.source_id)
                sr.source_id, sr.display_name, sr.license_class, sr.attribution_text,
                dv.data_version, dv.is_synthetic, dv.retrieved_at
-        FROM core.dataset_version dv
-        JOIN core.source_register sr USING (source_id)
+        FROM rebuild_core.dataset_version dv
+        JOIN rebuild_core.source_register sr USING (source_id)
         WHERE sr.source_id IN (SELECT source_id FROM contributing)
         ORDER BY sr.source_id, dv.data_version DESC
         """,
@@ -141,7 +141,7 @@ def list_sites(
         )
         params |= {"min_lon": min_lon, "min_lat": min_lat, "max_lon": max_lon, "max_lat": max_lat}
     if state:
-        where.append("s.state = %(state)s::core.site_state")
+        where.append("s.state = %(state)s::rebuild_core.site_state")
         params["state"] = state
     if max_risk is not None:
         where.append("f.risk_score <= %(max_risk)s")
@@ -159,9 +159,9 @@ def list_sites(
                f.risk_score, f.land_use_compatibility, f.pedestrian_accessibility,
                f.households_10min, f.park_area_per_capita, f.building_density,
                f.school_access, f.health_access, f.community_access, f.site_area
-        FROM core.site s
-        JOIN analytics.site_feature f USING (site_id)
-        LEFT JOIN core.site_damage_fusion fu USING (site_id)
+        FROM rebuild_core.site s
+        JOIN rebuild_analytics.site_feature f USING (site_id)
+        LEFT JOIN rebuild_core.site_damage_fusion fu USING (site_id)
         WHERE {" AND ".join(where)}
         ORDER BY s.site_id
         LIMIT %(limit)s
@@ -213,9 +213,9 @@ def site_detail(conn: Conn, site_id: str) -> schemas.SiteDetail:
                fu.independent_sources, fu.contributing_sources, fu.agreement_ratio,
                fu.any_field_validated, fu.observation_age_days, fu.drivers AS fusion_drivers,
                f.*
-        FROM core.site s
-        JOIN analytics.site_feature f USING (site_id)
-        LEFT JOIN core.site_damage_fusion fu USING (site_id)
+        FROM rebuild_core.site s
+        JOIN rebuild_analytics.site_feature f USING (site_id)
+        LEFT JOIN rebuild_core.site_damage_fusion fu USING (site_id)
         WHERE s.site_id = %s AND f.feature_version = %s
         """,
         (site_id, pipeline.FEATURE_VERSION),
@@ -232,9 +232,9 @@ def site_detail(conn: Conn, site_id: str) -> schemas.SiteDetail:
                e.acquisition_date::text AS acquisition_date,
                e.is_synthetic, e.positional_accuracy_m,
                sr.license_class::text AS license_class, sr.attribution_text AS attribution
-        FROM core.site_evidence se
-        JOIN core.damage_evidence e USING (evidence_id)
-        JOIN core.source_register sr ON sr.source_id = e.original_source
+        FROM rebuild_core.site_evidence se
+        JOIN rebuild_core.damage_evidence e USING (evidence_id)
+        JOIN rebuild_core.source_register sr ON sr.source_id = e.original_source
         WHERE se.site_id = %s
         ORDER BY e.observation_date
         """,
@@ -242,7 +242,7 @@ def site_detail(conn: Conn, site_id: str) -> schemas.SiteDetail:
     )
     exclusions = fetch_all(
         conn,
-        "SELECT constraint_id, reason, is_prohibited_risk FROM analytics.site_exclusion "
+        "SELECT constraint_id, reason, is_prohibited_risk FROM rebuild_analytics.site_exclusion "
         "WHERE site_id = %s ORDER BY constraint_id",
         (site_id,),
     )
@@ -351,11 +351,11 @@ def create_scenario(conn: Conn, request: schemas.ScenarioRequest) -> schemas.Sce
     with conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO core.scenario (
+            INSERT INTO rebuild_core.scenario (
                 scenario_id, display_name, weights, budget_cop, allowed_interventions,
                 constraint_set_version, feature_version, data_version, scoring_version,
                 candidate_set_hash, feature_matrix_hash, is_synthetic, created_by
-            ) VALUES (%s, %s, %s::jsonb, %s, %s::core.intervention_type[], %s, %s, %s, %s,
+            ) VALUES (%s, %s, %s::jsonb, %s, %s::rebuild_core.intervention_type[], %s, %s, %s, %s,
                       %s, %s, %s, %s)
             """,
             (
@@ -377,7 +377,7 @@ def create_scenario(conn: Conn, request: schemas.ScenarioRequest) -> schemas.Sce
         for item in result.items:
             cur.execute(
                 """
-                INSERT INTO core.scenario_site (
+                INSERT INTO rebuild_core.scenario_site (
                     scenario_id, site_id, intervention_type, rank, score, cost_cop,
                     marginal_population, marginal_gain, redundancy_ratio
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -396,7 +396,7 @@ def create_scenario(conn: Conn, request: schemas.ScenarioRequest) -> schemas.Sce
             )
         # FR-AUDIT-01
         cur.execute(
-            "INSERT INTO core.audit_log (actor, action, entity, entity_id, after) "
+            "INSERT INTO rebuild_core.audit_log (actor, action, entity, entity_id, after) "
             "VALUES (%s, %s, %s, %s, %s::jsonb)",
             (
                 "api",
@@ -448,8 +448,8 @@ def list_scenarios(conn: Conn) -> list[dict]:
                count(ss.site_id) AS projects,
                COALESCE(sum(ss.cost_cop), 0) AS total_cost,
                COALESCE(sum(ss.marginal_population), 0) AS population_served
-        FROM core.scenario s
-        LEFT JOIN core.scenario_site ss USING (scenario_id)
+        FROM rebuild_core.scenario s
+        LEFT JOIN rebuild_core.scenario_site ss USING (scenario_id)
         GROUP BY s.scenario_id
         ORDER BY s.created_at DESC
         """,
@@ -464,7 +464,7 @@ def data_sources(conn: Conn) -> list[schemas.SourceOut]:
         SELECT source_id, display_name, tier, license_class::text AS license_class,
                license_name, attribution_text, redistribution_allowed, share_alike,
                terms_verified_at::text AS terms_verified_at, verification_notes
-        FROM core.source_register ORDER BY tier, source_id
+        FROM rebuild_core.source_register ORDER BY tier, source_id
         """,
     )
     return [
@@ -480,7 +480,7 @@ def quality_alerts(conn: Conn) -> list[schemas.AlertOut]:
         for row in fetch_all(
             conn,
             "SELECT alert_id, severity, code, message, source_id, raised_at::text AS raised_at "
-            "FROM core.quality_alert ORDER BY alert_id DESC LIMIT 50",
+            "FROM rebuild_core.quality_alert ORDER BY alert_id DESC LIMIT 50",
         )
     ]
 
@@ -490,7 +490,7 @@ def audit(conn: Conn, limit: int = 100) -> list[dict]:
     return fetch_all(
         conn,
         "SELECT audit_id, occurred_at::text AS occurred_at, actor, action, entity, entity_id, "
-        "before, after, justification FROM core.audit_log ORDER BY audit_id DESC LIMIT %s",
+        "before, after, justification FROM rebuild_core.audit_log ORDER BY audit_id DESC LIMIT %s",
         (limit,),
     )
 
@@ -516,7 +516,9 @@ def export_scenario(
 
 
 def _build_export(conn, scenario_id: str, format: str, profile: ExportProfile):
-    scenario = fetch_one(conn, "SELECT * FROM core.scenario WHERE scenario_id = %s", (scenario_id,))
+    scenario = fetch_one(
+        conn, "SELECT * FROM rebuild_core.scenario WHERE scenario_id = %s", (scenario_id,)
+    )
     if scenario is None:
         raise HTTPException(404, f"escenario {scenario_id} no encontrado")
 
@@ -528,23 +530,23 @@ def _build_export(conn, scenario_id: str, format: str, profile: ExportProfile):
         conn,
         """
         WITH contributing_sources AS (
-            SELECT source_id FROM core.dataset_version
+            SELECT source_id FROM rebuild_core.dataset_version
             UNION
             SELECT DISTINCT e.original_source
-            FROM core.scenario_site ss
-            JOIN core.site_evidence se ON se.site_id = ss.site_id
-            JOIN core.damage_evidence e USING (evidence_id)
+            FROM rebuild_core.scenario_site ss
+            JOIN rebuild_core.site_evidence se ON se.site_id = ss.site_id
+            JOIN rebuild_core.damage_evidence e USING (evidence_id)
             WHERE ss.scenario_id = %s
             UNION
             SELECT DISTINCT e.source
-            FROM core.scenario_site ss
-            JOIN core.site_evidence se ON se.site_id = ss.site_id
-            JOIN core.damage_evidence e USING (evidence_id)
+            FROM rebuild_core.scenario_site ss
+            JOIN rebuild_core.site_evidence se ON se.site_id = ss.site_id
+            JOIN rebuild_core.damage_evidence e USING (evidence_id)
             WHERE ss.scenario_id = %s
         )
         SELECT sr.source_id, sr.license_class::text AS license_class,
                sr.attribution_text, sr.license_name
-        FROM core.source_register sr
+        FROM rebuild_core.source_register sr
         JOIN contributing_sources cs USING (source_id)
         ORDER BY 1
         """,
@@ -567,7 +569,7 @@ def _build_export(conn, scenario_id: str, format: str, profile: ExportProfile):
         """
         SELECT ss.*, ST_AsGeoJSON(s.geometry) AS geojson, ST_X(s.centroid) AS lon,
                ST_Y(s.centroid) AS lat, s.area_m2
-        FROM core.scenario_site ss JOIN core.site s USING (site_id)
+        FROM rebuild_core.scenario_site ss JOIN rebuild_core.site s USING (site_id)
         WHERE ss.scenario_id = %s ORDER BY ss.rank
         """,
         (scenario_id,),
@@ -607,8 +609,8 @@ def site_tiles(conn: Conn, z: int, x: int, y: int) -> Response:
             SELECT ST_AsMVTGeom(ST_Transform(s.geometry, 3857), bounds.geom) AS geom,
                    s.site_id, s.state::text AS state, s.area_m2,
                    f.confidence, f.risk_score, f.population_10min
-            FROM core.site s
-            JOIN analytics.site_feature f USING (site_id)
+            FROM rebuild_core.site s
+            JOIN rebuild_analytics.site_feature f USING (site_id)
             CROSS JOIN bounds
             WHERE ST_Transform(s.geometry, 3857) && bounds.geom
               AND f.feature_version = %(fv)s
@@ -636,7 +638,7 @@ def scenario_coverage(conn: Conn, scenario_id: str) -> dict:
       proyecto dice exactamente lo que el optimizador decidio.
     """
     scenario = fetch_one(
-        conn, "SELECT scenario_id FROM core.scenario WHERE scenario_id = %s", (scenario_id,)
+        conn, "SELECT scenario_id FROM rebuild_core.scenario WHERE scenario_id = %s", (scenario_id,)
     )
     if scenario is None:
         raise HTTPException(404, f"escenario {scenario_id} no encontrado")
@@ -647,7 +649,7 @@ def scenario_coverage(conn: Conn, scenario_id: str) -> dict:
         SELECT p.cell_id, p.population,
                ST_X(ST_Centroid(p.geometry)) AS lon,
                ST_Y(ST_Centroid(p.geometry)) AS lat
-        FROM core.population_cell p
+        FROM rebuild_core.population_cell p
         ORDER BY p.cell_id
         """,
     )
@@ -659,11 +661,11 @@ def scenario_coverage(conn: Conn, scenario_id: str) -> dict:
                ST_X(s.centroid) AS site_lon, ST_Y(s.centroid) AS site_lat,
                ST_X(ST_Centroid(p.geometry)) AS cell_lon,
                ST_Y(ST_Centroid(p.geometry)) AS cell_lat
-        FROM core.scenario_site ss
-        JOIN core.site s USING (site_id)
-        JOIN analytics.site_catchment c
+        FROM rebuild_core.scenario_site ss
+        JOIN rebuild_core.site s USING (site_id)
+        JOIN rebuild_analytics.site_catchment c
           ON c.site_id = ss.site_id AND c.minutes = 10 AND c.feature_version = %s
-        JOIN core.population_cell p ON ST_Intersects(p.geometry, c.geometry)
+        JOIN rebuild_core.population_cell p ON ST_Intersects(p.geometry, c.geometry)
         WHERE ss.scenario_id = %s
         ORDER BY ss.rank
         """,
@@ -753,9 +755,9 @@ def layer_geojson(conn: Conn, layer: str) -> Response:
                    f.population_10min, f.park_deficit, f.social_vulnerability,
                    f.pedestrian_accessibility, f.school_access, f.health_access,
                    f.community_access
-            FROM core.site s
-            JOIN analytics.site_feature f USING (site_id)
-            LEFT JOIN core.site_damage_fusion fu USING (site_id)
+            FROM rebuild_core.site s
+            JOIN rebuild_analytics.site_feature f USING (site_id)
+            LEFT JOIN rebuild_core.site_damage_fusion fu USING (site_id)
             WHERE f.feature_version = %s
             """,
             (pipeline.FEATURE_VERSION,),
@@ -796,27 +798,27 @@ def layer_geojson(conn: Conn, layer: str) -> Response:
     queries = {
         "evidence": (
             "SELECT evidence_id::text AS id, damage_class::text AS label, "
-            "ST_AsGeoJSON(geometry) AS g FROM core.damage_evidence"
+            "ST_AsGeoJSON(geometry) AS g FROM rebuild_core.damage_evidence"
         ),
         "green": (
             "SELECT osm_id::text AS id, leisure AS label, ST_AsGeoJSON(geometry) AS g "
-            "FROM osm_raw.green_space"
+            "FROM rebuild_osm_raw.green_space"
         ),
         "facilities": (
             "SELECT osm_id::text AS id, category AS label, ST_AsGeoJSON(geometry) AS g "
-            "FROM osm_raw.facility"
+            "FROM rebuild_osm_raw.facility"
         ),
         "risk": (
             "SELECT zone_id::text AS id, risk_level AS label, ST_AsGeoJSON(geometry) AS g "
-            "FROM core.risk_zone WHERE risk_level IN ('high','prohibited')"
+            "FROM rebuild_core.risk_zone WHERE risk_level IN ('high','prohibited')"
         ),
         "population": (
             "SELECT cell_id::text AS id, round(population)::text AS label, "
-            "population, ST_AsGeoJSON(geometry) AS g FROM core.population_cell"
+            "population, ST_AsGeoJSON(geometry) AS g FROM rebuild_core.population_cell"
         ),
         "catchments": (
             "SELECT site_id AS id, minutes::text AS label, ST_AsGeoJSON(geometry) AS g "
-            "FROM analytics.site_catchment WHERE minutes = 10 AND feature_version = %s"
+            "FROM rebuild_analytics.site_catchment WHERE minutes = 10 AND feature_version = %s"
         ),
     }
     if layer not in queries:

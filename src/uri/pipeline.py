@@ -87,7 +87,7 @@ def apply_constraints(
     """FR-CONS-01 — esto corre ANTES del scoring y decide quien entra."""
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO core.constraint_set (constraint_set_version, definition) "
+            "INSERT INTO rebuild_core.constraint_set (constraint_set_version, definition) "
             "VALUES (%s, %s::jsonb) ON CONFLICT (constraint_set_version) DO NOTHING",
             (
                 constraint_set.version,
@@ -103,11 +103,12 @@ def apply_constraints(
             ),
         )
         cur.execute(
-            "DELETE FROM analytics.site_exclusion WHERE constraint_set_version = %s",
+            "DELETE FROM rebuild_analytics.site_exclusion WHERE constraint_set_version = %s",
             (constraint_set.version,),
         )
         cur.execute(
-            "SELECT * FROM analytics.site_feature WHERE feature_version = %s", (FEATURE_VERSION,)
+            "SELECT * FROM rebuild_analytics.site_feature WHERE feature_version = %s",
+            (FEATURE_VERSION,),
         )
         rows = cur.fetchall()
 
@@ -119,7 +120,8 @@ def apply_constraints(
             excluded += 1
             for exclusion in exclusions:
                 cur.execute(
-                    "INSERT INTO analytics.site_exclusion (site_id, constraint_set_version, "
+                    "INSERT INTO rebuild_analytics.site_exclusion "
+                    "(site_id, constraint_set_version, "
                     "constraint_id, reason, is_prohibited_risk) VALUES (%s, %s, %s, %s, %s)",
                     (
                         row["site_id"],
@@ -132,18 +134,18 @@ def apply_constraints(
 
         cur.execute(
             """
-            UPDATE core.site s SET state = CASE
-                WHEN EXISTS (SELECT 1 FROM analytics.site_exclusion x
+            UPDATE rebuild_core.site s SET state = CASE
+                WHEN EXISTS (SELECT 1 FROM rebuild_analytics.site_exclusion x
                               WHERE x.site_id = s.site_id
                                 AND x.constraint_set_version = %s)
-                THEN 'EXCLUDED'::core.site_state
-                ELSE 'CANDIDATE'::core.site_state
+                THEN 'EXCLUDED'::rebuild_core.site_state
+                ELSE 'CANDIDATE'::rebuild_core.site_state
             END
             WHERE s.state IN ('EVALUATED', 'EXCLUDED', 'CANDIDATE')
             """,
             (constraint_set.version,),
         )
-        cur.execute("SELECT count(*) AS n FROM core.site WHERE state = 'CANDIDATE'")
+        cur.execute("SELECT count(*) AS n FROM rebuild_core.site WHERE state = 'CANDIDATE'")
         candidates = cur.fetchone()["n"]
 
     return {"excluded": excluded, "candidates": candidates}
@@ -157,9 +159,9 @@ def candidate_features(conn: psycopg.Connection) -> list[dict]:
             SELECT f.*, s.state, s.area_m2, s.evidence_count,
                    fu.damage_class, fu.damage_confidence, fu.independent_sources,
                    fu.contributing_sources, fu.agreement_ratio
-            FROM analytics.site_feature f
-            JOIN core.site s USING (site_id)
-            LEFT JOIN core.site_damage_fusion fu USING (site_id)
+            FROM rebuild_analytics.site_feature f
+            JOIN rebuild_core.site s USING (site_id)
+            LEFT JOIN rebuild_core.site_damage_fusion fu USING (site_id)
             WHERE f.feature_version = %s AND s.state = 'CANDIDATE'
             ORDER BY f.site_id
             """,
@@ -224,8 +226,8 @@ def build_candidates_for_optimizer(
         cur.execute(
             """
             SELECT c.site_id, p.cell_id, p.population, p.vulnerability
-            FROM analytics.site_catchment c
-            JOIN core.population_cell p ON ST_Intersects(p.geometry, c.geometry)
+            FROM rebuild_analytics.site_catchment c
+            JOIN rebuild_core.population_cell p ON ST_Intersects(p.geometry, c.geometry)
             WHERE c.minutes = 10 AND c.feature_version = %s
             """,
             (FEATURE_VERSION,),
@@ -271,8 +273,8 @@ def baseline_public_space_access(conn: psycopg.Connection) -> dict[int, float]:
             SELECT p.cell_id,
                    COALESCE(sum(ST_Area(ST_Transform(g.geometry, 3116))), 0)
                        / NULLIF(p.population, 0) AS m2_per_capita
-            FROM core.population_cell p
-            LEFT JOIN osm_raw.green_space g
+            FROM rebuild_core.population_cell p
+            LEFT JOIN rebuild_osm_raw.green_space g
                    ON ST_DWithin(ST_Transform(g.geometry, 3116),
                                  ST_Transform(p.geometry, 3116), 800)
             GROUP BY p.cell_id, p.population

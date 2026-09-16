@@ -45,7 +45,7 @@ PROHIBITED_TOKENS: frozenset[str] = frozenset(
 
 #: `PROHIBITED_EXACT` compara la columna COMPLETA, porque sus terminos si
 #: aparecen dentro de nombres tecnicos legitimos: `display_name`,
-#: `scenario.name` y `osm_raw.road.name` nombran cosas, no personas. Meter
+#: `scenario.name` y `rebuild_osm_raw.road.name` nombran cosas, no personas. Meter
 #: `name` entre los tokens haria fallar el control sobre su propio esquema, y
 #: un control que grita en todo deja de leerse.
 PROHIBITED_EXACT: frozenset[str] = frozenset(
