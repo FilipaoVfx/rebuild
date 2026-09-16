@@ -157,7 +157,9 @@ def test_las_fuentes_sin_verificar_siguen_en_unclear():
     """Si alguna de estas cambia, es porque alguien hizo la auditoria de
     fuentes.md §10 — y entonces esta prueba debe actualizarse a mano."""
     sin_verificar = {s.source_id for s in SOURCES if s.license_class is LicenseClass.UNCLEAR}
-    assert sin_verificar == {"unosat"}
+    # igac_catastro entro el 2026-09-16 TRAS auditarla, no por no mirarla: la
+    # capa cubre el AOI con 47.443 predios y no declara licencia ninguna.
+    assert sin_verificar == {"unosat", "igac_catastro"}
 
 
 def test_copernicus_es_redistribuible_y_sertit_no():
@@ -192,3 +194,32 @@ def test_copernicus_sustituye_a_sertit_como_fuente_de_dano():
 def test_el_generador_ya_no_esta_registrado_como_fuente():
     assert "synthetic" not in SOURCES_BY_ID
     assert "microsoft_buildings" in SOURCES_BY_ID
+
+
+# ── IGAC: disponible no es lo mismo que permitido ───────────────────────
+
+
+def test_el_catastro_de_igac_esta_bloqueado_por_no_declarar_licencia():
+    """La capa cubre el AOI con 47.443 predios y se descarga en un minuto.
+    Lo que no tiene es una sola frase que diga que se puede hacer con ella.
+
+    Esta prueba existe para que desbloquearla cueste borrarla, y borrarla
+    obligue a releer db/terms/igac_catastro_20260916.txt. Asi se publico la
+    capa del SGC durante semanas incumpliendo sus terminos: no por mala fe,
+    sino porque "esta disponible" se confundio con "se puede usar".
+    """
+    igac = SOURCES_BY_ID["igac_catastro"]
+    assert igac.license_class is LicenseClass.UNCLEAR
+    assert igac.redistribution_allowed is None, (
+        "sin licencia no se afirma que se pueda redistribuir"
+    )
+    assert igac.terms_snapshot_path, "un UNCLEAR sin auditoria escrita es una corazonada"
+
+    with pytest.raises(ValueError, match="UNCLEAR"):
+        assert_source_usable("igac_catastro")
+
+
+def test_las_fuentes_auditadas_de_esta_tanda_si_pasan_el_control():
+    """El control tiene que discriminar, no bloquear todo por igual."""
+    for source_id in ("dane_censo_2018", "copernicus_dem", "copernicus_sentinel"):
+        assert_source_usable(source_id)

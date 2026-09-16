@@ -1,0 +1,66 @@
+IGAC — Predios catastrales (capa Terreno), Risaralda
+Auditoría del 2026-09-16. VEREDICTO: UNCLEAR. No puede alimentar nada.
+
+=== QUÉ HAY ===
+
+Servicio: services2.arcgis.com/RVvWzU3lgJISqdke → info_risaralda_WFL1, capa 0
+          (Terreno_Risaralda)
+Item:     https://www.arcgis.com/home/item.html?id=9feea5c2feae40b2bf28255095a9f33a
+Dueño:    sebastian.jaramillo_IGAC_OIT  (cuenta personal, no institucional)
+accessInformation declarado: "IGAC"
+
+Cobertura COMPROBADA sobre el AOI de Pereira: **47.443 predios**, el triple que
+las 15.024 huellas de Microsoft. Campos: CODIGO, MANZANA_CODIGO,
+NUMERO_SUBTERRANEOS, CODIGO_ANTERIOR, codigo_municipio, CODIGO_DEPARTAMENTO.
+El dato es real, denso y directamente útil.
+
+=== POR QUÉ NO SE USA ===
+
+`licenseInfo` del item: **VACÍO**. No hay una sola frase que diga qué se puede
+hacer con estos datos.
+
+Lo único que trae la ficha es la definición legal de qué ES un predio
+(Art. 9, Res. 070 de 2011): «Es un inmueble no separado por otro predio público
+o privado, con o sin construcciones...». Eso describe el objeto, no concede
+ningún derecho de uso.
+
+Control C1 de `fuentes.md` §6, literal: «Una fuente con license_class =
+'UNCLEAR' no puede registrarse como insumo de una feature». Mientras esté en
+UNCLEAR puede explorarse en análisis, pero no alimenta feature, score ni
+export.
+
+=== VÍAS ALTERNATIVAS EXPLORADAS, Y POR QUÉ TAMPOCO ===
+
+1. datos.gov.co, catálogo catastral: 11 resultados. De ellos, uno solo declara
+   licencia (CC BY-SA) y es un documento de resoluciones, no la capa de
+   predios. «capa ladm predio», «capa ladm terreno», «Base Catastral SINIC
+   Dato Abierto» y el resto: SIN LICENCIA DECLARADA.
+
+2. Se consideró apoyarse en los términos del PORTAL datos.gov.co, que este
+   proyecto ya tiene auditados como ATTRIBUTION. No sirve aquí por dos razones:
+   la capa que SÍ se comprobó que cubre Pereira no está en ese portal —está en
+   ArcGIS Online—, y las entradas del portal son `federated_href`, punteros a
+   un recurso externo. Un puntero no lava una licencia.
+
+3. geoportal.igac.gov.co/contenido/datos-abiertos: no responde (HTTP 000).
+
+=== QUÉ LO DESBLOQUEARÍA ===
+
+Cualquiera de estas tres, y ninguna es trabajo de ingeniería:
+
+- Que IGAC declare términos en la ficha del item, o publique la capa bajo su
+  política de datos abiertos con texto citable.
+- Una autorización escrita de IGAC para este uso.
+- Encontrar la misma capa alojada (no enlazada) en datos.gov.co, donde los
+  términos del portal sí aplicarían al no declarar el dataset los suyos.
+
+=== POR QUÉ ESTE ARCHIVO EXISTE ===
+
+Porque la tentación es exactamente la contraria. El dato está ahí, es bueno, se
+descarga en un minuto y nadie se enteraría. Así se publicó la capa del SGC
+durante semanas incumpliendo sus términos (ADR-18): no por mala fe, sino
+porque «está disponible» se confundió con «se puede usar».
+
+Disponible y permitido no son lo mismo. La fuente queda registrada como
+UNCLEAR para que el control la bloquee por construcción, en vez de quedar como
+una idea suelta que alguien retome sin releer esto.

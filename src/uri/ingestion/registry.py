@@ -117,6 +117,52 @@ SOURCES: list[SourceRegistration] = [
         ),
     ),
     SourceRegistration(
+        source_id="igac_catastro",
+        display_name="IGAC — Predios catastrales (Risaralda)",
+        tier="B",
+        source_url="https://www.arcgis.com/home/item.html?id=9feea5c2feae40b2bf28255095a9f33a",
+        access_method="api",
+        spatial_reference="EPSG:4326",
+        # UNCLEAR, y no por falta de buscar. La capa cubre el AOI con 47.443
+        # predios —el triple que las huellas de Microsoft— y se descarga en un
+        # minuto. Lo que NO tiene es una sola frase que diga que se puede
+        # hacer con ella: `licenseInfo` esta vacio y la ficha solo trae la
+        # definicion legal de que ES un predio, que describe el objeto y no
+        # concede ningun derecho.
+        #
+        # Disponible y permitido no son lo mismo. Asi se publico la capa del
+        # SGC durante semanas incumpliendo sus terminos (ADR-18).
+        #
+        # Queda registrada para que el control C1 la BLOQUEE por construccion
+        # en vez de quedar como una idea suelta que alguien retome sin releer
+        # la auditoria. Ver db/terms/igac_catastro_20260916.txt.
+        license_class=LicenseClass.UNCLEAR,
+        license_name=None,
+        license_url=None,
+        attribution_text=None,
+        redistribution_allowed=None,
+        derivatives_allowed=None,
+        share_alike=False,
+        quality_score=None,
+        terms_verified_at=None,
+        terms_verified_by=None,
+        terms_snapshot_path="storage://terms/igac_catastro_20260916.txt",
+        verification_notes=(
+            "UNCLEAR. El item de ArcGIS no declara licencia ninguna y su dueno "
+            "es una cuenta personal de IGAC. Cobertura COMPROBADA: 47.443 "
+            "predios en el AOI, con MANZANA_CODIGO que ademas cruzaria con las "
+            "manzanas del DANE. El dato es bueno; los terminos no existen. "
+            "Vias alternativas exploradas y descartadas: en datos.gov.co las "
+            "capas catastrales tampoco declaran licencia, y las que aparecen "
+            "son `federated_href` —punteros a un recurso externo—, asi que los "
+            "terminos del portal no las cubren; un puntero no lava una "
+            "licencia. El geoportal de IGAC no responde. Lo desbloquea que "
+            "IGAC declare terminos, una autorizacion escrita, o encontrar la "
+            "capa ALOJADA en datos.gov.co. Nada de eso es trabajo de "
+            "ingenieria."
+        ),
+    ),
+    SourceRegistration(
         source_id="dane_censo_2018",
         display_name="DANE — Censo Nacional de Población y Vivienda 2018 (por manzana)",
         tier="A",
