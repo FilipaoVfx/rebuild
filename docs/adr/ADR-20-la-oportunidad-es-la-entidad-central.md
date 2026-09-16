@@ -57,6 +57,18 @@ existir, y el optimizador selecciona un portafolio **de oportunidades**, no de
 sitios. El contrato de `import-linter` lo verifica en CI, así que la jerarquía
 no se puede romper por descuido.
 
+> **Corrección (2026-09-16).** La primera versión de este ADR afirmaba lo
+> anterior en presente cuando todavía no era cierto: `optimizer/greedy.py`
+> seguía operando sobre `Candidate` por sitio y no se había tocado. Ya lo es:
+> `Candidate` lleva `opportunity_id` y `unknown_count`, `PortfolioItem` cita la
+> oportunidad elegida, y `PortfolioResult.unknown_checks` declara cuántas
+> condiciones quedaron sin comprobar en el portafolio entero — 38 sobre 19
+> proyectos, dos por proyecto: POT y riesgo.
+>
+> Las incógnitas **no penalizan el orden**, y hay una prueba que lo fija: no se
+> puede castigar a un sitio por un dato que el proyecto no tiene. Se arrastran
+> para declararlas.
+
 ### Tres reglas que gobiernan el módulo
 
 **1. Una condición sin fuente se declara `UNKNOWN`.** Nunca se colapsa a `OK`
@@ -89,6 +101,31 @@ pregunta. Partiendo siempre de todo apagado: partir del estado anterior
 acumularía capas hasta volver al punto de partida en tres clics.
 
 ---
+
+### Persistida, no calculada al vuelo
+
+`recovery_opportunity` es una tabla (migración 010), no una proyección de cada
+petición. Sin fila no hay identificador estable entre corridas, no se puede
+unir una oportunidad a un escenario, no se puede versionar y no se puede
+auditar qué decía la oportunidad #17 el día que alguien decidió sobre ella.
+**Una recomendación que no se puede citar después no es una recomendación: es
+una pantalla.**
+
+Cuatro `CHECK` impiden que la fila afirme de más:
+
+| restricción | qué impide |
+|---|---|
+| `unknown_count_matches_the_detail` | escribir «0 sin comprobar» junto a un POT `UNKNOWN` |
+| `blocked_matches_the_detail` | que `blocked` sea una etiqueta suelta en vez de la lectura del array |
+| `buildable_opportunity_costs_something` | publicar un parque de 0 COP |
+| `opportunity_states_its_provenance` | una oportunidad sin procedencia, que es una opinión con formato de dato |
+
+El tercero nació de un fallo real: las primeras 105 oportunidades se
+persistieron con área 0 y coste 0, porque el generador leía `site_area_m2` y el
+pipeline devolvía `site_area`. **Ningún paso falló** — multiplicar un área
+ausente por un coste unitario da cero, y cero es un número perfectamente válido
+para todas las capas de arriba. Un parque de 0 COP habría encabezado cualquier
+ranking de personas por millón invertido.
 
 ## Consecuencias
 

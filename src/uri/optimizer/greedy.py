@@ -23,6 +23,14 @@ from uri.contracts import InterventionType
 
 @dataclass(frozen=True)
 class Candidate:
+    """Una OPORTUNIDAD candidata a entrar al portafolio.
+
+    Lleva `opportunity_id` y no solo `site_id` porque lo que se selecciona es
+    una oportunidad —un par sitio+intervencion con su problema, su evidencia y
+    su viabilidad—, no un sitio. Un mismo sitio puede dar lugar a
+    oportunidades distintas, y el portafolio tiene que poder citar cual eligio.
+    """
+
     site_id: str
     intervention: InterventionType
     score: float
@@ -33,12 +41,20 @@ class Candidate:
     population_cells: dict[int, float]
     vulnerability: float
     commune: str | None = None
+    #: Identificador de la oportunidad persistida. `None` solo en pruebas que
+    #: ejercitan el greedy en aislamiento.
+    opportunity_id: str | None = None
+    #: Condiciones que nadie ha podido comprobar. NO se usan para ordenar: no
+    #: se puede penalizar a un sitio por un dato que el proyecto no tiene. Se
+    #: arrastran para que el portafolio las pueda declarar.
+    unknown_count: int = 0
 
 
 @dataclass
 class PortfolioItem:
     rank: int
     site_id: str
+    opportunity_id: str | None
     intervention: InterventionType
     score: float
     cost_cop: float
@@ -65,6 +81,11 @@ class PortfolioResult:
     #: sobre presupuesto. Sin declararlo, subir el presupuesto devuelve el
     #: mismo portafolio y el control parece roto en vez de saturado.
     stop_reason: str = "cobertura_saturada"
+    #: Condiciones de viabilidad sin comprobar en el portafolio entero. Un
+    #: portafolio de 19 proyectos con 38 incognitas no es lo mismo que uno con
+    #: ninguna, y el numero tiene que salir junto al total de poblacion, no en
+    #: una nota.
+    unknown_checks: int = 0
 
     @property
     def budget_binding(self) -> bool:
@@ -164,6 +185,7 @@ def select_portfolio(
             PortfolioItem(
                 rank=len(items) + 1,
                 site_id=chosen.site_id,
+                opportunity_id=chosen.opportunity_id,
                 intervention=chosen.intervention,
                 score=chosen.score,
                 cost_cop=chosen.cost_cop,
@@ -194,6 +216,11 @@ def select_portfolio(
     gini_after = _gini(after_values)
 
     return PortfolioResult(
+        unknown_checks=sum(
+            c.unknown_count
+            for c in candidates
+            if c.opportunity_id in {i.opportunity_id for i in items}
+        ),
         items=items,
         total_cost=round(spent, 2),
         total_population=round(sum(covered.values()), 2),

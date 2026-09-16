@@ -25,10 +25,8 @@ from uri.contracts import (
     LayerProvenance,
     Provenance,
 )
-from uri.contracts import opportunity as opportunity_contracts
 from uri.contracts.enums import PROFILE_ALLOWS, ExportProfile, LicenseClass
 from uri.db import api_connection, close_pool, fetch_all, fetch_one, open_pool
-from uri.opportunities import generate_opportunities
 from uri.reporting.exports import (
     ExportBlocked,
     attribution_block,
@@ -38,6 +36,13 @@ from uri.reporting.exports import (
 from uri.scoring.model import INTERVENTION_CATALOG
 
 API_PREFIX = "/api/v1"
+
+
+def _as_float(value):
+    """`numeric` llega como Decimal y `json` no lo serializa."""
+    return None if value is None else float(value)
+
+
 VIEWER_DIR = Path(__file__).resolve().parents[3] / "apps" / "viewer"
 
 
@@ -872,72 +877,78 @@ def layer_geojson(conn: Conn, layer: str) -> Response:
 def list_opportunities(conn: Conn, limit: int = Query(200, le=500)) -> Response:
     """Oportunidades de recuperación: la entidad central del producto.
 
-    Un `site` dice dónde. Una oportunidad dice qué problema hay ahí, qué lo
-    sustenta, qué se podría hacer, a quién beneficiaría y si es viable — que
-    es lo que hace falta para decidir.
+    Se LEEN de `recovery_opportunity`, no se recalculan. Esa diferencia es la
+    que permite citarlas: el identificador es estable entre corridas, la fila
+    lleva su `data_version` y su procedencia, y alguien puede auditar qué
+    decía la oportunidad #17 el día que se decidió sobre ella.
 
-    Desacopla la UI de las tablas: quien consume esto no necesita saber que la
-    población viene de manzanas del DANE, el daño de Copernicus EMS y la red
-    peatonal de OSM.
+    Desacopla la UI de las tablas de origen: quien consume esto no necesita
+    saber que la población viene de manzanas del DANE, el daño de Copernicus
+    EMS y la red peatonal de OSM.
     """
     rows = fetch_all(
         conn,
         """
-        SELECT s.site_id, s.area_m2, s.evidence_count,
-               ST_X(s.centroid) AS lon, ST_Y(s.centroid) AS lat,
-               fu.damage_class::text AS damage_class, fu.damage_confidence,
-               fu.independent_sources,
-               f.population_10min, f.park_deficit, f.social_vulnerability,
-               f.risk_score, f.land_use_compatibility, f.pedestrian_accessibility,
-               f.building_density, f.school_access, f.health_access,
-               f.community_access, f.site_area AS site_area_m2
-        FROM rebuild_core.site s
-        JOIN rebuild_analytics.site_feature f USING (site_id)
-        LEFT JOIN rebuild_core.site_damage_fusion fu USING (site_id)
-        WHERE s.state = 'CANDIDATE'
-        ORDER BY s.site_id
+        SELECT o.opportunity_id, o.site_id, o.zone,
+               ST_X(o.centroid) AS lon, ST_Y(o.centroid) AS lat,
+               o.problem_headline, o.problem_drivers, o.missing_factors,
+               o.damage_observations, o.damage_classes, o.evidence_sources, o.agreement,
+               o.intervention::text AS intervention, o.intervention_label,
+               o.population_reached, o.deficit_reduction, o.area_m2,
+               o.people_per_million_cop, o.feasibility, o.unknown_count, o.blocked,
+               o.cost_cop, o.suitability, o.confidence, o.provenance,
+               o.feature_version, o.scoring_version, o.data_version
+        FROM rebuild_core.recovery_opportunity o
+        WHERE o.data_version = (
+            SELECT max(data_version) FROM rebuild_core.recovery_opportunity
+        )
+        ORDER BY o.suitability DESC
         LIMIT %s
         """,
         (limit,),
     )
 
-    sitios = []
-    for row in rows:
-        clases = {}
-        if row.get("damage_class"):
-            clases[row["damage_class"]] = int(row.get("evidence_count") or 0)
-        sitios.append(
-            {
-                "site_id": row["site_id"],
-                "features": {k: row.get(k) for k in row if k != "site_id"},
-                "evidence": opportunity_contracts.EvidenceSummary(
-                    damage_observations=int(row.get("evidence_count") or 0),
-                    damage_classes=clases,
-                    source_ids=["copernicus_ems"],
-                    agreement=(
-                        float(row["damage_confidence"])
-                        if row.get("damage_confidence") is not None
-                        else None
-                    ),
-                ),
-                "provenance": {"feature_version": pipeline.FEATURE_VERSION},
-            }
-        )
-
-    oportunidades = generate_opportunities(sitios)
-    # Se ordenan por idoneidad, pero lo que la vista muestra primero es el
-    # problema: el score ordena y no titula.
-    oportunidades.sort(key=lambda o: o.suitability, reverse=True)
-
-    centros = {r["site_id"]: (r["lon"], r["lat"]) for r in rows}
-    payload = []
-    for o in oportunidades:
-        item = o.model_dump(mode="json")
-        lon, lat = centros.get(o.site_id, (None, None))
-        item["lon"], item["lat"] = lon, lat
-        item["unknowns"] = o.unknowns
-        item["blocked"] = o.blocked
-        payload.append(item)
+    payload = [
+        {
+            "opportunity_id": r["opportunity_id"],
+            "site_id": r["site_id"],
+            "zone": r["zone"],
+            "lon": r["lon"],
+            "lat": r["lat"],
+            "problem": {
+                "headline": r["problem_headline"],
+                "drivers": r["problem_drivers"],
+                "missing_factors": r["missing_factors"],
+            },
+            "evidence": {
+                "damage_observations": r["damage_observations"],
+                "damage_classes": r["damage_classes"],
+                "source_ids": list(r["evidence_sources"] or []),
+                "agreement": _as_float(r["agreement"]),
+            },
+            "intervention": r["intervention"],
+            "intervention_label": r["intervention_label"],
+            "impact": {
+                "population_reached": r["population_reached"],
+                "deficit_reduction": _as_float(r["deficit_reduction"]),
+                "area_m2": _as_float(r["area_m2"]),
+                "people_per_million_cop": _as_float(r["people_per_million_cop"]),
+            },
+            "feasibility": r["feasibility"],
+            "unknowns": [
+                c["label"] for c in (r["feasibility"] or []) if c.get("status") == "UNKNOWN"
+            ],
+            "blocked": r["blocked"],
+            "cost_cop": _as_float(r["cost_cop"]),
+            "suitability": _as_float(r["suitability"]),
+            "confidence": _as_float(r["confidence"]),
+            "provenance": {
+                **(r["provenance"] or {}),
+                "data_version": r["data_version"],
+            },
+        }
+        for r in rows
+    ]
 
     return Response(
         content=json.dumps({"opportunities": payload}, ensure_ascii=False),

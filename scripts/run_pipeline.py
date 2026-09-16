@@ -71,8 +71,18 @@ def main() -> int:
             if exp.counterfactual:
                 print(f"      contrafactual: {exp.counterfactual.note}")
 
+        print("== oportunidades de recuperacion ==")
+        opp_version, oportunidades = pipeline.run_opportunities(conn, rows)
+        conn.commit()
+        incognitas = sum(len(o.unknowns) for o in oportunidades)
+        print(f"   data_version {opp_version}: {len(oportunidades)} oportunidades")
+        print(f"   condiciones sin comprobar: {incognitas}")
+        for o in sorted(oportunidades, key=lambda x: x.suitability, reverse=True)[:3]:
+            print(f"   {o.opportunity_id}  {o.problem.headline[:72]}")
+
         print("== optimizacion de portafolio ==")
-        candidates = pipeline.build_candidates_for_optimizer(conn, scored)
+        por_sitio = {o.site_id: o for o in oportunidades}
+        candidates = pipeline.build_candidates_for_optimizer(conn, scored, opportunities=por_sitio)
         baseline = pipeline.baseline_public_space_access(conn)
         result = pipeline.optimize(candidates, budget=25_000_000_000, baseline_access=baseline)
         print(
@@ -81,9 +91,10 @@ def main() -> int:
         )
         for item in result.items[:6]:
             print(
-                f"   #{item.rank} {item.site_id} {item.intervention.value:<20} "
+                f"   #{item.rank} {item.opportunity_id or item.site_id:<24} "
                 f"marginal={item.marginal_population:8.0f}  redundancia={item.redundancy_ratio:.2%}"
             )
+        print(f"   condiciones sin comprobar en el portafolio: {result.unknown_checks}")
         print(f"   equidad antes={result.equity_before}  despues={result.equity_after}")
 
     print(f"\ntotal {time.time() - started:.1f}s")

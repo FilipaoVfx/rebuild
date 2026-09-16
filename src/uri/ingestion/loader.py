@@ -812,3 +812,125 @@ def load_census_blocks(conn: psycopg.Connection) -> tuple[int, int]:
             )
             escritas += cur.rowcount
     return version, escritas
+
+
+# ── Oportunidades de recuperacion ───────────────────────────────────────
+
+
+def record_opportunities(
+    conn: psycopg.Connection,
+    opportunities: list,
+    *,
+    feature_version: str,
+    scoring_version: str,
+    manifest: dict | None = None,
+) -> tuple[int, int]:
+    """Persiste las oportunidades y devuelve (data_version, filas).
+
+    Se guardan para que se puedan CITAR, no solo mostrar. Sin fila no hay
+    identificador estable entre corridas, no se puede unir a un escenario y no
+    se puede auditar que decia la oportunidad #17 el dia que alguien decidio
+    sobre ella.
+
+    La geometria se copia del sitio a proposito: es lo que desacopla al
+    consumidor: una vista pide oportunidades y no necesita saber de que tabla
+    salio el poligono.
+    """
+    import json as _json
+
+    content_hash = hashlib.sha256(
+        _json.dumps(
+            sorted(f"{o.opportunity_id}:{o.suitability}" for o in opportunities),
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+    version = _publish_version(
+        conn,
+        source_id="copernicus_ems",
+        record_count=len(opportunities),
+        content_hash=content_hash,
+        is_synthetic=False,
+        manifest=manifest
+        or {
+            "entidad": "recovery_opportunity",
+            "feature_version": feature_version,
+            "scoring_version": scoring_version,
+            "limitacion": (
+                "Una oportunidad NO es un proyecto aprobado. Es una lectura "
+                "del territorio con su evidencia, sus incognitas y su coste "
+                "estimado. POT y riesgo salen UNKNOWN en todo el AOI porque no "
+                "hay fuente, y eso viaja dentro de cada fila."
+            ),
+        },
+    )
+
+    escritas = 0
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM rebuild_core.recovery_opportunity WHERE data_version = %s", (version,)
+        )
+        for o in opportunities:
+            cur.execute(
+                """
+                INSERT INTO rebuild_core.recovery_opportunity (
+                    opportunity_id, site_id, zone, geometry, centroid,
+                    problem_headline, problem_drivers, missing_factors,
+                    damage_observations, damage_classes, evidence_sources, agreement,
+                    intervention, intervention_label, population_reached,
+                    deficit_reduction, area_m2, people_per_million_cop,
+                    feasibility, unknown_count, blocked,
+                    cost_cop, suitability, confidence,
+                    provenance, feature_version, scoring_version, data_version
+                )
+                SELECT
+                    %(opportunity_id)s, %(site_id)s, %(zone)s, s.geometry, s.centroid,
+                    %(headline)s, %(drivers)s::jsonb, %(missing)s::jsonb,
+                    %(observations)s, %(classes)s::jsonb, %(sources)s, %(agreement)s,
+                    %(intervention)s, %(label)s, %(population)s,
+                    %(deficit)s, %(area)s, %(per_million)s,
+                    %(feasibility)s::jsonb, %(unknowns)s, %(blocked)s,
+                    %(cost)s, %(suitability)s, %(confidence)s,
+                    %(provenance)s::jsonb, %(feature_version)s, %(scoring_version)s,
+                    %(version)s
+                FROM rebuild_core.site s WHERE s.site_id = %(site_id)s
+                """,
+                {
+                    "opportunity_id": o.opportunity_id,
+                    "site_id": o.site_id,
+                    "zone": o.zone,
+                    "headline": o.problem.headline,
+                    "drivers": _json.dumps(o.problem.drivers),
+                    "missing": _json.dumps(o.problem.missing_factors),
+                    "observations": o.evidence.damage_observations,
+                    "classes": _json.dumps(o.evidence.damage_classes),
+                    "sources": o.evidence.source_ids,
+                    "agreement": o.evidence.agreement,
+                    "intervention": o.intervention.value,
+                    "label": o.intervention_label,
+                    "population": o.impact.population_reached,
+                    "deficit": o.impact.deficit_reduction,
+                    "area": o.impact.area_m2,
+                    "per_million": o.impact.people_per_million_cop,
+                    "feasibility": _json.dumps([c.model_dump(mode="json") for c in o.feasibility]),
+                    "unknowns": len(o.unknowns),
+                    "blocked": o.blocked,
+                    "cost": o.cost_cop,
+                    "suitability": o.suitability,
+                    "confidence": o.confidence,
+                    # La procedencia NO puede quedar vacia: la base lo exige
+                    # con un CHECK, porque una oportunidad sin ella es una
+                    # opinion con formato de dato.
+                    "provenance": _json.dumps(
+                        {
+                            **(o.provenance or {}),
+                            "feature_version": feature_version,
+                            "scoring_version": scoring_version,
+                        }
+                    ),
+                    "feature_version": feature_version,
+                    "scoring_version": scoring_version,
+                    "version": version,
+                },
+            )
+            escritas += cur.rowcount
+    return version, escritas

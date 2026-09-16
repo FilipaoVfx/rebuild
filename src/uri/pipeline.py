@@ -220,13 +220,21 @@ def score_candidates(
 
 
 def build_candidates_for_optimizer(
-    conn: psycopg.Connection, scored: dict[str, list]
+    conn: psycopg.Connection,
+    scored: dict[str, list],
+    *,
+    opportunities: dict[str, object] | None = None,
 ) -> list[Candidate]:
-    """Traduce recomendaciones a candidatos con su cobertura poblacional.
+    """Traduce OPORTUNIDADES a candidatos con su cobertura poblacional.
 
     Las celdas de poblacion son el mecanismo de redundancia: dos sitios que
     alcanzan las mismas celdas comparten identificadores, y el optimizador
     lo ve sin necesidad de una penalizacion explicita.
+
+    `opportunities` mapea site_id -> RecoveryOpportunity. Cuando esta, el
+    candidato arrastra el identificador de la oportunidad y su recuento de
+    incognitas, que es lo que permite al portafolio citar QUE eligio y decir
+    cuanto de ello esta sin comprobar.
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -254,6 +262,7 @@ def build_candidates_for_optimizer(
         if not cells:
             continue
         vulns = vulnerability.get(site_id, [0.5])
+        oportunidad = (opportunities or {}).get(site_id)
         out.append(
             Candidate(
                 site_id=site_id,
@@ -262,6 +271,8 @@ def build_candidates_for_optimizer(
                 cost_cop=best.cost_cop,
                 population_cells=cells,
                 vulnerability=sum(vulns) / len(vulns),
+                opportunity_id=getattr(oportunidad, "opportunity_id", None),
+                unknown_count=len(getattr(oportunidad, "unknowns", []) or []),
             )
         )
     return out
@@ -302,3 +313,57 @@ def optimize(
 
 
 SCORING = SCORING_VERSION
+
+
+def run_opportunities(
+    conn: psycopg.Connection,
+    rows: list[dict],
+    *,
+    weights: dict[str, float] | None = None,
+) -> tuple[int, list]:
+    """Genera y PERSISTE las oportunidades. Devuelve (data_version, lista).
+
+    Se persisten para que se puedan citar: sin fila no hay identificador
+    estable entre corridas, no se puede unir una oportunidad a un escenario y
+    no se puede auditar que decia el dia que alguien decidio sobre ella.
+    """
+    from uri.contracts.opportunity import EvidenceSummary
+    from uri.opportunities import generate_opportunities
+
+    entradas = []
+    for row in rows:
+        clases = {}
+        if row.get("damage_class"):
+            clases[row["damage_class"]] = int(row.get("evidence_count") or 0)
+        # `candidate_features` devuelve la columna como `site_area`; el
+        # generador lee `site_area_m2`. Sin esta traduccion el area sale 0,
+        # el coste sale 0 y la viabilidad del area sale UNKNOWN — todo en
+        # silencio, porque ningun paso falla al multiplicar por cero.
+        features = dict(row)
+        features.setdefault("site_area_m2", features.get("site_area"))
+        entradas.append(
+            {
+                "site_id": row["site_id"],
+                "features": features,
+                "evidence": EvidenceSummary(
+                    damage_observations=int(row.get("evidence_count") or 0),
+                    damage_classes=clases,
+                    source_ids=["copernicus_ems"],
+                    agreement=(
+                        float(row["damage_confidence"])
+                        if row.get("damage_confidence") is not None
+                        else None
+                    ),
+                ),
+                "provenance": {"feature_version": FEATURE_VERSION},
+            }
+        )
+
+    oportunidades = generate_opportunities(entradas, weights=weights)
+    version, escritas = loader.record_opportunities(
+        conn,
+        oportunidades,
+        feature_version=FEATURE_VERSION,
+        scoring_version=SCORING_VERSION,
+    )
+    return version, oportunidades[:escritas] if escritas else oportunidades

@@ -7,6 +7,7 @@ exactamente el fallo que este proyecto lleva toda su historia evitando.
 
 from __future__ import annotations
 
+import psycopg
 import pytest
 
 from uri.contracts.enums import InterventionType
@@ -187,3 +188,201 @@ def test_toda_intervencion_del_catalogo_produce_una_oportunidad_valida(tipo):
     assert op.cost_cop > 0
     assert 0.0 <= op.confidence <= 1.0
     assert len(op.feasibility) == 4
+
+
+# ── Persistencia: la oportunidad tiene que poder CITARSE ────────────────
+
+
+def _version_de_prueba(db_conn) -> int:
+    from uri.ingestion.loader import register_sources
+
+    register_sources(db_conn)
+    db_conn.commit()
+    with db_conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO rebuild_core.dataset_version
+                (source_id, retrieved_at, record_count, content_hash, is_synthetic)
+            VALUES ('copernicus_ems', now(), 1, 'fixture-opp', false)
+            ON CONFLICT (source_id, content_hash) DO NOTHING
+            RETURNING data_version
+            """
+        )
+        fila = cur.fetchone()
+        if fila is None:
+            cur.execute(
+                "SELECT data_version FROM rebuild_core.dataset_version "
+                "WHERE source_id = 'copernicus_ems' AND content_hash = 'fixture-opp'"
+            )
+            fila = cur.fetchone()
+    db_conn.commit()
+    return fila["data_version"]
+
+
+def _insertar(cur, version, **overrides):
+    campos = {
+        "opportunity_id": "opp_prueba",
+        "site_id": None,
+        "headline": "Zona con déficit",
+        "feasibility": '[{"status": "UNKNOWN"}, {"status": "OK"}]',
+        "unknowns": 1,
+        "blocked": False,
+        "cost": 1_000_000.0,
+        "area": 1000.0,
+        "intervention": "PARK",
+        "provenance": '{"feature_version": "features_v1"}',
+    }
+    campos.update(overrides)
+    cur.execute(
+        """
+        INSERT INTO rebuild_core.recovery_opportunity (
+            opportunity_id, site_id, geometry, centroid, problem_headline,
+            intervention, intervention_label, area_m2, feasibility,
+            unknown_count, blocked, cost_cop, suitability, confidence,
+            provenance, feature_version, scoring_version, data_version
+        )
+        SELECT %(opportunity_id)s, s.site_id, s.geometry, s.centroid, %(headline)s,
+               %(intervention)s, 'Prueba', %(area)s, %(feasibility)s::jsonb,
+               %(unknowns)s, %(blocked)s, %(cost)s, 50.0, 0.7,
+               %(provenance)s::jsonb, 'features_v1', 'scoring_v1', %(version)s
+        FROM rebuild_core.site s LIMIT 1
+        """,
+        {**campos, "version": version},
+    )
+
+
+def test_el_recuento_de_incognitas_no_puede_divergir_del_detalle(db_conn):
+    """Sin este candado bastaria escribir unknown_count = 0 junto a un POT
+    UNKNOWN para que la tarjeta dijera que todo esta comprobado."""
+    version = _version_de_prueba(db_conn)
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM rebuild_core.site LIMIT 1")
+        if cur.fetchone() is None:
+            pytest.skip("sin sitios cargados")
+    with pytest.raises(psycopg.errors.CheckViolation), db_conn.cursor() as cur:
+        _insertar(cur, version, unknowns=0)
+    db_conn.rollback()
+
+
+def test_el_bloqueo_no_puede_divergir_del_detalle(db_conn):
+    """`blocked` es la lectura del array, no una etiqueta suelta. Divergir es
+    como se publica un proyecto inviable como viable."""
+    version = _version_de_prueba(db_conn)
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM rebuild_core.site LIMIT 1")
+        if cur.fetchone() is None:
+            pytest.skip("sin sitios cargados")
+    with pytest.raises(psycopg.errors.CheckViolation), db_conn.cursor() as cur:
+        _insertar(
+            cur,
+            version,
+            feasibility='[{"status": "BLOCKED"}]',
+            unknowns=0,
+            blocked=False,
+        )
+    db_conn.rollback()
+
+
+def test_una_intervencion_construible_no_puede_costar_cero(db_conn):
+    """Las primeras 105 oportunidades se persistieron con area 0 y coste 0
+    porque el generador leia `site_area_m2` y el pipeline devolvia
+    `site_area`. Ningun paso fallo: multiplicar un area ausente por un coste
+    unitario da cero, y cero es valido para todas las capas de arriba.
+
+    Ese es el modo de fallo que este proyecto no puede permitirse — no
+    revienta, publica. Un parque de 0 COP encabezaria cualquier ranking de
+    personas por millon invertido.
+    """
+    version = _version_de_prueba(db_conn)
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM rebuild_core.site LIMIT 1")
+        if cur.fetchone() is None:
+            pytest.skip("sin sitios cargados")
+    with pytest.raises(psycopg.errors.CheckViolation), db_conn.cursor() as cur:
+        _insertar(cur, version, cost=0.0)
+    db_conn.rollback()
+
+
+def test_una_oportunidad_sin_procedencia_no_entra(db_conn):
+    """Una oportunidad sin procedencia es una opinion con formato de dato."""
+    version = _version_de_prueba(db_conn)
+    with db_conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM rebuild_core.site LIMIT 1")
+        if cur.fetchone() is None:
+            pytest.skip("sin sitios cargados")
+    with pytest.raises(psycopg.errors.CheckViolation), db_conn.cursor() as cur:
+        _insertar(cur, version, provenance="{}")
+    db_conn.rollback()
+
+
+# ── El optimizador selecciona oportunidades, no sitios ──────────────────
+
+
+def test_el_portafolio_cita_la_oportunidad_que_eligio():
+    """ADR-20 afirma que el optimizador selecciona un portafolio de
+    oportunidades. Esta prueba es lo que hace que esa frase sea cierta."""
+    from uri.optimizer.greedy import Candidate, select_portfolio
+
+    candidatos = [
+        Candidate(
+            site_id=f"site_{i:04d}",
+            opportunity_id=f"opp_{i:04d}_park",
+            intervention=InterventionType.PARK,
+            score=90.0 - i,
+            cost_cop=1e9,
+            population_cells={i * 10 + j: 100.0 for j in range(5)},
+            vulnerability=0.4,
+            unknown_count=2,
+        )
+        for i in range(4)
+    ]
+    resultado = select_portfolio(candidatos, budget=10e9)
+    assert resultado.items
+    assert all(item.opportunity_id for item in resultado.items)
+    assert resultado.items[0].opportunity_id == "opp_0000_park"
+
+
+def test_el_portafolio_declara_cuantas_condiciones_quedan_sin_comprobar():
+    """Un portafolio de 19 proyectos con 38 incognitas no es lo mismo que uno
+    con ninguna, y el numero tiene que salir junto al total de poblacion."""
+    from uri.optimizer.greedy import Candidate, select_portfolio
+
+    candidatos = [
+        Candidate(
+            site_id=f"site_{i:04d}",
+            opportunity_id=f"opp_{i:04d}_park",
+            intervention=InterventionType.PARK,
+            score=90.0 - i,
+            cost_cop=1e9,
+            population_cells={i * 10 + j: 100.0 for j in range(5)},
+            vulnerability=0.4,
+            unknown_count=2,
+        )
+        for i in range(3)
+    ]
+    resultado = select_portfolio(candidatos, budget=10e9)
+    assert resultado.unknown_checks == 2 * len(resultado.items)
+
+
+def test_las_incognitas_no_penalizan_el_orden():
+    """No se puede castigar a un sitio por un dato que el proyecto no tiene.
+    Las incognitas se arrastran para declararlas, no para ordenar."""
+    from uri.optimizer.greedy import Candidate, select_portfolio
+
+    def candidato(i, incognitas):
+        return Candidate(
+            site_id=f"site_{i:04d}",
+            opportunity_id=f"opp_{i:04d}_park",
+            intervention=InterventionType.PARK,
+            score=80.0,
+            cost_cop=1e9,
+            population_cells={i * 10 + j: 100.0 for j in range(5)},
+            vulnerability=0.4,
+            unknown_count=incognitas,
+        )
+
+    sin_dudas = select_portfolio([candidato(0, 0), candidato(1, 0)], budget=10e9)
+    con_dudas = select_portfolio([candidato(0, 4), candidato(1, 4)], budget=10e9)
+    assert [i.opportunity_id for i in sin_dudas.items] == [
+        i.opportunity_id for i in con_dudas.items
+    ]
