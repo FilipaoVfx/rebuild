@@ -700,6 +700,29 @@ async function startSwipe(familia) {
   if (!pre || !post) return;
 
   stopSwipe();
+
+  // Comparar dos imagenes se hace mirando hacia abajo. Con las columnas de
+  // poblacion puestas la cortina queda tapada, y con 55 grados de inclinacion
+  // la linea de corte es vertical en pantalla pero diagonal sobre el suelo:
+  // el ojo compara dos sitios distintos a cada lado. Se aplana la vista.
+  if (state.relief) setRelief(false);
+  if (state.map.getTerrain()) {
+    state.map.setTerrain(null);
+    const casilla = $('#layer-control input[data-terrain]');
+    if (casilla) casilla.checked = false;
+  }
+  // Y encuadrando el AOI entero. La cortina se define sobre la IMAGEN, no
+  // sobre la pantalla: con el mapa acercado a un barrio, el corte cae fuera
+  // del encuadre y el deslizador parece no hacer nada.
+  const [ow, osur, oe, onorte] = post.bbox;
+  state.map.fitBounds(
+    [
+      [ow, osur],
+      [oe, onorte],
+    ],
+    { padding: 30, pitch: 0, bearing: 0, duration: 900 }
+  );
+
   setSatellite(`${familia}-PRE`);
 
   const base = STATIC_BASE || "data";
