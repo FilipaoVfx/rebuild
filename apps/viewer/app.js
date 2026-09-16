@@ -63,9 +63,10 @@ const state = {
   mapReady: false,
   colorBy: "score",
   layers: Object.fromEntries(LAYERS.map((l) => [l.id, l.on])),
-  // Modo 3D: apagado por defecto y cargado en diferido. deck.gl son 575 KB
-  // comprimidos; cobrarlos en el arranque a quien solo quiere la tabla sería
-  // pagar por una vista que no pidió.
+  // Modo 3D: arranca apagado y se enciende solo al final de `main`, una vez
+  // que la tabla y el mapa ya sirven. deck.gl son 575 KB comprimidos y
+  // cobrarlos en el arranque retrasaría la vista que sí es utilizable sin
+  // ellos; cargarlos despues da las dos cosas.
   relief: false,
   deckReady: false,
   deckOverlay: null,
@@ -596,6 +597,12 @@ function reliefTooltip({ object, layer }) {
 async function setRelief(on) {
   state.relief = on;
   const note = $("#relief-note");
+  // La casilla se sincroniza aqui y no en el manejador del clic, porque el
+  // relieve tambien se enciende solo al arrancar. Sin esto la vista saldria
+  // en 3D con el control diciendo que esta apagado, y el primer clic —el que
+  // deberia apagarlo— seria un clic muerto.
+  const box = $('#layer-control input[data-layer="relief"]');
+  if (box) box.checked = on;
   if (!on) {
     if (state.deckOverlay) state.deckOverlay.setProps({ layers: [] });
     state.map.easeTo({ pitch: 0, bearing: 0, duration: 700 });
@@ -616,7 +623,6 @@ async function setRelief(on) {
   } catch (error) {
     if (note) note.textContent = `No se pudo activar el relieve: ${error.message}`;
     state.relief = false;
-    const box = $('#layer-control input[data-layer="relief"]');
     if (box) box.checked = false;
     return;
   }
@@ -1304,6 +1310,15 @@ async function main() {
   renderProvenance(provenance, sources);
   renderSources(sources);
   renderAlerts(alerts);
+
+  // El relieve se enciende solo, DESPUES de que la tabla y el mapa ya sirven.
+  // Estaba detras de una casilla apagada en el fondo del panel de capas, que
+  // es el sitio menos visible de la pagina: quien entraba veia puntos sueltos
+  // sobre un fondo liso y se iba sin saber que la vista principal existia.
+  // Sigue siendo carga diferida —los 575 KB de deck.gl no bloquean nada— y la
+  // casilla lo apaga igual. Si el navegador no puede con WebGL, `setRelief`
+  // ya deja el mapa plano y lo dice.
+  if (!state.relief) setRelief(true);
 }
 
 main().catch((error) => {
