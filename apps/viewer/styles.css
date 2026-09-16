@@ -423,3 +423,18 @@ button.ghost:hover { color: var(--ink-1); border-color: var(--s1); }
 .sat-opacity input {
   flex: 1;
 }
+
+/* El aviso legal del DEM es obligatorio, no protagonista: plegado ocupa una
+   línea y sigue estando a un clic, que es lo que la licencia pide. */
+.relief-note details {
+  margin-top: 4px;
+}
+.relief-note summary {
+  cursor: pointer;
+  color: #5a584f;
+}
+.relief-note details[open] {
+  color: #5a584f;
+  font-size: 11px;
+  line-height: 1.4;
+}

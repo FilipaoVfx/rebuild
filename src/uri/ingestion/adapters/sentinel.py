@@ -93,6 +93,19 @@ DEM_SOURCE_ID = "copernicus_dem"
 #: la resolucion aqui invalida la auditoria.
 DEM_INSTANCE = "COPERNICUS_30"
 
+#: De donde sale el DEM, y por que NO de la API de proceso de CDSE.
+#:
+#: El primer intento fue pedirlo por `sh.dataspace.copernicus.eu/process/v1`,
+#: con las mismas credenciales que sirven para las escenas. Responde 403
+#: COMMON_INSUFFICIENT_PERMISSIONS: el DEM es una Copernicus Contributing
+#: Mission y no entra en el tier gratuito de Sentinel Hub. La licencia lo
+#: permite; la cuenta no llega.
+#:
+#: El registro de datos abiertos de AWS sirve el MISMO producto de forma
+#: anonima, sin credencial ninguna. La licencia auditada es la misma —lo que
+#: cambia es el transporte, no los terminos.
+DEM_BASE_URL = "https://copernicus-dem-30m.s3.amazonaws.com"
+
 #: Hasta que zoom se generan teselas. El DEM son 30 m por muestra; a z14 una
 #: tesela de 256 px cubre ~9,5 m por pixel, o sea que ya remuestrea por encima
 #: de lo que el dato tiene. Pedir z15 o z16 seria inventar detalle y multiplicar
@@ -299,42 +312,6 @@ class CdseClient:
             "format": image_format,
         }
         return content, request_parameters
-
-    def fetch_terrain_tile(
-        self, z: int, x: int, y: int, *, evalscript: str, size: int = TILE_SIZE
-    ) -> tuple[bytes, dict]:
-        """Una tesela XYZ del DEM, ya codificada en Terrain-RGB.
-
-        La peticion NO lleva `timeRange`: un modelo de elevacion no tiene
-        fecha de adquisicion en el sentido en que la tiene una escena. Meterle
-        una ventana temporal, como hace `fetch_aoi`, devolveria vacio.
-        """
-        _assert_usable_source(DEM_SOURCE_ID)
-        bbox = tile_bounds(z, x, y)
-        payload = {
-            "input": {
-                "bounds": {
-                    "bbox": list(bbox),
-                    "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"},
-                },
-                "data": [{"type": "dem", "dataFilter": {"demInstance": DEM_INSTANCE}}],
-            },
-            "output": {
-                "width": size,
-                "height": size,
-                "responses": [{"identifier": "default", "format": {"type": "image/png"}}],
-            },
-            "evalscript": evalscript,
-        }
-        content = self._post(PROCESS_URL, payload, accept="image/png")
-        return content, {
-            "url": PROCESS_URL,
-            "tile": [z, x, y],
-            "bbox": list(bbox),
-            "size": size,
-            "dem_instance": DEM_INSTANCE,
-            "evalscript_sha256": _sha256(evalscript),
-        }
 
 
 # ── Evalscripts ─────────────────────────────────────────────────────────
@@ -675,40 +652,6 @@ def select_radar(
 # La licencia del DEM NO es la de Sentinel: esta auditada aparte en
 # `db/terms/copernicus_dem_glo30_licence_20260916.txt` y obliga a un aviso de
 # no responsabilidad que Sentinel no pide.
-
-
-def terrain_evalscript() -> str:
-    """Codifica la elevacion en Terrain-RGB, que es lo que MapLibre lee.
-
-    La formula es la de Mapbox, que MapLibre implementa igual:
-    `altura = -10000 + (R * 256 * 256 + G * 256 + B) * 0.1`. Da un rango de
-    -10.000 a 1.667.721 m con paso de 10 cm, muy por encima de lo que el DEM
-    distingue.
-
-    Se hace en el servicio y no en Python a proposito: evita meter numpy y
-    rasterio como dependencias para un solo uso, y deja la codificacion
-    declarada en un script con hash en la procedencia en vez de escondida en
-    codigo local.
-    """
-    return """//VERSION=3
-function setup() {
-  return {
-    input: ["DEM"],
-    output: { bands: 3, sampleType: "UINT8" }
-  };
-}
-function evaluatePixel(s) {
-  // El mar y los huecos del DEM llegan como valores muy negativos. Fijarlos
-  // en 0 evita un pozo artificial en el borde del recorte; el AOI de Pereira
-  // esta a ~1.400 m, asi que aqui no se pierde nada real.
-  var h = Math.max(s.DEM, 0);
-  var v = Math.round((h + 10000) / 0.1);
-  return [
-    (v >> 16) & 255,
-    (v >> 8) & 255,
-    v & 255
-  ];
-}"""
 
 
 def tile_bounds(z: int, x: int, y: int) -> tuple[float, float, float, float]:

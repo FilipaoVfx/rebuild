@@ -77,6 +77,11 @@ const state = {
   // ("s2-PRE", "s1-POST"...) o null si la capa esta apagada.
   sentinel: null,
   satellite: null,
+  swipe: null,
+  // Terreno. `terrain` es el indice del DEM (o false si no hay teselas
+  // versionadas); `exaggeration` es cuanto se amplifica el relieve.
+  terrain: null,
+  exaggeration: 1.5,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -668,6 +673,191 @@ function setSatellite(key) {
   }
 }
 
+/* ── Cortina antes/después ────────────────────────────────────────────
+ *
+ * La comparación es el gesto que da sentido a tener dos fechas. Se hace con
+ * UNA sola instancia de mapa, no con dos sincronizadas: la imagen post se
+ * pinta en un `<canvas>` recortado por el deslizador y MapLibre lo consume
+ * como fuente `canvas`. Dos mapas superpuestos tendrían que sincronizar
+ * cámara, y con el terreno puesto esa sincronía se rompe en cuanto hay
+ * inclinación — quedaría un borde que no cuadra justo donde el ojo compara.
+ *
+ * Las dos escenas cubren EXACTAMENTE el mismo bbox (el AOI), así que recortar
+ * por fracción de ancho es recortar por longitud. Si no lo cubrieran, esto
+ * mentiría: estaría alineando dos encuadres distintos.
+ *
+ * Y sigue sin ser daño. Lo que cambia entre las dos fechas puede ser sombra,
+ * obra, cosecha o un tejado mojado.
+ */
+
+const SWIPE_ID = "sat-swipe";
+
+async function startSwipe(familia) {
+  const indice = state.sentinel;
+  if (!indice) return;
+  const pre = indice.scenes.find((x) => sentinelKey(x) === `${familia}-PRE`);
+  const post = indice.scenes.find((x) => sentinelKey(x) === `${familia}-POST`);
+  if (!pre || !post) return;
+
+  stopSwipe();
+  setSatellite(`${familia}-PRE`);
+
+  const base = STATIC_BASE || "data";
+  const imagen = await new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => reject(new Error(`no se pudo cargar ${post.file}`));
+    im.src = `${base}/sentinel/${post.file}`;
+  });
+
+  const lienzo = document.createElement("canvas");
+  lienzo.width = imagen.width;
+  lienzo.height = imagen.height;
+  state.swipe = { familia, imagen, lienzo, pre, post, fraccion: 0.5 };
+
+  const [w, sur, e, norte] = post.bbox;
+  if (!state.map.getSource(SWIPE_ID)) {
+    state.map.addSource(SWIPE_ID, {
+      type: "canvas",
+      canvas: lienzo,
+      // `animate` deja que MapLibre relea el lienzo cuando lo redibujamos.
+      animate: true,
+      coordinates: [
+        [w, norte],
+        [e, norte],
+        [e, sur],
+        [w, sur],
+      ],
+    });
+    const encima = `sat-${familia}-PRE`;
+    state.map.addLayer(
+      { id: SWIPE_ID, type: "raster", source: SWIPE_ID, paint: { "raster-opacity": 1 } },
+      state.map.getLayer(encima) ? undefined : undefined
+    );
+    // Justo encima de la imagen pre, para que la cortina tape a su pareja y
+    // no al tejido urbano.
+    if (state.map.getLayer(encima)) state.map.moveLayer(SWIPE_ID, encima);
+    state.map.moveLayer(encima);
+    state.map.moveLayer(SWIPE_ID);
+  }
+  drawSwipe(0.5);
+
+  const ui = $("#swipe-ui");
+  if (ui) {
+    ui.hidden = false;
+    $("#swipe-range").value = 50;
+  }
+  const nota = $("#sat-note");
+  if (nota) {
+    nota.hidden = false;
+    nota.innerHTML =
+      `<strong>Izquierda: ${pre.acquisition} (antes) · Derecha: ${post.acquisition} ` +
+      `(después).</strong> ${indice.limitation}`;
+  }
+}
+
+function drawSwipe(fraccion) {
+  const sw = state.swipe;
+  if (!sw) return;
+  sw.fraccion = fraccion;
+  const ctx = sw.lienzo.getContext("2d");
+  ctx.clearRect(0, 0, sw.lienzo.width, sw.lienzo.height);
+  const x = Math.round(sw.lienzo.width * fraccion);
+  const ancho = sw.lienzo.width - x;
+  if (ancho > 0) {
+    // Solo la banda derecha de la post; lo que queda a la izquierda es
+    // transparente y deja ver la escena pre que hay debajo.
+    ctx.drawImage(sw.imagen, x, 0, ancho, sw.lienzo.height, x, 0, ancho, sw.lienzo.height);
+  }
+  if (state.map.getSource(SWIPE_ID)) state.map.getSource(SWIPE_ID).play?.();
+}
+
+function stopSwipe() {
+  if (state.map.getLayer(SWIPE_ID)) state.map.removeLayer(SWIPE_ID);
+  if (state.map.getSource(SWIPE_ID)) state.map.removeSource(SWIPE_ID);
+  state.swipe = null;
+  const ui = $("#swipe-ui");
+  if (ui) ui.hidden = true;
+}
+
+/* ── Relieve del terreno (Copernicus DEM GLO-30) ──────────────────────
+ *
+ * Elevación real, no un efecto. Pereira está a ~1.400 m en la cordillera y
+ * los valles que parten la ciudad son los mismos que se ven en las imágenes
+ * Sentinel: inclinar el mapa muestra por qué la trama urbana tiene la forma
+ * que tiene.
+ *
+ * LICENCIA: el WorldDEM-30 NO comparte los términos de Sentinel aunque lleve
+ * Copernicus en el nombre. Su art. 6(c) obliga a publicar una exención de
+ * responsabilidad literal, que es una obligación distinta de la nota de
+ * fuente. Por eso el índice trae `liability_notice` además de `attribution`,
+ * y las dos se pintan. El art. 6(d) prohíbe dar a entender respaldo oficial:
+ * nada de escudos de la UE ni de ESA aquí.
+ */
+
+async function loadTerrainIndex() {
+  if (state.terrain !== null) return state.terrain;
+  try {
+    const base = STATIC_BASE || "data";
+    const response = await fetch(`${base}/terrain/terrain.json`);
+    state.terrain = response.ok ? await response.json() : false;
+  } catch {
+    state.terrain = false;
+  }
+  return state.terrain;
+}
+
+function setTerrain(on) {
+  const indice = state.terrain;
+  if (!indice) return;
+  const nota = $("#terrain-note");
+
+  if (!on) {
+    state.map.setTerrain(null);
+    if (nota) nota.hidden = true;
+    return;
+  }
+
+  if (!state.map.getSource("dem")) {
+    const base = STATIC_BASE || "data";
+    state.map.addSource("dem", {
+      type: "raster-dem",
+      tiles: [`${base}/terrain/{z}/{x}/{y}.png`],
+      // `mapbox` es la codificación Terrain-RGB que el evalscript emite:
+      // altura = -10000 + (R*65536 + G*256 + B) * 0.1.
+      encoding: indice.encoding || "mapbox",
+      tileSize: indice.tile_size || 256,
+      // Solo hay teselas del AOI. Sin `bounds`, MapLibre pide las de
+      // alrededor y la consola se llena de 404 que parecen un fallo.
+      bounds: indice.aoi_bbox,
+      minzoom: indice.minzoom,
+      // Por encima de esto MapLibre sobre-amplía las teselas que ya tiene, en
+      // vez de pedir unas que no existen y dejar el relieve en plano.
+      maxzoom: indice.maxzoom,
+      attribution: indice.attribution,
+    });
+  }
+  state.map.setTerrain({ source: "dem", exaggeration: state.exaggeration });
+  if (state.map.getPitch() < 25) {
+    state.map.easeTo({ pitch: 55, bearing: -18, duration: 1400 });
+  }
+
+  if (nota) {
+    nota.hidden = false;
+    // El aviso del art. 6(c) va literal y en su idioma original: la licencia
+    // pide "the following sentence or its translation", y traducir una
+    // exención de responsabilidad es una forma barata de debilitarla.
+    // El aviso del art. 6(c) va literal y en su idioma original —la licencia
+    // pide "the following sentence or its translation", y traducir una
+    // exención de responsabilidad es una forma barata de debilitarla— pero
+    // plegado: obligatorio no es lo mismo que protagonista.
+    nota.innerHTML =
+      `<strong>Elevación real del Copernicus DEM GLO-30</strong>, 30 m por muestra. ` +
+      `<details><summary>Atribución y exención</summary>` +
+      `${indice.attribution}. <em>${indice.liability_notice}.</em></details>`;
+  }
+}
+
 function reliefLayers(coverage) {
   const { ColumnLayer, ArcLayer } = window.deck;
   const scale = elevationScale(coverage.cells);
@@ -845,9 +1035,30 @@ function renderMapControls() {
         </label>`
       ).join("")}
     </div>
+    <div class="control-group" id="terrain-group" hidden>
+      <h3>Terreno</h3>
+      <label class="layer-row">
+        <input type="checkbox" data-terrain>
+        <span>Relieve real</span>
+        <span class="origin real">real</span>
+      </label>
+      <label class="sat-opacity">
+        Exageración
+        <input type="range" id="terrain-exag" min="10" max="40" value="15">
+      </label>
+      <p class="relief-note" id="terrain-note" hidden></p>
+    </div>
     <div class="control-group" id="sat-group" hidden>
       <h3>Imagen Sentinel</h3>
       <div class="sat-buttons" id="sat-buttons"></div>
+      <div class="sat-buttons">
+        <button type="button" class="ghost sat" data-swipe="s2">Comparar óptica</button>
+        <button type="button" class="ghost sat" data-swipe="s1">Comparar radar</button>
+      </div>
+      <label class="sat-opacity" id="swipe-ui" hidden>
+        Cortina
+        <input type="range" id="swipe-range" min="0" max="100" value="50">
+      </label>
       <label class="sat-opacity">
         Opacidad
         <input type="range" id="sat-opacity" min="10" max="100" value="85">
@@ -885,6 +1096,22 @@ function renderMapControls() {
         applyLayerVisibility();
       })
     );
+  loadTerrainIndex().then((indice) => {
+    if (!indice) return;
+    $("#terrain-group").hidden = false;
+    $('#layer-control input[data-terrain]').addEventListener("change", (event) => {
+      setTerrain(event.target.checked);
+    });
+    $("#terrain-exag").addEventListener("input", (event) => {
+      state.exaggeration = Number(event.target.value) / 10;
+      // Solo re-aplica si el terreno esta puesto: llamar a setTerrain con la
+      // casilla apagada lo encenderia desde el deslizador.
+      if (state.map.getTerrain()) {
+        state.map.setTerrain({ source: "dem", exaggeration: state.exaggeration });
+      }
+    });
+  });
+
   loadSentinelIndex().then((indice) => {
     if (!indice || !indice.scenes.length) return;
     const grupo = $("#sat-group");
@@ -909,9 +1136,40 @@ function renderMapControls() {
           $("#sat-buttons")
             .querySelectorAll("button")
             .forEach((b) => b.classList.toggle("on", b === boton));
+          // Elegir una escena suelta cancela la comparacion: dejar la cortina
+          // puesta sobre otra escena mostraria dos fechas que no son las que
+          // el rotulo dice.
+          stopSwipe();
+          document.querySelectorAll("[data-swipe]").forEach((b) => b.classList.remove("on"));
           setSatellite(boton.dataset.sat || null);
         })
       );
+    document.querySelectorAll("[data-swipe]").forEach((boton) =>
+      boton.addEventListener("click", () => {
+        const activo = boton.classList.contains("on");
+        document.querySelectorAll("[data-swipe]").forEach((b) => b.classList.remove("on"));
+        if (activo) {
+          stopSwipe();
+          return;
+        }
+        boton.classList.add("on");
+        $("#sat-buttons")
+          .querySelectorAll("button")
+          .forEach((b) => b.classList.toggle("on", b.dataset.sat === ""));
+        startSwipe(boton.dataset.swipe).catch((error) => {
+          const nota = $("#sat-note");
+          if (nota) {
+            nota.hidden = false;
+            nota.textContent = `No se pudo comparar: ${error.message}`;
+          }
+        });
+      })
+    );
+
+    $("#swipe-range").addEventListener("input", (event) => {
+      drawSwipe(Number(event.target.value) / 100);
+    });
+
     $("#sat-opacity").addEventListener("input", (event) => {
       if (!state.satellite) return;
       state.map.setPaintProperty(
