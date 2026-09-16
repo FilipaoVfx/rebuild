@@ -77,7 +77,7 @@ def recompute(conn) -> tuple[dict, list[str]]:
         cur.execute(
             """
             SELECT max(data_version) AS v
-            FROM core.dataset_version
+            FROM rebuild_core.dataset_version
             WHERE source_id = %s
             """,
             (DAMAGE_SOURCE,),
@@ -176,14 +176,14 @@ def main() -> int:
                 CONTRIBUTING_SOURCES_SQL
                 + """
                 SELECT DISTINCT dv.source_id
-                FROM core.dataset_version dv
+                FROM rebuild_core.dataset_version dv
                 JOIN contributing c USING (source_id)
                 JOIN referenciada r USING (data_version)
                 WHERE dv.is_synthetic
                 """
             )
             synthetic_versions = cur.fetchall()
-            cur.execute("SELECT count(*) AS n FROM core.site WHERE is_synthetic")
+            cur.execute("SELECT count(*) AS n FROM rebuild_core.site WHERE is_synthetic")
             synthetic_sites = cur.fetchone()["n"]
 
         by_origin: dict[str, float] = {"real": 0.0, "derivado": 0.0, "no disponible": 0.0}
@@ -233,7 +233,7 @@ def main() -> int:
                     count(DISTINCT building_density) AS densidad_d,
                     count(*) FILTER (WHERE catchment_method = 'NETWORK') AS red,
                     2 AS red_d
-                FROM analytics.site_feature
+                FROM rebuild_analytics.site_feature
                 """
             )
             cov = cur.fetchone()

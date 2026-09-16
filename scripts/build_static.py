@@ -60,7 +60,7 @@ def assert_publishable(profile: str) -> None:
             CONTRIBUTING_SOURCES_SQL
             + """
             SELECT sr.source_id, sr.license_class::text AS license_class
-            FROM core.source_register sr
+            FROM rebuild_core.source_register sr
             JOIN contributing c USING (source_id)
             WHERE sr.redistribution_allowed IS DISTINCT FROM true
             ORDER BY 1

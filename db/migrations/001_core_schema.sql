@@ -9,14 +9,14 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS pgrouting;
 
-CREATE SCHEMA IF NOT EXISTS core;
-CREATE SCHEMA IF NOT EXISTS analytics;
-CREATE SCHEMA IF NOT EXISTS osm_raw;
-CREATE SCHEMA IF NOT EXISTS osm_derived;
+CREATE SCHEMA IF NOT EXISTS rebuild_core;
+CREATE SCHEMA IF NOT EXISTS rebuild_analytics;
+CREATE SCHEMA IF NOT EXISTS rebuild_osm_raw;
+CREATE SCHEMA IF NOT EXISTS rebuild_osm_derived;
 
 -- fuentes.md §1 — los cinco ejes de licencia colapsan en un unico enum que
 -- gobierna los controles automaticos. UNCLEAR es el valor seguro: bloquea.
-CREATE TYPE core.license_class AS ENUM (
+CREATE TYPE rebuild_core.license_class AS ENUM (
     'COMMERCIAL_SAFE',
     'ATTRIBUTION',
     'SHARE_ALIKE',
@@ -25,10 +25,10 @@ CREATE TYPE core.license_class AS ENUM (
 );
 
 -- fuentes.md §5 — un export no es un archivo, es un archivo con destinatario.
-CREATE TYPE core.export_profile AS ENUM ('INTERNAL', 'INSTITUTIONAL', 'COMMERCIAL');
+CREATE TYPE rebuild_core.export_profile AS ENUM ('INTERNAL', 'INSTITUTIONAL', 'COMMERCIAL');
 
 -- ADR-16 — vocabulario normalizado de daño. Ordinal: el orden importa.
-CREATE TYPE core.damage_class AS ENUM (
+CREATE TYPE rebuild_core.damage_class AS ENUM (
     'NO_DAMAGE',
     'POSSIBLY_DAMAGED',
     'DAMAGED',
@@ -36,7 +36,7 @@ CREATE TYPE core.damage_class AS ENUM (
 );
 
 -- ADR-16 — como se observó el daño. Gobierna la fiabilidad en la fusion.
-CREATE TYPE core.evidence_method AS ENUM (
+CREATE TYPE rebuild_core.evidence_method AS ENUM (
     'REMOTE_SENSING',
     'FIELD_INSPECTION',
     'CITIZEN_REPORT',
@@ -45,7 +45,7 @@ CREATE TYPE core.evidence_method AS ENUM (
 );
 
 -- SRS §5.2 — ciclo de vida del sitio de oportunidad.
-CREATE TYPE core.site_state AS ENUM (
+CREATE TYPE rebuild_core.site_state AS ENUM (
     'INGESTED',
     'EVALUATED',
     'EXCLUDED',
@@ -55,7 +55,7 @@ CREATE TYPE core.site_state AS ENUM (
 );
 
 -- PRD §16, recortado a los 6 tipos de la V1 (plan de MVP §1.4).
-CREATE TYPE core.intervention_type AS ENUM (
+CREATE TYPE rebuild_core.intervention_type AS ENUM (
     'PARK',
     'SPORTS',
     'PUBLIC_SQUARE',
@@ -65,4 +65,4 @@ CREATE TYPE core.intervention_type AS ENUM (
 );
 
 -- FR-FEAT-03 — como se calculo un catchment. `BUFFER` implica degradacion.
-CREATE TYPE core.catchment_method AS ENUM ('NETWORK', 'BUFFER');
+CREATE TYPE rebuild_core.catchment_method AS ENUM ('NETWORK', 'BUFFER');

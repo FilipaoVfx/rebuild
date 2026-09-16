@@ -27,7 +27,7 @@ def throwaway_version(db_conn) -> int:
     with db_conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO core.source_register
+            INSERT INTO rebuild_core.source_register
                 (source_id, display_name, tier, source_url, access_method, spatial_reference)
             VALUES ('fixture_prueba', 'Fixture', 'A', 'urn:test', 'generated', 'EPSG:4326')
             ON CONFLICT (source_id) DO NOTHING
@@ -35,7 +35,7 @@ def throwaway_version(db_conn) -> int:
         )
         cur.execute(
             """
-            INSERT INTO core.dataset_version
+            INSERT INTO rebuild_core.dataset_version
                 (source_id, retrieved_at, record_count, content_hash, is_synthetic)
             VALUES ('fixture_prueba', now(), 1, %s, false)
             ON CONFLICT (source_id, content_hash) DO NOTHING
@@ -46,7 +46,7 @@ def throwaway_version(db_conn) -> int:
         row = cur.fetchone()
         if row is None:
             cur.execute(
-                "SELECT data_version FROM core.dataset_version "
+                "SELECT data_version FROM rebuild_core.dataset_version "
                 "WHERE source_id = 'fixture_prueba' LIMIT 1"
             )
             row = cur.fetchone()
@@ -60,13 +60,13 @@ def test_una_version_de_dataset_no_se_puede_mutar(db_conn, throwaway_version):
 
     with pytest.raises(psycopg.errors.RaiseException, match="FR-ING-02"), db_conn.cursor() as cur:
         cur.execute(
-            "UPDATE core.dataset_version SET record_count = 0 WHERE data_version = %s",
+            "UPDATE rebuild_core.dataset_version SET record_count = 0 WHERE data_version = %s",
             (version,),
         )
     db_conn.rollback()
 
     with pytest.raises(psycopg.errors.RaiseException, match="FR-ING-02"), db_conn.cursor() as cur:
-        cur.execute("DELETE FROM core.dataset_version WHERE data_version = %s", (version,))
+        cur.execute("DELETE FROM rebuild_core.dataset_version WHERE data_version = %s", (version,))
     db_conn.rollback()
 
 
@@ -74,7 +74,7 @@ def test_el_log_de_auditoria_no_se_edita_ni_se_borra(db_conn):
     """FR-AUDIT-01 — una entrada editable no es una auditoria."""
     with db_conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO core.audit_log (actor, action, entity) VALUES (%s, %s, %s) "
+            "INSERT INTO rebuild_core.audit_log (actor, action, entity) VALUES (%s, %s, %s) "
             "RETURNING audit_id",
             ("prueba", "test.write", "prueba"),
         )
@@ -82,8 +82,8 @@ def test_el_log_de_auditoria_no_se_edita_ni_se_borra(db_conn):
     db_conn.commit()
 
     for sql in (
-        "UPDATE core.audit_log SET actor = 'otro' WHERE audit_id = %s",
-        "DELETE FROM core.audit_log WHERE audit_id = %s",
+        "UPDATE rebuild_core.audit_log SET actor = 'otro' WHERE audit_id = %s",
+        "DELETE FROM rebuild_core.audit_log WHERE audit_id = %s",
     ):
         with (
             pytest.raises(psycopg.errors.RaiseException, match="FR-AUDIT-01"),
@@ -103,7 +103,8 @@ def test_ninguna_columna_del_esquema_analitico_nombra_un_campo_prohibido(db_conn
             """
             SELECT table_schema, table_name, column_name
             FROM information_schema.columns
-            WHERE table_schema IN ('core', 'analytics', 'osm_raw', 'osm_derived')
+            WHERE table_schema IN ('rebuild_core', 'rebuild_analytics',
+                                   'rebuild_osm_raw', 'rebuild_osm_derived')
             """
         )
         rows = cur.fetchall()
@@ -125,7 +126,7 @@ def test_una_fuente_clasificada_exige_evidencia_archivada(db_conn):
     with pytest.raises(psycopg.errors.CheckViolation), db_conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO core.source_register
+            INSERT INTO rebuild_core.source_register
                 (source_id, display_name, tier, source_url, access_method,
                  spatial_reference, license_class)
             VALUES ('prueba_sin_evidencia', 'Prueba', 'A', 'https://x', 'download',
@@ -137,7 +138,7 @@ def test_una_fuente_clasificada_exige_evidencia_archivada(db_conn):
 
 def test_las_geometrias_de_sitio_son_validas(db_conn):
     with db_conn.cursor() as cur:
-        cur.execute("SELECT count(*) AS n FROM core.site WHERE NOT ST_IsValid(geometry)")
+        cur.execute("SELECT count(*) AS n FROM rebuild_core.site WHERE NOT ST_IsValid(geometry)")
         assert cur.fetchone()["n"] == 0
 
 
@@ -151,7 +152,7 @@ def test_la_evidencia_no_puede_observarse_despues_de_adquirirse(db_conn, throwaw
     with pytest.raises(psycopg.errors.CheckViolation), db_conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO core.damage_evidence
+            INSERT INTO rebuild_core.damage_evidence
                 (source, original_source, geometry, observation_date, acquisition_date,
                  damage_class, raw_damage_label, method, confidence, is_synthetic,
                  data_version)
@@ -178,7 +179,7 @@ def test_la_base_rechaza_una_capa_sintetica(db_conn, throwaway_version):
     ):
         cur.execute(
             """
-            INSERT INTO core.population_cell
+            INSERT INTO rebuild_core.population_cell
                 (geometry, population, households, vulnerability, is_synthetic, data_version)
             VALUES (ST_GeomFromText('POLYGON((-75.7 4.8, -75.69 4.8, -75.69 4.81,
                                               -75.7 4.81, -75.7 4.8))', 4326),
@@ -196,7 +197,7 @@ def test_la_base_rechaza_evidencia_de_dano_sintetica(db_conn, throwaway_version)
     ):
         cur.execute(
             """
-            INSERT INTO core.damage_evidence
+            INSERT INTO rebuild_core.damage_evidence
                 (source, original_source, geometry, positional_accuracy_m,
                  observation_date, acquisition_date, damage_class, raw_damage_label,
                  method, confidence, is_synthetic, data_version)

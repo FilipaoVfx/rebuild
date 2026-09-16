@@ -50,16 +50,16 @@ class Provenance(BaseModel):
 #: listas escritas a mano se desincronizan y la que se queda corta es la que
 #: deja pasar una fuente sin evaluar.
 PUBLISHED_LAYER_TABLES = (
-    "core.damage_evidence",
-    "core.site",
-    "core.population_cell",
-    "core.risk_zone",
-    "core.land_use",
-    "core.building_footprint",
-    "osm_raw.road",
-    "osm_raw.green_space",
-    "osm_raw.facility",
-    "analytics.site_feature",
+    "rebuild_core.damage_evidence",
+    "rebuild_core.site",
+    "rebuild_core.population_cell",
+    "rebuild_core.risk_zone",
+    "rebuild_core.land_use",
+    "rebuild_core.building_footprint",
+    "rebuild_osm_raw.road",
+    "rebuild_osm_raw.green_space",
+    "rebuild_osm_raw.facility",
+    "rebuild_analytics.site_feature",
 )
 
 #: SQL que resuelve las fuentes que contribuyen al resultado.
@@ -77,10 +77,10 @@ WITH referenciada AS (
 ),
 contributing AS (
     SELECT DISTINCT dv.source_id
-    FROM core.dataset_version dv
+    FROM rebuild_core.dataset_version dv
     JOIN referenciada r USING (data_version)
     UNION
-    SELECT DISTINCT original_source FROM core.damage_evidence
+    SELECT DISTINCT original_source FROM rebuild_core.damage_evidence
 )
 """.format(
     unions="\n    UNION ".join(

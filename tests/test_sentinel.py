@@ -191,7 +191,7 @@ def sentinel_version(db_conn) -> int:
     with db_conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO core.dataset_version
+            INSERT INTO rebuild_core.dataset_version
                 (source_id, retrieved_at, record_count, content_hash, is_synthetic)
             VALUES ('copernicus_sentinel', now(), 1, %s, false)
             ON CONFLICT (source_id, content_hash) DO NOTHING
@@ -202,7 +202,7 @@ def sentinel_version(db_conn) -> int:
         row = cur.fetchone()
         if row is None:
             cur.execute(
-                "SELECT data_version FROM core.dataset_version "
+                "SELECT data_version FROM rebuild_core.dataset_version "
                 "WHERE source_id = 'copernicus_sentinel' AND content_hash = 'sentinel-fixture'"
             )
             row = cur.fetchone()
@@ -222,7 +222,7 @@ def insertar_escena(cur, version, **overrides):
     campos.update(overrides)
     cur.execute(
         """
-        INSERT INTO core.satellite_scene
+        INSERT INTO rebuild_core.satellite_scene
             (scene_id, collection, event_window, acquisition_date, footprint,
              cloud_cover, selected, selection_reason, data_version)
         VALUES (%(scene_id)s, %(collection)s, %(event_window)s, '2026-08-05',
@@ -262,14 +262,16 @@ def test_ninguna_banda_puede_llamarse_como_un_veredicto(db_conn, sentinel_versio
     """
     with db_conn.cursor() as cur:
         insertar_escena(cur, sentinel_version, scene_id="S2_BANDAS")
-        cur.execute("SELECT scene_pk FROM core.satellite_scene WHERE scene_id = 'S2_BANDAS'")
+        cur.execute(
+            "SELECT scene_pk FROM rebuild_core.satellite_scene WHERE scene_id = 'S2_BANDAS'"
+        )
         scene_pk = cur.fetchone()["scene_pk"]
 
         for prohibida in ("damage_score", "DAMAGE_probability", "dano_estimado"):
             with pytest.raises(psycopg.errors.CheckViolation):
                 cur.execute(
                     """
-                    INSERT INTO core.satellite_observation
+                    INSERT INTO rebuild_core.satellite_observation
                         (geometry, band, value, event_window, scene_pk,
                          observation_date, data_version)
                     VALUES (ST_GeomFromText('POINT(-75.69 4.81)', 4326), %s, 0.5,
@@ -279,14 +281,16 @@ def test_ninguna_banda_puede_llamarse_como_un_veredicto(db_conn, sentinel_versio
                 )
             db_conn.rollback()
             insertar_escena(cur, sentinel_version, scene_id="S2_BANDAS")
-            cur.execute("SELECT scene_pk FROM core.satellite_scene WHERE scene_id = 'S2_BANDAS'")
+            cur.execute(
+                "SELECT scene_pk FROM rebuild_core.satellite_scene WHERE scene_id = 'S2_BANDAS'"
+            )
             scene_pk = cur.fetchone()["scene_pk"]
 
         # Lo que si se admite: la medicion, con su nombre de medicion.
         for permitida in ("VV", "VH", "NDVI", "NDBI", "delta_backscatter", "change_score"):
             cur.execute(
                 """
-                INSERT INTO core.satellite_observation
+                INSERT INTO rebuild_core.satellite_observation
                     (geometry, band, value, event_window, scene_pk,
                      observation_date, data_version)
                 VALUES (ST_GeomFromText('POINT(-75.69 4.81)', 4326), %s, 0.5,
@@ -303,7 +307,7 @@ def test_la_base_rechaza_una_escena_de_version_sintetica(db_conn):
     with db_conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO core.source_register
+            INSERT INTO rebuild_core.source_register
                 (source_id, display_name, tier, source_url, access_method, spatial_reference)
             VALUES ('fixture_sintetica', 'Fixture', 'A', 'urn:test', 'generated', 'EPSG:4326')
             ON CONFLICT (source_id) DO NOTHING
@@ -311,7 +315,7 @@ def test_la_base_rechaza_una_escena_de_version_sintetica(db_conn):
         )
         cur.execute(
             """
-            INSERT INTO core.dataset_version
+            INSERT INTO rebuild_core.dataset_version
                 (source_id, retrieved_at, record_count, content_hash, is_synthetic)
             VALUES ('fixture_sintetica', now(), 1, 'sintetica-sentinel', true)
             ON CONFLICT (source_id, content_hash) DO NOTHING
@@ -321,7 +325,7 @@ def test_la_base_rechaza_una_escena_de_version_sintetica(db_conn):
         row = cur.fetchone()
         if row is None:
             cur.execute(
-                "SELECT data_version FROM core.dataset_version "
+                "SELECT data_version FROM rebuild_core.dataset_version "
                 "WHERE content_hash = 'sintetica-sentinel'"
             )
             row = cur.fetchone()

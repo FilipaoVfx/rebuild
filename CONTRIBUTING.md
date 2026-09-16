@@ -38,6 +38,24 @@ en un repositorio público era redistribuirlo (ADR-18).
 006 lo impone con un `CHECK` en la base: una fila con `is_synthetic = true` en
 una capa de contexto falla al insertarse.
 
+## Los esquemas van prefijados
+
+Cuatro esquemas, todos con prefijo `rebuild_`:
+
+```
+rebuild_core          dominio: fuentes, evidencia, sitios, escenarios
+rebuild_analytics     derivado: features, catchments, exclusiones
+rebuild_osm_raw       OSM crudo        ─┐ aislados por el share-alike
+rebuild_osm_derived   grafo peatonal   ─┘ de ODbL (fuentes.md §8)
+```
+
+El prefijo no es decorativo: la base de producción es **compartida con otro
+producto**, que vive entero en `public`. Sin él, `core` y `analytics` son
+nombres lo bastante genéricos como para que alguien los reclame algún día.
+
+Nada usa `public`, así que la separación es total y se ve en el desplegable de
+esquemas de cualquier cliente SQL.
+
 ## Comprobaciones
 
 ```bash
@@ -56,14 +74,48 @@ está poblada y no ordena nada. Hoy `land_use` sale así.
 
 ## Escenas Sentinel (opcional)
 
+### En CI: secretos de GitHub
+
+El camino de producción. `.github/workflows/sentinel.yml` corre el pipeline
+contra la base persistente con tres secretos de repositorio:
+
+| Secreto | Qué es |
+|---|---|
+| `CDSE_CLIENT_ID` | Cliente OAuth de CDSE |
+| `CDSE_CLIENT_SECRET` | Su secreto (se muestra una sola vez) |
+| `URI_DATABASE_URL` | **Session pooler** de Supabase, puerto 5432 |
+
+Ojo con el último: tiene que ser el *session pooler*
+(`aws-<region>.pooler.supabase.com:5432`), **no** la conexión directa. Las
+conexiones directas de Supabase son IPv6 en el plan Free y los runners de
+GitHub Actions son IPv4 — la propia documentación de Supabase lista GitHub
+Actions entre las plataformas que solo aceptan IPv4. Y tampoco el puerto 6543
+(modo transacción): no admite prepared statements, y psycopg3 los usa.
+
+El workflow es manual y arranca con `dry_run` activado, que cataloga y elige
+sin gastar cuota de proceso.
+
+### En local: `.env`
+
+Las credenciales van en `.env` (ignorado por git) o en el entorno. Las dos
+formas funcionan; `cp .env.example .env` y rellena:
+
 ```bash
-export CDSE_CLIENT_ID=... CDSE_CLIENT_SECRET=...   # solo backend, nunca el visor
+CDSE_CLIENT_ID=...
+CDSE_CLIENT_SECRET=...
+```
+
+Se crean en `dataspace.copernicus.eu` → Dashboard → **User Settings → OAuth
+clients → Create**. El secreto se muestra **una sola vez**.
+
+```bash
 .venv/bin/python scripts/fetch_sentinel.py --dry-run   # cataloga y elige, sin descargar
 .venv/bin/python scripts/fetch_sentinel.py             # recorta el AOI a data/sentinel/
 ```
 
-Sin credenciales sale con código 2 y dice qué falta, en vez de escribir a
-medias. Los `.tif` no se versionan: `core.satellite_scene` guarda `scene_id` y
+El script pide el token **antes** de empezar, así que una credencial ausente o
+mal pegada sale con código 2 y un mensaje, no con un traceback a mitad del
+catálogo. Nunca en el visor ni en un archivo versionado. Los `.tif` no se versionan: `core.satellite_scene` guarda `scene_id` y
 `request_parameters` completos, que es lo que permite reconstruirlos.
 
 ## Paquete estático (GitHub Pages)

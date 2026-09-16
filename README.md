@@ -156,7 +156,7 @@ La V1 **no entrega una aplicación web de propósito general**: entrega una API 
 src/uri/          contracts · ingestion · features · constraints · scoring
                   optimizer · reporting · api   (fronteras forzadas por CI)
 apps/viewer/      visor de decisión: mapa interactivo, tabla densa, detalle
-db/migrations/    esquema core · analytics · osm_raw · osm_derived
+db/migrations/    rebuild_core · rebuild_analytics · rebuild_osm_raw · rebuild_osm_derived
 scripts/          dev_db · migrate · run_pipeline · serve · build_static · checks
 docs/             producto (PRD/SRS/ARD) · planificación · ADR
 ```
