@@ -148,6 +148,24 @@ def main(profile: str) -> int:
         coverage[scenario["scenario_id"]] = response.json()
     write(data / "coverage.json", coverage)
 
+    # Las vistas Sentinel van versionadas en el repositorio, no se descargan
+    # aqui. Es el mismo criterio que con el extracto de OSM: atar cada
+    # despliegue a que CDSE este en pie ese dia ya fallo una vez con Overpass.
+    # Un checkout sin ellas sigue construyendo; el visor no pinta la capa.
+    previews = ROOT / "data" / "sentinel" / "previews.json"
+    if previews.exists():
+        destino = data / "sentinel"
+        destino.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(previews, destino / "previews.json")
+        indice = json.loads(previews.read_text(encoding="utf-8"))
+        for escena in indice["scenes"]:
+            familia = "sentinel1" if escena["collection"] == "sentinel-1-grd" else "sentinel2"
+            origen = ROOT / "data" / "sentinel" / familia / escena["window"].lower()
+            shutil.copy2(origen / escena["file"], destino / escena["file"])
+        print(f"vistas Sentinel: {len(indice['scenes'])} imagenes")
+    else:
+        print("vistas Sentinel: ninguna versionada — la capa no se publica")
+
     total = sum(f.stat().st_size for f in DIST.rglob("*") if f.is_file())
     print(f"\ndist/ listo — {total / 1024 / 1024:.1f} MB")
     return 0
