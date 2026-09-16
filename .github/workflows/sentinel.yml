@@ -163,6 +163,14 @@ jobs:
           [ -n "${{ inputs.bbox }}" ] && args="$args --bbox ${{ inputs.bbox }}"
           python scripts/fetch_sentinel.py $args
 
+      # El terreno es otra fuente y otra licencia: el WorldDEM-30 es un
+      # producto de Airbus que la UE sublicencia, auditado aparte en
+      # db/terms/copernicus_dem_glo30_licence_20260916.txt. Son 10 teselas
+      # para todo el AOI, asi que cuesta practicamente nada.
+      - name: Terreno (Copernicus DEM GLO-30)
+        if: ${{ inputs.dry_run == false }}
+        run: python scripts/fetch_terrain.py
+
       # Los GeoTIFF no se versionan (data/sentinel/README.md): se reconstruyen
       # desde `scene_id` + `request_parameters`, que sí quedan en la base. El
       # artefacto es para poder mirarlos sin volver a pedirlos a CDSE.
@@ -178,6 +186,8 @@ jobs:
             data/sentinel/**/*.tif
             data/sentinel/**/*.png
             data/sentinel/previews.json
+            data/terrain/**/*.png
+            data/terrain/terrain.json
           if-no-files-found: warn
           retention-days: 30
 

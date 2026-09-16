@@ -117,6 +117,63 @@ SOURCES: list[SourceRegistration] = [
         ),
     ),
     SourceRegistration(
+        source_id="copernicus_dem",
+        display_name="Copernicus DEM GLO-30 (WorldDEM-30)",
+        tier="A",
+        source_url="https://dataspace.copernicus.eu/explore-data/data-collections/"
+        "copernicus-contributing-missions/collections-description/COP-DEM",
+        access_method="api",
+        spatial_reference="EPSG:4326",
+        # Licencia LEIDA, no supuesta. No son los terminos de Sentinel aunque
+        # lleve Copernicus en el nombre: es un producto de Airbus que la UE
+        # sublicencia, con su propio documento.
+        #
+        # El art. 4 concede reproduccion, distribucion, comunicacion al publico
+        # y modificacion, sin clausula de no comercialidad — a diferencia del
+        # SGC y de SERTIT. El art. 9 renuncia a reclamar los IPR del trabajo
+        # propio del usuario, asi que no hay copyleft.
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="Licence for Copernicus DEM instance COP-DEM-GLO-30-F "
+        "Global 30m Full, Free & Open",
+        license_url="https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/"
+        "Data/DEM/resources/license/License-COPDEM-30.pdf",
+        # Art. 6(b): el terreno se recorta y se reproyecta al AOI, asi que la
+        # forma que aplica es la de dato MODIFICADO, no la del art. 6(a).
+        attribution_text=(
+            "produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and "
+            "© Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS "
+            "by the European Union and ESA; all rights reserved"
+        ),
+        # Art. 6(c), literal y obligatorio. Ninguna otra fuente del registro
+        # pide esto, y por eso existe la columna.
+        liability_notice=(
+            "The organisations in charge of the Copernicus programme by law or "
+            "by delegation do not incur any liability for any use of the "
+            "Copernicus WorldDEM-30"
+        ),
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        share_alike=False,
+        quality_score=0.85,
+        terms_verified_at=date(2026, 9, 16),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/copernicus_dem_glo30_licence_20260916.txt",
+        verification_notes=(
+            "Licencia leida verbatim del PDF oficial; copia en "
+            "db/terms/copernicus_dem_glo30_licence_20260916.txt. PASA como "
+            "ATTRIBUTION redistribuible, sin restriccion comercial y sin "
+            "share-alike. TRES OBLIGACIONES QUE SENTINEL NO TIENE: (1) art. 6c "
+            "exige publicar un aviso de no responsabilidad literal, que va en "
+            "liability_notice y tiene que llegar a la pagina; (2) art. 6d "
+            "prohibe dar a entender respaldo oficial, asi que nada de escudos "
+            "de la UE o de ESA en el visor; (3) art. 6e obliga a trasladar "
+            "estas obligaciones a quien reciba el dato de nosotros — es "
+            "propagacion de avisos, no copyleft. AVISO: el GLO-10 esta "
+            "EXPRESAMENTE excluido de distribucion al publico por el preambulo. "
+            "Si alguien sube la resolucion, esta auditoria deja de aplicar."
+        ),
+    ),
+    SourceRegistration(
         source_id="copernicus_sentinel",
         display_name="Copernicus Sentinel (CDSE)",
         tier="A",

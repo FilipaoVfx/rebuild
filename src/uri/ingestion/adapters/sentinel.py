@@ -34,6 +34,18 @@ from datetime import date, datetime, timedelta
 SOURCE_ID = "copernicus_sentinel"
 
 
+def _assert_usable_source(source_id: str) -> None:
+    """Control C1 para una fuente cualquiera del registro.
+
+    El DEM y las escenas son fuentes DISTINTAS con licencias distintas: si el
+    terreno se colase por la comprobacion de Sentinel, una de las dos podria
+    caer a UNCLEAR sin que la otra se enterase.
+    """
+    from uri.ingestion.loader import assert_source_usable
+
+    assert_source_usable(source_id)
+
+
 def _assert_usable() -> None:
     """Control C1 de `fuentes.md` §6 — una fuente `UNCLEAR` no alimenta nada.
 
@@ -73,6 +85,22 @@ S2_BANDS = ("B02", "B03", "B04", "B08", "B11", "B12")
 #: de 20 m y el servicio las remuestrea. Pedirlas a 10 m no las mejora, pero
 #: mantiene una sola rejilla y evita alinear dos mallas a mano.
 RESOLUTION_M = 10
+
+DEM_SOURCE_ID = "copernicus_dem"
+
+#: Instancia del DEM. GLO-30 es la publica. El GLO-10 esta EXPRESAMENTE
+#: excluido de distribucion al publico por el preambulo de su licencia: subir
+#: la resolucion aqui invalida la auditoria.
+DEM_INSTANCE = "COPERNICUS_30"
+
+#: Hasta que zoom se generan teselas. El DEM son 30 m por muestra; a z14 una
+#: tesela de 256 px cubre ~9,5 m por pixel, o sea que ya remuestrea por encima
+#: de lo que el dato tiene. Pedir z15 o z16 seria inventar detalle y multiplicar
+#: por cuatro las llamadas para no anadir informacion. MapLibre sobre-amplia
+#: sola por encima del maxzoom declarado.
+TERRAIN_MAX_ZOOM = 14
+TERRAIN_MIN_ZOOM = 11
+TILE_SIZE = 256
 
 
 class CdseAuthMissing(RuntimeError):
@@ -271,6 +299,42 @@ class CdseClient:
             "format": image_format,
         }
         return content, request_parameters
+
+    def fetch_terrain_tile(
+        self, z: int, x: int, y: int, *, evalscript: str, size: int = TILE_SIZE
+    ) -> tuple[bytes, dict]:
+        """Una tesela XYZ del DEM, ya codificada en Terrain-RGB.
+
+        La peticion NO lleva `timeRange`: un modelo de elevacion no tiene
+        fecha de adquisicion en el sentido en que la tiene una escena. Meterle
+        una ventana temporal, como hace `fetch_aoi`, devolveria vacio.
+        """
+        _assert_usable_source(DEM_SOURCE_ID)
+        bbox = tile_bounds(z, x, y)
+        payload = {
+            "input": {
+                "bounds": {
+                    "bbox": list(bbox),
+                    "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"},
+                },
+                "data": [{"type": "dem", "dataFilter": {"demInstance": DEM_INSTANCE}}],
+            },
+            "output": {
+                "width": size,
+                "height": size,
+                "responses": [{"identifier": "default", "format": {"type": "image/png"}}],
+            },
+            "evalscript": evalscript,
+        }
+        content = self._post(PROCESS_URL, payload, accept="image/png")
+        return content, {
+            "url": PROCESS_URL,
+            "tile": [z, x, y],
+            "bbox": list(bbox),
+            "size": size,
+            "dem_instance": DEM_INSTANCE,
+            "evalscript_sha256": _sha256(evalscript),
+        }
 
 
 # ── Evalscripts ─────────────────────────────────────────────────────────
@@ -603,3 +667,78 @@ def select_radar(
         f"{best.orbit_direction} orbita relativa {best.relative_orbit} "
         f"({len(pool)} candidatas de {len(scenes)} halladas){constraint}"
     )
+
+
+# ── Terreno (Copernicus DEM GLO-30) ─────────────────────────────────────
+#
+# Misma API de proceso, misma credencial, otra coleccion y otra licencia.
+# La licencia del DEM NO es la de Sentinel: esta auditada aparte en
+# `db/terms/copernicus_dem_glo30_licence_20260916.txt` y obliga a un aviso de
+# no responsabilidad que Sentinel no pide.
+
+
+def terrain_evalscript() -> str:
+    """Codifica la elevacion en Terrain-RGB, que es lo que MapLibre lee.
+
+    La formula es la de Mapbox, que MapLibre implementa igual:
+    `altura = -10000 + (R * 256 * 256 + G * 256 + B) * 0.1`. Da un rango de
+    -10.000 a 1.667.721 m con paso de 10 cm, muy por encima de lo que el DEM
+    distingue.
+
+    Se hace en el servicio y no en Python a proposito: evita meter numpy y
+    rasterio como dependencias para un solo uso, y deja la codificacion
+    declarada en un script con hash en la procedencia en vez de escondida en
+    codigo local.
+    """
+    return """//VERSION=3
+function setup() {
+  return {
+    input: ["DEM"],
+    output: { bands: 3, sampleType: "UINT8" }
+  };
+}
+function evaluatePixel(s) {
+  // El mar y los huecos del DEM llegan como valores muy negativos. Fijarlos
+  // en 0 evita un pozo artificial en el borde del recorte; el AOI de Pereira
+  // esta a ~1.400 m, asi que aqui no se pierde nada real.
+  var h = Math.max(s.DEM, 0);
+  var v = Math.round((h + 10000) / 0.1);
+  return [
+    (v >> 16) & 255,
+    (v >> 8) & 255,
+    v & 255
+  ];
+}"""
+
+
+def tile_bounds(z: int, x: int, y: int) -> tuple[float, float, float, float]:
+    """Esquinas de una tesela XYZ en EPSG:4326."""
+    import math
+
+    n = 2.0**z
+
+    def lat(yy: float) -> float:
+        return math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * yy / n))))
+
+    return (x / n * 360.0 - 180.0, lat(y + 1), (x + 1) / n * 360.0 - 180.0, lat(y))
+
+
+def tiles_covering(
+    bbox: tuple[float, float, float, float], zoom: int
+) -> list[tuple[int, int, int]]:
+    """Teselas XYZ de un zoom que tocan el bbox."""
+    import math
+
+    min_lon, min_lat, max_lon, max_lat = bbox
+    n = 2.0**zoom
+
+    def xy(lon: float, lat: float) -> tuple[int, int]:
+        rad = math.radians(lat)
+        return (
+            int((lon + 180.0) / 360.0 * n),
+            int((1.0 - math.asinh(math.tan(rad)) / math.pi) / 2.0 * n),
+        )
+
+    x0, y0 = xy(min_lon, max_lat)
+    x1, y1 = xy(max_lon, min_lat)
+    return [(zoom, x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)]

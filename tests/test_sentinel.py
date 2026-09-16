@@ -469,3 +469,83 @@ def test_un_catalogo_en_seco_no_borra_la_procedencia_de_un_recorte_hecho(db_conn
     assert fila["asset_path"] == "data/sentinel/s2/pre/y.tif"
     assert fila["request_parameters"]["width"] == 560
     db_conn.rollback()
+
+
+# ── Teselado del terreno ────────────────────────────────────────────────
+
+
+def test_las_teselas_calculadas_cubren_el_aoi_entero():
+    """Una tesela de menos deja un agujero en el relieve, y se ve."""
+    for zoom in (11, 12, 13, 14):
+        teselas = sentinel.tiles_covering(AOI, zoom)
+        assert teselas, f"z{zoom} no devolvio ninguna tesela"
+        oeste = min(sentinel.tile_bounds(*t)[0] for t in teselas)
+        sur = min(sentinel.tile_bounds(*t)[1] for t in teselas)
+        este = max(sentinel.tile_bounds(*t)[2] for t in teselas)
+        norte = max(sentinel.tile_bounds(*t)[3] for t in teselas)
+        assert oeste <= AOI[0] and sur <= AOI[1]
+        assert este >= AOI[2] and norte >= AOI[3]
+
+
+def test_cada_zoom_cuadruplica_el_area_de_la_tesela():
+    """Si el eje y se invirtiera, el terreno saldria del reves y en silencio."""
+    for zoom in (11, 12, 13):
+        (o1, s1, e1, n1) = sentinel.tile_bounds(zoom, 0, 0)
+        (o2, s2, e2, n2) = sentinel.tile_bounds(zoom + 1, 0, 0)
+        assert e2 - o2 == pytest.approx((e1 - o1) / 2)
+        # La fila 0 empieza arriba en el esquema XYZ: el norte no se mueve.
+        assert n2 == pytest.approx(n1)
+        assert s2 > s1
+
+
+def test_el_terreno_no_se_pide_por_encima_de_la_resolucion_del_dem():
+    """El DEM son 30 m. A z14 una tesela de 256 px ya va a ~9,5 m/pixel: por
+    encima seria inventar detalle y multiplicar las llamadas por cuatro."""
+    assert sentinel.TERRAIN_MAX_ZOOM == 14
+    o, s, e, n = sentinel.tile_bounds(sentinel.TERRAIN_MAX_ZOOM, 0, 0)
+    metros_por_pixel = (e - o) * 111_320 / sentinel.TILE_SIZE
+    assert metros_por_pixel < 30, "ya se remuestrea por encima del dato"
+
+
+def test_el_evalscript_de_terreno_codifica_como_espera_maplibre():
+    guion = sentinel.terrain_evalscript()
+    # La formula de Mapbox que MapLibre implementa:
+    # altura = -10000 + (R*65536 + G*256 + B) * 0.1
+    assert "(h + 10000) / 0.1" in guion
+    assert "bands: 3" in guion and 'sampleType: "UINT8"' in guion
+    # Los huecos del DEM llegan muy negativos; sin la pinza saldria un pozo.
+    assert "Math.max(s.DEM, 0)" in guion
+
+
+def test_el_dem_se_comprueba_como_fuente_propia_y_no_como_sentinel():
+    """Son licencias distintas. Si el terreno pasara por el control de
+    Sentinel, una de las dos podria caer a UNCLEAR sin que la otra se
+    enterase."""
+    import inspect
+
+    codigo = inspect.getsource(sentinel.CdseClient.fetch_terrain_tile)
+    assert "_assert_usable_source(DEM_SOURCE_ID)" in codigo
+    assert sentinel.DEM_SOURCE_ID != sentinel.SOURCE_ID
+
+
+def test_la_licencia_del_dem_obliga_a_un_aviso_que_llega_a_la_pagina(db_conn):
+    """El art. 6c del WorldDEM-30 exige publicar una exencion literal, que es
+    una obligacion DISTINTA de la nota de fuente. La capa del SGC se publico
+    incumpliendo sus terminos porque la obligacion vivia en un comentario."""
+    from uri.ingestion.loader import register_sources
+
+    register_sources(db_conn)
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "SELECT license_class::text AS lc, redistribution_allowed, share_alike, "
+            "attribution_text, liability_notice FROM rebuild_core.source_register "
+            "WHERE source_id = 'copernicus_dem'"
+        )
+        fila = cur.fetchone()
+    assert fila is not None, "el DEM no esta registrado"
+    assert fila["lc"] == "ATTRIBUTION"
+    assert fila["redistribution_allowed"] is True
+    assert fila["share_alike"] is False
+    assert "Copernicus WorldDEM-30" in fila["attribution_text"]
+    assert "do not incur any liability" in fila["liability_notice"]
+    db_conn.rollback()

@@ -66,20 +66,23 @@ def register_sources(conn: psycopg.Connection) -> None:
                 INSERT INTO rebuild_core.source_register (
                     source_id, display_name, tier, source_url, access_method,
                     spatial_reference, license_class, license_name, license_url,
-                    attribution_text, redistribution_allowed, derivatives_allowed,
+                    attribution_text, liability_notice, redistribution_allowed,
+                    derivatives_allowed,
                     share_alike, quality_score, terms_verified_at, terms_verified_by,
                     terms_snapshot_path, verification_notes
                 ) VALUES (
                     %(source_id)s, %(display_name)s, %(tier)s, %(source_url)s,
                     %(access_method)s, %(spatial_reference)s, %(license_class)s,
                     %(license_name)s, %(license_url)s, %(attribution_text)s,
-                    %(redistribution_allowed)s, %(derivatives_allowed)s, %(share_alike)s,
+                    %(liability_notice)s, %(redistribution_allowed)s,
+                    %(derivatives_allowed)s, %(share_alike)s,
                     %(quality_score)s, %(terms_verified_at)s, %(terms_verified_by)s,
                     %(terms_snapshot_path)s, %(verification_notes)s
                 )
                 ON CONFLICT (source_id) DO UPDATE SET
                     license_class = EXCLUDED.license_class,
                     attribution_text = EXCLUDED.attribution_text,
+                    liability_notice = EXCLUDED.liability_notice,
                     verification_notes = EXCLUDED.verification_notes
                 """,
                 source.model_dump(mode="json"),
