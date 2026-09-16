@@ -39,7 +39,19 @@ BUDGETS_MMM = (10, 25, 50, 100)
 #: Sin "risk": retirada la capa del SGC por licencia (ADR-18) no hay
 #: amenaza que servir, y publicar una coleccion vacia solo produce un
 #: control de capa que no enciende nada.
-LAYERS = ("sites", "evidence", "green", "facilities", "population", "catchments")
+LAYERS = (
+    # `buildings` y `roads` son el tejido urbano: pesan ~1 MB comprimidos
+    # entre los dos y son la diferencia entre un mapa y unos puntos sobre
+    # papel en blanco.
+    "buildings",
+    "roads",
+    "sites",
+    "evidence",
+    "green",
+    "facilities",
+    "population",
+    "catchments",
+)
 
 
 class PublicationBlocked(RuntimeError):

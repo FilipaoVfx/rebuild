@@ -796,6 +796,26 @@ def layer_geojson(conn: Conn, layer: str) -> Response:
         )
 
     queries = {
+        # Tejido urbano. Son las dos capas que hacen que el mapa se lea como
+        # una ciudad y no como puntos sobre papel en blanco, y llevaban todo
+        # este tiempo en la base sin publicarse.
+        #
+        # No contradicen ADR-10 ni fuentes.md §11: lo que esas reglas prohiben
+        # es un tile de un tercero, que no tiene `data_version` y rompe la
+        # reproducibilidad. Esto es dato propio, ya ingerido, ya sellado con su
+        # version y ya redistribuible (Microsoft y OSM, ambos SHARE_ALIKE).
+        #
+        # 6 decimales son ~11 cm en el ecuador: mas precision que la que tiene
+        # una huella de edificio derivada por teledeteccion, y un tercio menos
+        # de bytes que el doble completo.
+        "buildings": (
+            "SELECT footprint_id::text AS id, ST_AsGeoJSON(geometry, 6) AS g "
+            "FROM rebuild_core.building_footprint"
+        ),
+        "roads": (
+            "SELECT osm_id::text AS id, highway AS label, "
+            "ST_AsGeoJSON(geometry, 6) AS g FROM rebuild_osm_raw.road"
+        ),
         "evidence": (
             "SELECT evidence_id::text AS id, damage_class::text AS label, "
             "ST_AsGeoJSON(geometry) AS g FROM rebuild_core.damage_evidence"

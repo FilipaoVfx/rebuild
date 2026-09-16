@@ -45,6 +45,8 @@ const STATE_LABEL = {
  * de "dónde el modelo cree que hay que intervenir" — y hoy esa diferencia lo
  * es todo (ver el diagnóstico de señal). */
 const LAYERS = [
+  { id: "buildings", label: "Edificios (Microsoft)", origin: "real", on: true },
+  { id: "roads", label: "Vías (OSM)", origin: "real", on: true },
   { id: "sites", label: "Sitios de oportunidad", origin: "real", on: true },
   { id: "evidence", label: "Observaciones de daño", origin: "real", on: true },
   { id: "green", label: "Espacio verde (OSM)", origin: "real", on: true },
@@ -279,14 +281,51 @@ async function initMap(provenance) {
 
   await new Promise((resolve) => state.map.on("load", resolve));
 
-  const [sites, evidence, green, catchments, facilities, population] = await Promise.all([
-    geojson("sites"),
-    geojson("evidence"),
-    geojson("green"),
-    geojson("catchments"),
-    geojson("facilities").catch(() => ({ type: "FeatureCollection", features: [] })),
-    geojson("population").catch(() => ({ type: "FeatureCollection", features: [] })),
-  ]);
+  const [sites, evidence, green, catchments, facilities, population, buildings, roads] =
+    await Promise.all([
+      geojson("sites"),
+      geojson("evidence"),
+      geojson("green"),
+      geojson("catchments"),
+      geojson("facilities").catch(() => ({ type: "FeatureCollection", features: [] })),
+      geojson("population").catch(() => ({ type: "FeatureCollection", features: [] })),
+      // El tejido urbano es contexto: si falta, el mapa se degrada a como
+      // estaba antes en vez de no cargar.
+      geojson("buildings").catch(() => ({ type: "FeatureCollection", features: [] })),
+      geojson("roads").catch(() => ({ type: "FeatureCollection", features: [] })),
+    ]);
+
+  // Tejido urbano, lo PRIMERO que se añade y por tanto lo que queda debajo.
+  //
+  // 15.024 huellas de Microsoft y 6.695 vías de OSM llevaban desde el
+  // principio en la base sin publicarse, y sin ellas el mapa eran puntos
+  // flotando sobre papel en blanco. No contradice ADR-10: lo prohibido es un
+  // tile de un tercero, sin `data_version`; esto es dato propio y sellado.
+  //
+  // Van en gris apagado a propósito. Son el fondo sobre el que se leen los
+  // sitios, y un edificio no es un hallazgo: si compitieran en contraste con
+  // la evidencia de daño, el mapa diría que todos pesan lo mismo.
+  state.map.addSource("buildings", { type: "geojson", data: buildings });
+  state.map.addLayer({
+    id: "buildings",
+    type: "fill",
+    source: "buildings",
+    paint: { "fill-color": "#dedcd4", "fill-outline-color": "#cfccc2" },
+  });
+
+  state.map.addSource("roads", { type: "geojson", data: roads });
+  state.map.addLayer({
+    id: "roads",
+    type: "line",
+    source: "roads",
+    paint: {
+      "line-color": "#ffffff",
+      // Las vías se ensanchan con el zoom: a z13 una línea de ancho fijo
+      // convierte la red peatonal en una mancha sólida.
+      "line-width": ["interpolate", ["linear"], ["zoom"], 13, 0.4, 16, 1.6, 18, 4],
+      "line-opacity": 0.9,
+    },
+  });
 
   // Lo derivado va debajo de todo: la población dasimétrica es un reparto
   // calculado sobre huellas de edificio, no una medición, y no debería
@@ -483,6 +522,8 @@ function syncSitePoints() {
 function applyLayerVisibility() {
   if (!state.mapReady) return;
   const pairs = {
+    buildings: ["buildings"],
+    roads: ["roads"],
     sites: ["sites", "sites-outline", "sites-selected", "site-points"],
     evidence: ["evidence"],
     green: ["green"],
