@@ -367,23 +367,24 @@ function setup() {
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
-// Retrodispersion a dB y de ahi a 0..255. El rango -25..0 dB cubre desde el
-// agua en calma hasta el reflector urbano; recortar fuera de ahi es lo que
-// evita que un solo pixel brillante aplaste el resto de la imagen.
-function db(v) {
-  var d = 10 * Math.log(Math.max(v, 1e-6)) / Math.LN10;
-  return Math.max(0, Math.min(255, Math.round((d + 25) / 25 * 255)));
+// Cada canal con SU rango, no uno compartido.
+//
+// Medido sobre la escena pre del AOI (percentiles 1 y 99): VV va de -16,7 a
+// +5,8 dB y VH de -24,1 a -3,9. VH esta unos 7 dB por debajo de VV siempre,
+// porque la despolarizacion devuelve menos energia que la copolarizacion.
+// Pasar los dos por un mismo rango dejaba el verde permanentemente por
+// debajo del rojo y tenia toda la imagen en magenta, en la vista y no en el
+// terreno. Con el rango propio de cada banda, la vegetacion sale verde, lo
+// construido violeta por doble rebote y el agua oscura.
+function esc(db, lo, hi) {
+  return Math.max(0, Math.min(255, Math.round((db - lo) / (hi - lo) * 255)));
 }
-// El cociente TAMBIEN en dB, que es restar. Escalarlo lineal (VV/VH va de ~2
-// a ~8) mandaba el azul al tope en casi todo el encuadre y la imagen salia
-// saturada en magenta y amarillo: bonita de lejos e ilegible de cerca.
-// La diferencia VV-VH cae entre 0 y 15 dB en superficie terrestre.
-function ratioDb(vv, vh) {
-  var d = 10 * Math.log(Math.max(vv, 1e-6) / Math.max(vh, 1e-6)) / Math.LN10;
-  return Math.max(0, Math.min(255, Math.round(d / 15 * 255)));
+function db(v) {
+  return 10 * Math.log(Math.max(v, 1e-6)) / Math.LN10;
 }
 function evaluatePixel(s) {
-  return [db(s.VV), db(s.VH), ratioDb(s.VV, s.VH), s.dataMask * 255];
+  var vv = db(s.VV), vh = db(s.VH);
+  return [esc(vv, -18, 6), esc(vh, -25, -3), esc(vv - vh, 0, 18), s.dataMask * 255];
 }"""
 
 
