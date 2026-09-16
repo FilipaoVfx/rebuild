@@ -70,6 +70,52 @@ jobs:
           fi
           echo "los tres secretos están presentes"
 
+      # Diagnostico de la cadena de conexion, SIN la contraseña.
+      #
+      # Dos corridas se fueron en adivinar por que la autenticacion fallaba.
+      # El secreto no se puede leer desde fuera, asi que el unico sitio donde
+      # se puede mirar es aqui dentro — y lo que hace falta ver (usuario, host,
+      # puerto) no es el secreto. La contraseña no se imprime ni su longitud
+      # exacta: solo si esta presente y si lleva caracteres que obligan a
+      # percent-encodear.
+      - name: Comprobar la forma de URI_DATABASE_URL
+        run: |
+          python - <<'PY'
+          import os, sys
+          from urllib.parse import urlsplit, unquote
+
+          u = urlsplit(os.environ["URI_DATABASE_URL"])
+          user, host, port, db = u.username, u.hostname, u.port, (u.path or "/").lstrip("/")
+          print(f"  esquema : {u.scheme}")
+          print(f"  usuario : {user}")
+          print(f"  host    : {host}")
+          print(f"  puerto  : {port}")
+          print(f"  base    : {db}")
+          print(f"  password: {'presente' if u.password else 'AUSENTE'}")
+
+          problemas = []
+          if not user:
+              problemas.append("sin usuario")
+          elif host and "pooler.supabase.com" in host and "." not in user:
+              problemas.append(
+                  f"el pooler exige usuario 'postgres.<project-ref>'; llega '{user}'"
+              )
+          if port == 6543:
+              problemas.append("puerto 6543 (modo transaccion) no admite prepared statements")
+          if host and host.startswith("db.") and host.endswith(".supabase.co"):
+              problemas.append("conexion directa: es IPv6 y los runners son IPv4")
+          if u.password and unquote(u.password) != u.password:
+              print("  nota    : la contraseña lleva secuencias percent-encoded")
+          if u.password and any(c in u.password for c in "@/:?#[]"):
+              problemas.append(
+                  "la contraseña lleva caracteres que hay que percent-encodear (@ / : ? # [ ])"
+              )
+
+          for p in problemas:
+              print(f"::error::{p}")
+          sys.exit(1 if problemas else 0)
+          PY
+
       # Idempotente: el registro de migraciones dice cuáles faltan. Sobre una
       # base ya migrada no hace nada.
       - name: Migraciones
