@@ -75,6 +75,12 @@ const state = {
   coverage: null,
   // Vistas Sentinel. `satellite` es la escena que se esta mirando
   // ("s2-PRE", "s1-POST"...) o null si la capa esta apagada.
+  // Oportunidades: la entidad central. `context` decide que se enfatiza en
+  // el mapa — el requerimiento pide que la vista inicial NO muestre todas las
+  // capas tecnicas a la vez.
+  opportunities: null,
+  opportunity: null,
+  context: "situacion",
   sentinel: null,
   satellite: null,
   swipe: null,
@@ -585,6 +591,217 @@ function loadDeck() {
 function elevationScale(cells) {
   const max = cells.reduce((m, c) => Math.max(m, c.population || 0), 0);
   return max > 0 ? 900 / max : 0;
+}
+
+/* ── Contextos del mapa (RF-02) ───────────────────────────────────────
+ *
+ * El mapa es una interfaz espacial, no un contenedor de todas las capas. Cada
+ * contexto enciende SOLO lo que hace falta para una pregunta concreta, y
+ * apaga el resto.
+ *
+ * El problema que resuelve: con nueve capas encendidas a la vez, nada
+ * destaca. Que todo sea visible no es lo mismo que que algo sea legible.
+ */
+
+const CONTEXTS = [
+  {
+    id: "situacion",
+    label: "Situación",
+    question: "¿Qué está pasando en el territorio?",
+    layers: { buildings: true, roads: true, evidence: true, sites: false, green: true },
+  },
+  {
+    id: "damage",
+    label: "Daño",
+    question: "¿Dónde se observó daño, y con qué evidencia?",
+    layers: { buildings: true, roads: true, evidence: true, sites: false, green: false },
+  },
+  {
+    id: "need",
+    label: "Necesidad",
+    question: "¿Dónde vive la gente que quedó afectada?",
+    layers: { buildings: false, roads: true, evidence: false, sites: false, population: true },
+  },
+  {
+    id: "deficit",
+    label: "Déficit",
+    question: "¿Dónde falta espacio público?",
+    layers: { buildings: false, roads: true, green: true, sites: true, evidence: false },
+  },
+  {
+    id: "access",
+    label: "Acceso",
+    question: "¿Hasta dónde se llega andando en 10 minutos?",
+    layers: { buildings: false, roads: true, catchments: true, sites: true, evidence: false },
+  },
+  {
+    id: "opportunities",
+    label: "Oportunidades",
+    question: "¿Dónde se podría intervenir, y por qué ahí?",
+    layers: { buildings: true, roads: true, sites: true, evidence: false, green: false },
+  },
+];
+
+function setContext(id) {
+  const ctx = CONTEXTS.find((c) => c.id === id) || CONTEXTS[0];
+  state.context = ctx.id;
+
+  // Se parte de TODO apagado y se enciende lo del contexto. Partir del estado
+  // anterior iria acumulando capas: a los tres cambios de contexto estarian
+  // todas encendidas otra vez, que es justo de lo que se venia.
+  for (const capa of LAYERS) state.layers[capa.id] = false;
+  for (const [capa, on] of Object.entries(ctx.layers)) state.layers[capa] = on;
+  applyLayerVisibility();
+
+  document.querySelectorAll("[data-context]").forEach((b) => {
+    b.classList.toggle("on", b.dataset.context === ctx.id);
+  });
+  const pregunta = $("#context-question");
+  if (pregunta) pregunta.textContent = ctx.question;
+  // Las casillas del panel tecnico siguen siendo la verdad: si el contexto
+  // las cambia y ellas no lo reflejan, el usuario deja de creerles.
+  document.querySelectorAll("#layer-control input[data-layer]").forEach((input) => {
+    if (input.dataset.layer in state.layers) input.checked = state.layers[input.dataset.layer];
+  });
+}
+
+/* ── Oportunidades de recuperación (RF-04, RF-05) ─────────────────────
+ *
+ * Responde, en este orden: qué problema existe, por qué aquí, qué podría
+ * hacerse, qué impacto tendría, si es viable y cuánto cuesta.
+ *
+ * El score NO es el titular. Ordena la lista y vive en la vista técnica,
+ * porque «suitability 68,3» no es una razón para intervenir en un sitio;
+ * «déficit de espacio público con 15.671 personas alcanzables» sí.
+ */
+
+const FEASIBILITY_ICON = {
+  OK: "✓",
+  WARNING: "!",
+  BLOCKED: "✕",
+  UNKNOWN: "?",
+};
+
+async function loadOpportunities() {
+  if (state.opportunities !== null) return state.opportunities;
+  try {
+    const datos = STATIC_BASE
+      ? await loadStatic("opportunities.json")
+      : await api("/opportunities");
+    state.opportunities = datos.opportunities || [];
+  } catch {
+    state.opportunities = [];
+  }
+  return state.opportunities;
+}
+
+function renderOpportunities(lista) {
+  const cuerpo = $("#opportunity-list");
+  if (!cuerpo) return;
+  if (!lista.length) {
+    cuerpo.innerHTML = `<p class="note">Sin oportunidades disponibles.</p>`;
+    return;
+  }
+  cuerpo.innerHTML = lista
+    .map((o) => {
+      const dudas = o.unknowns.length
+        ? `<span class="unknowns" title="${o.unknowns.join(" · ")}">${o.unknowns.length} sin comprobar</span>`
+        : "";
+      return `
+      <article class="opp" data-opp="${o.opportunity_id}">
+        <header>
+          <strong>${o.intervention_label}</strong>
+          <span class="opp-zone">${o.site_id}</span>
+        </header>
+        <p class="opp-problem">${o.problem.headline}</p>
+        <div class="opp-figures">
+          <span><b>${o.impact.population_reached.toLocaleString("es-CO")}</b> personas</span>
+          <span><b>${`${cop(o.cost_cop)} COP`}</b></span>
+          ${o.impact.people_per_million_cop ? `<span><b>${o.impact.people_per_million_cop}</b> pers/MM</span>` : ""}
+        </div>
+        <div class="opp-flags">${dudas}</div>
+      </article>`;
+    })
+    .join("");
+
+  cuerpo.querySelectorAll("[data-opp]").forEach((el) =>
+    el.addEventListener("click", () => showOpportunity(el.dataset.opp))
+  );
+}
+
+function showOpportunity(id) {
+  const o = (state.opportunities || []).find((x) => x.opportunity_id === id);
+  if (!o) return;
+  state.opportunity = o;
+
+  const panel = $("#detail");
+  if (!panel) return;
+
+  const viabilidad = o.feasibility
+    .map(
+      (f) => `
+      <li class="feas ${f.status.toLowerCase()}">
+        <span class="feas-icon">${FEASIBILITY_ICON[f.status] || "?"}</span>
+        <div><strong>${f.label}</strong><br><span class="feas-detail">${f.detail}</span></div>
+      </li>`
+    )
+    .join("");
+
+  const porque = o.problem.drivers.length
+    ? `<ul class="drivers">${o.problem.drivers.map((d) => `<li>✓ ${d}</li>`).join("")}</ul>`
+    : `<p class="note">Ningún factor domina el modelo en este sitio.</p>`;
+
+  // Lo que el modelo no pudo mirar va ARRIBA, junto al problema, no escondido
+  // al final: cambia cuánto se le puede creer a todo lo demás.
+  const ausentes = o.problem.missing_factors.length
+    ? `<p class="note warn">Sin dato en este sitio: ${o.problem.missing_factors.join(", ")}.
+       El modelo puntuó sin ${o.problem.missing_factors.length === 1 ? "ese factor" : "esos factores"}.</p>`
+    : "";
+
+  panel.innerHTML = `
+    <div class="opp-detail">
+      <h2>${o.intervention_label}</h2>
+      <p class="opp-zone">${o.site_id}${o.zone ? ` · ${o.zone}` : ""}</p>
+
+      <h3>Problema</h3>
+      <p>${o.problem.headline}</p>
+      ${ausentes}
+
+      <h3>¿Por qué aquí?</h3>
+      ${porque}
+
+      <h3>Evidencia</h3>
+      <p>${o.evidence.damage_observations} observaciones de daño
+         ${Object.keys(o.evidence.damage_classes).length ? `(${Object.entries(o.evidence.damage_classes).map(([k, v]) => `${v} ${k}`).join(", ")})` : ""}.
+         Fuente: ${o.evidence.source_ids.join(", ") || "—"}.</p>
+
+      <h3>Impacto estimado</h3>
+      <ul class="impact">
+        <li><b>${o.impact.population_reached.toLocaleString("es-CO")}</b> personas alcanzables a 10 min andando</li>
+        <li><b>${o.impact.area_m2.toLocaleString("es-CO")}</b> m² de área</li>
+        ${o.impact.people_per_million_cop ? `<li><b>${o.impact.people_per_million_cop}</b> personas por millón de COP</li>` : ""}
+      </ul>
+
+      <h3>Viabilidad</h3>
+      <ul class="feasibility">${viabilidad}</ul>
+
+      <h3>Costo estimado</h3>
+      <p class="cost">${`${cop(o.cost_cop)} COP`}</p>
+
+      <h3>Confianza</h3>
+      <p>${(o.confidence * 100).toFixed(0)} % — combina cuánta evidencia de daño
+         sostiene el sitio y cuántos factores del modelo tienen dato aquí.</p>
+
+      <details class="tecnico">
+        <summary>Vista técnica</summary>
+        <p>Idoneidad del par (sitio, intervención): <code>${o.suitability}</code></p>
+        <p>Procedencia: <code>${JSON.stringify(o.provenance)}</code></p>
+      </details>
+    </div>`;
+
+  if (o.lon && o.lat) {
+    state.map.easeTo({ center: [o.lon, o.lat], zoom: 16.2, duration: 900 });
+  }
 }
 
 /* ── Vistas Sentinel ──────────────────────────────────────────────────
@@ -1119,6 +1336,17 @@ function renderMapControls() {
         applyLayerVisibility();
       })
     );
+  // Contextos: la vista inicial NO enciende todas las capas tecnicas.
+  const barra = document.querySelector("#context-bar .context-buttons");
+  if (barra) {
+    barra.innerHTML = CONTEXTS.map(
+      (c) => `<button type="button" data-context="${c.id}">${c.label}</button>`
+    ).join("");
+    barra.querySelectorAll("[data-context]").forEach((b) =>
+      b.addEventListener("click", () => setContext(b.dataset.context))
+    );
+  }
+
   loadTerrainIndex().then((indice) => {
     if (!indice) return;
     $("#terrain-group").hidden = false;
@@ -1764,6 +1992,16 @@ async function main() {
 
   await initMap(provenance);
   await loadSites();
+
+  // Oportunidades: la entidad central. Se cargan despues del mapa para que la
+  // tabla ya sirva mientras llegan.
+  loadOpportunities().then((lista) => {
+    renderOpportunities(lista);
+    const contador = $("#opp-count");
+    if (contador) contador.textContent = lista.length ? String(lista.length) : "";
+  });
+
+  setContext("situacion");
 
   renderProvenance(provenance, sources);
   renderSources(sources);

@@ -438,3 +438,163 @@ button.ghost:hover { color: var(--ink-1); border-color: var(--s1); }
   font-size: 11px;
   line-height: 1.4;
 }
+
+/* ── Contextos del mapa ───────────────────────────────────────────────
+   Cada contexto responde una pregunta y enciende solo las capas que la
+   contestan. La pregunta se muestra: es lo que explica por qué el mapa
+   cambió al pulsar. */
+.context-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e2e0d8;
+  background: #fbfaf7;
+  flex-wrap: wrap;
+}
+.context-buttons {
+  display: inline-flex;
+  gap: 2px;
+  background: #fff;
+  border: 1px solid #d9d7cf;
+  border-radius: 6px;
+  padding: 3px;
+}
+.context-buttons button {
+  border: 0;
+  background: transparent;
+  padding: 5px 11px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #3d3b35;
+}
+.context-buttons button:hover {
+  background: #eceae3;
+}
+.context-buttons button.on {
+  background: #1d1d1b;
+  color: #fff;
+}
+.context-question {
+  margin: 0;
+  font-size: 12px;
+  color: #5a584f;
+}
+
+/* ── Oportunidades ────────────────────────────────────────────────────
+   El problema es el titular. El score vive en la vista técnica. */
+.opp-list {
+  display: grid;
+  gap: 8px;
+}
+.opp {
+  border: 1px solid #e2e0d8;
+  border-left: 3px solid #2a78d6;
+  border-radius: 4px;
+  padding: 10px 12px;
+  cursor: pointer;
+  background: #fff;
+}
+.opp:hover {
+  border-left-color: #1d1d1b;
+  background: #fbfaf7;
+}
+.opp header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.opp-zone {
+  font-size: 11px;
+  color: #8a887e;
+  font-family: ui-monospace, monospace;
+}
+.opp-problem {
+  margin: 5px 0 7px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.opp-figures {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: #5a584f;
+}
+.opp-flags {
+  margin-top: 5px;
+}
+.unknowns {
+  font-size: 11px;
+  color: #a06a00;
+  background: #fdf6e8;
+  border: 1px solid #f0dcb4;
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+/* Viabilidad: el estado se lee por icono Y por texto, nunca solo por color
+   (FR-UI-05, WCAG 2.1 AA — sin distinciones categóricas dependientes del
+   color). */
+.feasibility {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.feas {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 12px;
+}
+.feas-icon {
+  flex: 0 0 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 3px;
+  font-weight: 700;
+  font-size: 11px;
+}
+.feas.ok .feas-icon { background: #dcf0e4; color: #17693f; }
+.feas.warning .feas-icon { background: #fdf0d8; color: #8a5a00; }
+.feas.blocked .feas-icon { background: #f7dcdc; color: #9c2020; }
+.feas.unknown .feas-icon { background: #eceae3; color: #5a584f; }
+.feas-detail { color: #6b6961; }
+.drivers, .impact {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 4px;
+  font-size: 13px;
+  display: grid;
+  gap: 3px;
+}
+.opp-detail h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8a887e;
+  margin: 16px 0 5px;
+}
+.opp-detail .cost {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+.tecnico {
+  margin-top: 18px;
+  font-size: 12px;
+  color: #6b6961;
+}
+.tecnico summary {
+  cursor: pointer;
+}
+.note.warn {
+  color: #8a5a00;
+  background: #fdf6e8;
+  border-left: 3px solid #f0c974;
+  padding: 6px 9px;
+}
