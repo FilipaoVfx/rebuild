@@ -78,41 +78,66 @@ jobs:
       # puerto) no es el secreto. La contraseña no se imprime ni su longitud
       # exacta: solo si esta presente y si lleva caracteres que obligan a
       # percent-encodear.
+      # Diagnostico de la cadena de conexion, SIN la contraseña.
+      #
+      # Se parsea a mano y no con urlsplit: urlsplit revienta con
+      # `_check_bracketed_netloc` si la cadena lleva corchetes —lo que pasa
+      # cuando alguien deja el marcador `[TU-PASSWORD]` sin sustituir— y un
+      # diagnostico que se cae ante el error que existe para detectar no sirve
+      # de nada. Nada de lo que se imprime es el secreto: usuario, host y
+      # puerto no lo son, y la contraseña no se muestra ni se mide.
       - name: Comprobar la forma de URI_DATABASE_URL
         run: |
           python - <<'PY'
           import os, sys
-          from urllib.parse import urlsplit, unquote
 
-          u = urlsplit(os.environ["URI_DATABASE_URL"])
-          user, host, port, db = u.username, u.hostname, u.port, (u.path or "/").lstrip("/")
-          print(f"  esquema : {u.scheme}")
-          print(f"  usuario : {user}")
-          print(f"  host    : {host}")
-          print(f"  puerto  : {port}")
-          print(f"  base    : {db}")
-          print(f"  password: {'presente' if u.password else 'AUSENTE'}")
-
+          raw = os.environ["URI_DATABASE_URL"].strip()
           problemas = []
-          if not user:
-              problemas.append("sin usuario")
-          elif host and "pooler.supabase.com" in host and "." not in user:
+
+          esquema, _, resto = raw.partition("://")
+          if not resto:
+              print("::error::la cadena no tiene forma postgresql://usuario:clave@host:puerto/base")
+              sys.exit(1)
+
+          # El host empieza tras el ULTIMO '@': una contraseña puede llevar '@'.
+          userinfo, _, hostpart = resto.rpartition("@")
+          usuario, _, clave = userinfo.partition(":")
+          hostport, _, base = hostpart.partition("/")
+          host, _, puerto = hostport.rpartition(":") if ":" in hostport else (hostport, "", "")
+
+          print(f"  esquema : {esquema}")
+          print(f"  usuario : {usuario or '(vacio)'}")
+          print(f"  host    : {host or '(vacio)'}")
+          print(f"  puerto  : {puerto or '(sin puerto)'}")
+          print(f"  base    : {base or '(vacia)'}")
+          print(f"  password: {'presente' if clave else 'AUSENTE'}")
+
+          if "[" in userinfo or "]" in userinfo:
               problemas.append(
-                  f"el pooler exige usuario 'postgres.<project-ref>'; llega '{user}'"
+                  "la cadena conserva corchetes: el marcador de la plantilla "
+                  "(p. ej. [TU-PASSWORD]) no se sustituyo por la contraseña real"
               )
-          if port == 6543:
-              problemas.append("puerto 6543 (modo transaccion) no admite prepared statements")
-          if host and host.startswith("db.") and host.endswith(".supabase.co"):
-              problemas.append("conexion directa: es IPv6 y los runners son IPv4")
-          if u.password and unquote(u.password) != u.password:
-              print("  nota    : la contraseña lleva secuencias percent-encoded")
-          if u.password and any(c in u.password for c in "@/:?#[]"):
+          if not usuario:
+              problemas.append("sin usuario")
+          elif "pooler.supabase.com" in host and "." not in usuario:
               problemas.append(
-                  "la contraseña lleva caracteres que hay que percent-encodear (@ / : ? # [ ])"
+                  f"el pooler exige usuario 'postgres.<project-ref>'; llega '{usuario}'"
+              )
+          if not clave:
+              problemas.append("sin contraseña")
+          if puerto == "6543":
+              problemas.append("puerto 6543 (modo transaccion) no admite prepared statements")
+          if host.startswith("db.") and host.endswith(".supabase.co"):
+              problemas.append("conexion directa: es IPv6 y los runners de Actions son IPv4")
+          # Estos rompen el parseo de la URI y el fallo aflora como otra cosa.
+          if any(c in clave for c in "@/?#[]"):
+              problemas.append(
+                  "la contraseña lleva caracteres que hay que percent-encodear "
+                  "(@ -> %40, / -> %2F, ? -> %3F, # -> %23)"
               )
 
-          for p in problemas:
-              print(f"::error::{p}")
+          for problema in problemas:
+              print(f"::error::{problema}")
           sys.exit(1 if problemas else 0)
           PY
 
