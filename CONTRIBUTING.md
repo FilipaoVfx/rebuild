@@ -74,6 +74,29 @@ está poblada y no ordena nada. Hoy `land_use` sale así.
 
 ## Escenas Sentinel (opcional)
 
+### En CI: secretos de GitHub
+
+El camino de producción. `.github/workflows/sentinel.yml` corre el pipeline
+contra la base persistente con tres secretos de repositorio:
+
+| Secreto | Qué es |
+|---|---|
+| `CDSE_CLIENT_ID` | Cliente OAuth de CDSE |
+| `CDSE_CLIENT_SECRET` | Su secreto (se muestra una sola vez) |
+| `URI_DATABASE_URL` | **Session pooler** de Supabase, puerto 5432 |
+
+Ojo con el último: tiene que ser el *session pooler*
+(`aws-<region>.pooler.supabase.com:5432`), **no** la conexión directa. Las
+conexiones directas de Supabase son IPv6 en el plan Free y los runners de
+GitHub Actions son IPv4 — la propia documentación de Supabase lista GitHub
+Actions entre las plataformas que solo aceptan IPv4. Y tampoco el puerto 6543
+(modo transacción): no admite prepared statements, y psycopg3 los usa.
+
+El workflow es manual y arranca con `dry_run` activado, que cataloga y elige
+sin gastar cuota de proceso.
+
+### En local: `.env`
+
 Las credenciales van en `.env` (ignorado por git) o en el entorno. Las dos
 formas funcionan; `cp .env.example .env` y rellena:
 

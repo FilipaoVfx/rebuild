@@ -1,0 +1,116 @@
+name: Sentinel
+
+# Manual, no programado. Cada corrida gasta cuota de proceso de CDSE (10.000
+# PU/mes en el tier gratuito), y una descarga que nadie pidió es cuota que
+# nadie recupera. Cuando el pipeline esté rodado, añadir un `schedule` aquí
+# es una línea.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Solo catalogar y elegir, sin descargar (no gasta PU de proceso)"
+        type: boolean
+        default: true
+      bbox:
+        description: "AOI: min_lon,min_lat,max_lon,max_lat. Vacío = el AOI de EMSR916"
+        type: string
+        default: ""
+
+# Una corrida a la vez: dos escribiendo escenas en la misma base se pisan.
+concurrency:
+  group: sentinel
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
+      # Las credenciales entran SOLO por aquí. Nunca en un archivo del
+      # repositorio, nunca en el visor. El adaptador las lee del entorno y no
+      # las escribe en la procedencia: `request_parameters` guarda qué se
+      # pidió, no con qué llave.
+      CDSE_CLIENT_ID: ${{ secrets.CDSE_CLIENT_ID }}
+      CDSE_CLIENT_SECRET: ${{ secrets.CDSE_CLIENT_SECRET }}
+      # Session pooler de Supabase, puerto 5432. NO la conexión directa: las
+      # conexiones directas de Supabase son IPv6 en el plan Free y los runners
+      # de GitHub Actions son IPv4 — la propia documentación de Supabase lista
+      # GitHub Actions entre las plataformas que solo aceptan IPv4.
+      # Tampoco el puerto 6543 (modo transacción): no admite prepared
+      # statements, y psycopg3 los usa.
+      URI_DATABASE_URL: ${{ secrets.URI_DATABASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      # Falla temprano y con un mensaje, en vez de a mitad del catálogo con un
+      # error de conexión que parece otra cosa.
+      - name: Comprobar que los secretos están configurados
+        run: |
+          missing=""
+          [ -n "$CDSE_CLIENT_ID" ]     || missing="$missing CDSE_CLIENT_ID"
+          [ -n "$CDSE_CLIENT_SECRET" ] || missing="$missing CDSE_CLIENT_SECRET"
+          [ -n "$URI_DATABASE_URL" ]   || missing="$missing URI_DATABASE_URL"
+          if [ -n "$missing" ]; then
+            echo "::error::Faltan secretos del repositorio:$missing"
+            echo "Settings -> Secrets and variables -> Actions -> New repository secret"
+            exit 1
+          fi
+          echo "los tres secretos están presentes"
+
+      # Idempotente: el registro de migraciones dice cuáles faltan. Sobre una
+      # base ya migrada no hace nada.
+      - name: Migraciones
+        run: python scripts/migrate.py
+
+      - name: Catalogar y recortar
+        run: |
+          args=""
+          [ "${{ inputs.dry_run }}" = "true" ] && args="--dry-run"
+          [ -n "${{ inputs.bbox }}" ] && args="$args --bbox ${{ inputs.bbox }}"
+          python scripts/fetch_sentinel.py $args
+
+      # Los GeoTIFF no se versionan (data/sentinel/README.md): se reconstruyen
+      # desde `scene_id` + `request_parameters`, que sí quedan en la base. El
+      # artefacto es para poder mirarlos sin volver a pedirlos a CDSE.
+      - name: Publicar los recortes como artefacto
+        if: ${{ inputs.dry_run == false }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-aoi-${{ github.run_number }}
+          path: data/sentinel/**/*.tif
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Qué quedó en la base
+        if: always()
+        run: |
+          python - <<'PY'
+          from uri.db import worker_connection
+          with worker_connection() as conn, conn.cursor() as cur:
+              cur.execute("""
+                  SELECT collection::text, event_window::text,
+                         count(*) AS escenas,
+                         count(*) FILTER (WHERE selected) AS elegidas
+                  FROM rebuild_core.satellite_scene
+                  GROUP BY 1, 2 ORDER BY 1, 2
+              """)
+              filas = cur.fetchall()
+          if not filas:
+              print("sin escenas registradas")
+          for f in filas:
+              print(f"  {f['collection']:16} {f['event_window']:5} "
+                    f"{f['escenas']:3} consideradas, {f['elegidas']} elegida(s)")
+          PY

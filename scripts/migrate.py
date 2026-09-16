@@ -22,8 +22,11 @@ def main(reset: bool = False) -> int:
                 "DROP SCHEMA IF EXISTS rebuild_core, rebuild_analytics, "
                 "rebuild_osm_raw, rebuild_osm_derived CASCADE"
             )
-            # Sin esto, el registro sigue diciendo que todo esta aplicado y
-            # `--reset` deja una base vacia que se cree migrada.
+            # El registro vive DENTRO de rebuild_core, asi que el DROP SCHEMA
+            # de arriba ya se lo lleva. Se borra tambien el de `public` por si
+            # queda de una version anterior: sin eso, el registro seguiria
+            # diciendo que todo esta aplicado y `--reset` dejaria una base
+            # vacia que se cree migrada.
             conn.execute("DROP TABLE IF EXISTS public.schema_migration")
             for type_name in (
                 "license_class",
@@ -36,13 +39,20 @@ def main(reset: bool = False) -> int:
             ):
                 conn.execute(f"DROP TYPE IF EXISTS rebuild_core.{type_name} CASCADE")
 
+        # El registro va en `rebuild_core`, no en `public`. La base de
+        # produccion es compartida con otro producto que vive entero en
+        # `public`; dejar ahi una tabla de este proyecto seria justo lo que el
+        # prefijo de esquema existe para evitar. El `CREATE SCHEMA` de aqui
+        # rompe el huevo y la gallina: la 001 lo vuelve a declarar, y es
+        # idempotente.
+        conn.execute("CREATE SCHEMA IF NOT EXISTS rebuild_core")
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS public.schema_migration ("
+            "CREATE TABLE IF NOT EXISTS rebuild_core.schema_migration ("
             "  filename text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())"
         )
         applied = {
             row[0]
-            for row in conn.execute("SELECT filename FROM public.schema_migration").fetchall()
+            for row in conn.execute("SELECT filename FROM rebuild_core.schema_migration").fetchall()
         }
 
         for path in sorted(MIGRATIONS.glob("*.sql")):
@@ -50,7 +60,9 @@ def main(reset: bool = False) -> int:
                 continue
             print(f"aplicando {path.name}")
             conn.execute(path.read_text(encoding="utf-8"))
-            conn.execute("INSERT INTO public.schema_migration (filename) VALUES (%s)", (path.name,))
+            conn.execute(
+                "INSERT INTO rebuild_core.schema_migration (filename) VALUES (%s)", (path.name,)
+            )
     print("migraciones al dia")
     return 0
 
