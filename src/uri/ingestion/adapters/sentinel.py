@@ -374,10 +374,16 @@ function db(v) {
   var d = 10 * Math.log(Math.max(v, 1e-6)) / Math.LN10;
   return Math.max(0, Math.min(255, Math.round((d + 25) / 25 * 255)));
 }
+// El cociente TAMBIEN en dB, que es restar. Escalarlo lineal (VV/VH va de ~2
+// a ~8) mandaba el azul al tope en casi todo el encuadre y la imagen salia
+// saturada en magenta y amarillo: bonita de lejos e ilegible de cerca.
+// La diferencia VV-VH cae entre 0 y 15 dB en superficie terrestre.
+function ratioDb(vv, vh) {
+  var d = 10 * Math.log(Math.max(vv, 1e-6) / Math.max(vh, 1e-6)) / Math.LN10;
+  return Math.max(0, Math.min(255, Math.round(d / 15 * 255)));
+}
 function evaluatePixel(s) {
-  var ratio = s.VV / Math.max(s.VH, 1e-6);
-  return [db(s.VV), db(s.VH), Math.max(0, Math.min(255, Math.round(ratio * 25))),
-          s.dataMask * 255];
+  return [db(s.VV), db(s.VH), ratioDb(s.VV, s.VH), s.dataMask * 255];
 }"""
 
 
