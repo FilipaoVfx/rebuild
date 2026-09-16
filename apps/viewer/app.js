@@ -63,13 +63,18 @@ const state = {
   mapReady: false,
   colorBy: "score",
   layers: Object.fromEntries(LAYERS.map((l) => [l.id, l.on])),
-  // Modo 3D: apagado por defecto y cargado en diferido. deck.gl son 575 KB
-  // comprimidos; cobrarlos en el arranque a quien solo quiere la tabla sería
-  // pagar por una vista que no pidió.
+  // Modo 3D: arranca apagado y se enciende solo al final de `main`, una vez
+  // que la tabla y el mapa ya sirven. deck.gl son 575 KB comprimidos y
+  // cobrarlos en el arranque retrasaría la vista que sí es utilizable sin
+  // ellos; cargarlos despues da las dos cosas.
   relief: false,
   deckReady: false,
   deckOverlay: null,
   coverage: null,
+  // Vistas Sentinel. `satellite` es la escena que se esta mirando
+  // ("s2-PRE", "s1-POST"...) o null si la capa esta apagada.
+  sentinel: null,
+  satellite: null,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -536,6 +541,92 @@ function elevationScale(cells) {
   return max > 0 ? 900 / max : 0;
 }
 
+/* ── Vistas Sentinel ──────────────────────────────────────────────────
+ *
+ * Imagen observada, NO daño. Lo que se ve es reflectancia (S2) y
+ * retrodispersión (S1): una mancha oscura puede ser sombra, agua, asfalto
+ * nuevo o un tejado repintado. La nota que lo dice se pinta junto al
+ * control y sale del propio índice, no de una constante de este archivo,
+ * para que no puedan divergir.
+ *
+ * Son PNG ya estirados por un evalscript del servicio. El GeoTIFF float32
+ * que alimenta los índices es otro archivo y no se publica: quien mirase
+ * una imagen realzada creyendo ver el dato mediría el estiramiento.
+ */
+
+async function loadSentinelIndex() {
+  if (state.sentinel !== null) return state.sentinel;
+  try {
+    const base = STATIC_BASE || "data";
+    const response = await fetch(`${base}/sentinel/previews.json`);
+    // 404 es el caso normal en un despliegue sin imágenes versionadas.
+    state.sentinel = response.ok ? await response.json() : false;
+  } catch {
+    state.sentinel = false;
+  }
+  return state.sentinel;
+}
+
+function sentinelKey(scene) {
+  const familia = scene.collection === "sentinel-1-grd" ? "s1" : "s2";
+  return `${familia}-${scene.window}`;
+}
+
+function setSatellite(key) {
+  const indice = state.sentinel;
+  if (!indice) return;
+  const previo = state.satellite;
+  if (previo && state.map.getLayer(`sat-${previo}`)) {
+    state.map.setLayoutProperty(`sat-${previo}`, "visibility", "none");
+  }
+  state.satellite = key;
+  const nota = $("#sat-note");
+  if (!key) {
+    if (nota) nota.hidden = true;
+    return;
+  }
+
+  const scene = indice.scenes.find((x) => sentinelKey(x) === key);
+  const id = `sat-${key}`;
+  if (!state.map.getSource(id)) {
+    const base = STATIC_BASE || "data";
+    const [w, sur, e, norte] = scene.bbox;
+    state.map.addSource(id, {
+      type: "image",
+      url: `${base}/sentinel/${scene.file}`,
+      // Esquinas en sentido horario desde arriba-izquierda, que es el orden
+      // que espera MapLibre; invertirlo voltea la imagen sin avisar.
+      coordinates: [
+        [w, norte],
+        [e, norte],
+        [e, sur],
+        [w, sur],
+      ],
+    });
+    // Debajo de todo lo vectorial: la imagen es el fondo sobre el que se
+    // leen los sitios, no una capa que los tape.
+    const primera = state.map.getStyle().layers.find((l) => l.id !== "bg");
+    state.map.addLayer(
+      { id, type: "raster", source: id, paint: { "raster-opacity": 0.85 } },
+      primera ? primera.id : undefined
+    );
+  }
+  state.map.setLayoutProperty(id, "visibility", "visible");
+  const opacidad = Number($("#sat-opacity")?.value ?? 85) / 100;
+  state.map.setPaintProperty(id, "raster-opacity", opacidad);
+
+  if (nota) {
+    const nube =
+      scene.cloud_cover == null
+        ? `${scene.orbit_direction || ""} órbita ${scene.relative_orbit ?? "—"}`
+        : `nubosidad ${scene.cloud_cover.toFixed(1)} %`;
+    nota.hidden = false;
+    nota.innerHTML =
+      `<strong>${scene.window === "PRE" ? "Antes" : "Después"} del sismo — ` +
+      `${scene.acquisition}.</strong> ${nube}. ${indice.limitation}`;
+  }
+}
+
 function reliefLayers(coverage) {
   const { ColumnLayer, ArcLayer } = window.deck;
   const scale = elevationScale(coverage.cells);
@@ -596,6 +687,12 @@ function reliefTooltip({ object, layer }) {
 async function setRelief(on) {
   state.relief = on;
   const note = $("#relief-note");
+  // La casilla se sincroniza aqui y no en el manejador del clic, porque el
+  // relieve tambien se enciende solo al arrancar. Sin esto la vista saldria
+  // en 3D con el control diciendo que esta apagado, y el primer clic —el que
+  // deberia apagarlo— seria un clic muerto.
+  const box = $('#layer-control input[data-layer="relief"]');
+  if (box) box.checked = on;
   if (!on) {
     if (state.deckOverlay) state.deckOverlay.setProps({ layers: [] });
     state.map.easeTo({ pitch: 0, bearing: 0, duration: 700 });
@@ -616,7 +713,6 @@ async function setRelief(on) {
   } catch (error) {
     if (note) note.textContent = `No se pudo activar el relieve: ${error.message}`;
     state.relief = false;
-    const box = $('#layer-control input[data-layer="relief"]');
     if (box) box.checked = false;
     return;
   }
@@ -708,6 +804,15 @@ function renderMapControls() {
         </label>`
       ).join("")}
     </div>
+    <div class="control-group" id="sat-group" hidden>
+      <h3>Imagen Sentinel</h3>
+      <div class="sat-buttons" id="sat-buttons"></div>
+      <label class="sat-opacity">
+        Opacidad
+        <input type="range" id="sat-opacity" min="10" max="100" value="85">
+      </label>
+      <p class="relief-note" id="sat-note" hidden></p>
+    </div>
     <div class="control-group">
       <h3>Relieve de cobertura</h3>
       <label class="layer-row">
@@ -739,6 +844,43 @@ function renderMapControls() {
         applyLayerVisibility();
       })
     );
+  loadSentinelIndex().then((indice) => {
+    if (!indice || !indice.scenes.length) return;
+    const grupo = $("#sat-group");
+    const orden = { "s2-PRE": 0, "s2-POST": 1, "s1-PRE": 2, "s1-POST": 3 };
+    const claves = indice.scenes.map(sentinelKey).sort((a, b) => orden[a] - orden[b]);
+    $("#sat-buttons").innerHTML =
+      `<button type="button" class="ghost sat on" data-sat="">Ninguna</button>` +
+      claves
+        .map((k) => {
+          const [familia, ventana] = k.split("-");
+          const etiqueta = `${familia === "s1" ? "Radar" : "Óptica"} ${
+            ventana === "PRE" ? "antes" : "después"
+          }`;
+          return `<button type="button" class="ghost sat" data-sat="${k}">${etiqueta}</button>`;
+        })
+        .join("");
+    grupo.hidden = false;
+    $("#sat-buttons")
+      .querySelectorAll("button")
+      .forEach((boton) =>
+        boton.addEventListener("click", () => {
+          $("#sat-buttons")
+            .querySelectorAll("button")
+            .forEach((b) => b.classList.toggle("on", b === boton));
+          setSatellite(boton.dataset.sat || null);
+        })
+      );
+    $("#sat-opacity").addEventListener("input", (event) => {
+      if (!state.satellite) return;
+      state.map.setPaintProperty(
+        `sat-${state.satellite}`,
+        "raster-opacity",
+        Number(event.target.value) / 100
+      );
+    });
+  });
+
   $("#tour").addEventListener("click", () => {
     const box = $('#layer-control input[data-layer="relief"]');
     if (box) box.checked = true;
@@ -1304,6 +1446,15 @@ async function main() {
   renderProvenance(provenance, sources);
   renderSources(sources);
   renderAlerts(alerts);
+
+  // El relieve se enciende solo, DESPUES de que la tabla y el mapa ya sirven.
+  // Estaba detras de una casilla apagada en el fondo del panel de capas, que
+  // es el sitio menos visible de la pagina: quien entraba veia puntos sueltos
+  // sobre un fondo liso y se iba sin saber que la vista principal existia.
+  // Sigue siendo carga diferida —los 575 KB de deck.gl no bloquean nada— y la
+  // casilla lo apaga igual. Si el navegador no puede con WebGL, `setRelief`
+  // ya deja el mapa plano y lo dice.
+  if (!state.relief) setRelief(true);
 }
 
 main().catch((error) => {

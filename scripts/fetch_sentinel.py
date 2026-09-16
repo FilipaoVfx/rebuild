@@ -57,6 +57,18 @@ DEFAULT_BBOX = loader.PEREIRA_BBOX
 
 WINDOWS = (("PRE", sentinel.PRE_WINDOW), ("POST", sentinel.POST_WINDOW))
 
+#: Forma de dato modificado del art. 8 del Reg. UE 1159/2013: todo se recorta
+#: al AOI, asi que la imagen publicada NO es el producto original.
+ATTRIBUTION = "Contains modified Copernicus Sentinel data 2026"
+
+#: Viaja con las imagenes hasta la pantalla. Una mancha oscura en un PNG
+#: invita a leerse como edificio caido, y no lo es.
+LIMITATION = (
+    "Reflectancia y retrodispersion observadas, no dano. Una diferencia entre "
+    "las dos fechas puede ser sombra, agua, obra nueva, cosecha o un tejado "
+    "repintado. Evidencia para mirar, no veredicto."
+)
+
 
 def out_dir(collection: str, window: str) -> Path:
     family = "sentinel1" if collection == sentinel.S1 else "sentinel2"
@@ -89,6 +101,7 @@ def main(bbox: tuple[float, float, float, float], *, dry_run: bool) -> int:
         return 2
 
     considered: list[tuple] = []
+    previews: list[dict] = []
 
     # ── Catalogo ────────────────────────────────────────────────────────
     found: dict[tuple[str, str], list[sentinel.Scene]] = {}
@@ -131,6 +144,40 @@ def main(bbox: tuple[float, float, float, float], *, dry_run: bool) -> int:
                     sentinel.S1_BANDS if collection == sentinel.S1 else sentinel.S2_BANDS
                 )
                 print(f"   escrito {path.relative_to(ROOT)}  ({len(content) / 1024:.0f} KB)")
+
+                # La vista es un producto APARTE: PNG de 8 bits ya estirado,
+                # con su propio evalscript y su propio hash. El GeoTIFF de
+                # arriba sigue en float32 sin reescalar, porque es el que
+                # alimenta los indices y un estiramiento ahi seria contraste
+                # inventado midiendose como si fuera senal.
+                vista = sentinel.PREVIEW_EVALSCRIPTS[collection]()
+                imagen, vista_params = client.fetch_aoi(
+                    scene, bbox, evalscript=vista, image_format="image/png"
+                )
+                png = directory / f"{scene.scene_id}.png"
+                png.write_bytes(imagen)
+                params["preview"] = {
+                    "path": str(png.relative_to(ROOT)),
+                    "evalscript_sha256": vista_params["evalscript_sha256"],
+                    "width": vista_params["width"],
+                    "height": vista_params["height"],
+                    "bytes": len(imagen),
+                }
+                previews.append(
+                    {
+                        "collection": collection,
+                        "window": label,
+                        "scene_id": scene.scene_id,
+                        "acquisition": scene.acquisition.date().isoformat(),
+                        "cloud_cover": scene.cloud_cover,
+                        "orbit_direction": scene.orbit_direction,
+                        "relative_orbit": scene.relative_orbit,
+                        "file": png.name,
+                        "bbox": list(bbox),
+                        "reason": best_reason,
+                    }
+                )
+                print(f"   escrito {png.relative_to(ROOT)}  ({len(imagen) / 1024:.0f} KB)")
             considered.append((scene, label, selected, best_reason if selected else None, params))
 
     if not considered:
@@ -154,6 +201,29 @@ def main(bbox: tuple[float, float, float, float], *, dry_run: bool) -> int:
         ),
         "dry_run": dry_run,
     }
+    # El manifiesto de vistas es lo unico que el visor lee: nombres de
+    # archivo, limites y por que se eligio cada escena. No lleva credencial
+    # ninguna, y sin el las imagenes serian cuatro PNG sin fecha ni motivo.
+    if previews:
+        indice = ROOT / "data" / "sentinel" / "previews.json"
+        indice.parent.mkdir(parents=True, exist_ok=True)
+        indice.write_text(
+            json.dumps(
+                {
+                    "aoi_bbox": list(bbox),
+                    "event_date": sentinel.EVENT_DATE.isoformat(),
+                    "attribution": ATTRIBUTION,
+                    "limitation": LIMITATION,
+                    "scenes": sorted(previews, key=lambda x: (x["collection"], x["window"])),
+                },
+                indent=1,
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"\nindice de vistas: {indice.relative_to(ROOT)} ({len(previews)} imagenes)")
+
     with worker_connection() as conn:
         loader.register_sources(conn)
         version, written = loader.record_satellite_scenes(conn, considered, manifest=manifest)

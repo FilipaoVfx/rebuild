@@ -171,7 +171,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sentinel-aoi-${{ github.run_number }}
-          path: data/sentinel/**/*.tif
+          # Los tres productos, no solo el GeoTIFF: la vista PNG y el
+          # indice son lo que consume el visor, y subir solo los .tif ya
+          # hizo que una corrida pareciera identica a la anterior.
+          path: |
+            data/sentinel/**/*.tif
+            data/sentinel/**/*.png
+            data/sentinel/previews.json
           if-no-files-found: warn
           retention-days: 30
 

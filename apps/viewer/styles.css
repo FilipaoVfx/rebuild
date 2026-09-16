@@ -393,3 +393,33 @@ button.ghost {
   border: 1px solid var(--border); border-radius: 3px; cursor: pointer;
 }
 button.ghost:hover { color: var(--ink-1); border-color: var(--s1); }
+
+/* Botonera de la imagen Sentinel. El seleccionado se marca en oscuro: con
+   cuatro escenas y una opción de apagado, sin marca no se sabe cuál se está
+   mirando, y la diferencia entre antes y después es justo lo que se compara. */
+.sat-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.sat-buttons .sat {
+  flex: 1 1 calc(50% - 4px);
+  font-size: 12px;
+  padding: 5px 6px;
+}
+.sat-buttons .sat.on {
+  background: #1d1d1b;
+  color: #fff;
+  border-color: #1d1d1b;
+}
+.sat-opacity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #5a584f;
+}
+.sat-opacity input {
+  flex: 1;
+}
