@@ -143,6 +143,16 @@ jobs:
 
       # Idempotente: el registro de migraciones dice cuáles faltan. Sobre una
       # base ya migrada no hace nada.
+      #
+      # SI FALLA CON `password authentication failed for user "postgres"`:
+      # el nombre del usuario en ese mensaje NO es la pista. Supavisor usa el
+      # sufijo `.<project-ref>` solo para enrutar al proyecto y luego autentica
+      # contra el rol real de Postgres, que se llama `postgres` a secas. El
+      # paso anterior ya comprobó que el usuario de la cadena lleva su sufijo,
+      # así que un fallo aquí es la CONTRASEÑA, no el usuario. Se comprueba en
+      # dos segundos desde cualquier máquina:
+      #
+      #   psql "$URI_DATABASE_URL" -c "select 1"
       - name: Migraciones
         run: python scripts/migrate.py
 
