@@ -1,0 +1,3 @@
+# El COG de origen son 43 MB y se vuelve a bajar solo. Lo que se versiona son
+# las 10 teselas, que pesan 355 KB y son lo que el sitio sirve.
+.cog/

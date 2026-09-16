@@ -39,7 +39,19 @@ BUDGETS_MMM = (10, 25, 50, 100)
 #: Sin "risk": retirada la capa del SGC por licencia (ADR-18) no hay
 #: amenaza que servir, y publicar una coleccion vacia solo produce un
 #: control de capa que no enciende nada.
-LAYERS = ("sites", "evidence", "green", "facilities", "population", "catchments")
+LAYERS = (
+    # `buildings` y `roads` son el tejido urbano: pesan ~1 MB comprimidos
+    # entre los dos y son la diferencia entre un mapa y unos puntos sobre
+    # papel en blanco.
+    "buildings",
+    "roads",
+    "sites",
+    "evidence",
+    "green",
+    "facilities",
+    "population",
+    "catchments",
+)
 
 
 class PublicationBlocked(RuntimeError):
@@ -152,6 +164,27 @@ def main(profile: str) -> int:
     # aqui. Es el mismo criterio que con el extracto de OSM: atar cada
     # despliegue a que CDSE este en pie ese dia ya fallo una vez con Overpass.
     # Un checkout sin ellas sigue construyendo; el visor no pinta la capa.
+    # El terreno: 10 teselas Terrain-RGB y su indice. Versionadas por el
+    # mismo motivo que las vistas — atar cada despliegue a que CDSE responda
+    # ese dia ya fallo una vez con Overpass.
+    terreno = ROOT / "data" / "terrain"
+    if (terreno / "terrain.json").exists():
+        # Solo las teselas y el indice. `copytree` a secas se llevaba tambien
+        # `.cog/`, el GeoTIFF de origen de 43 MB, y multiplicaba por diez el
+        # peso del sitio publicado sin que nadie lo pidiera.
+        destino = data / "terrain"
+        destino.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(terreno / "terrain.json", destino / "terrain.json")
+        n = 0
+        for tesela in sorted(terreno.glob("[0-9]*/*/*.png")):
+            salida = destino / tesela.relative_to(terreno)
+            salida.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(tesela, salida)
+            n += 1
+        print(f"terreno: {n} teselas")
+    else:
+        print("terreno: sin teselas versionadas — el relieve no se publica")
+
     previews = ROOT / "data" / "sentinel" / "previews.json"
     if previews.exists():
         destino = data / "sentinel"

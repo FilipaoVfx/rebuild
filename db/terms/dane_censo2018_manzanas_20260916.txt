@@ -1,0 +1,64 @@
+DANE — Censo Nacional de Población y Vivienda 2018, agregado por manzana
+Vía de acceso: Esri Colombia (Living Atlas), ags.esri.co
+
+Item: https://www.arcgis.com/home/item.html?id=340378a6077c4a558847d5e12ceaaeb0
+accessInformation declarado por el publicador: "DANE, ESRI Colombia"
+Leído y transcrito el 2026-09-16.
+
+--- AVISO LEGAL, VERBATIM ---
+
+"Este aviso legal recoge las condiciones generales que rigen la consulta, uso,
+almacenamiento o reutilización de información generada por entidades públicas
+de la Republica de Colombia bajo el esquema Open Data, filosofía que tiene como
+finalidad poner a disposición de la sociedad los datos que gestiona la
+administración pública en formatos fáciles de manipular y la cual fue
+desarrollada por la ley 1712 de 2014 que tiene por objeto regular el derecho de
+acceso a la información pública, los procedimientos para el ejercicio y garantía
+del derecho y las excepciones a la publicidad de información. Se aclara que la
+información aquí contenida tiene el carácter de Pública y que puede ser objeto
+de modificación y/o actualización constante; así mismo la utilización,
+reproducción, modificación o distribución de los datos impone la obligación de
+reconocer la autoría de los mismos así como la de citar a la fuente. Pese al
+esfuerzo desplegado para la gestión de los datos que se ponen a disposición en
+este portal, Esri Colombia S.A.S no da ningún tipo de garantía respecto a los
+datos publicados ni asegura su integridad, actualización, precisión o acceso
+continuo a los mimos. Aunado a esto Esri Colombia S.A.S. no se hace responsable
+de los daños o pérdidas que, de forma directa o indirecta acarreen perjuicios
+económicos, materiales o morales sobre datos, desarrollos, sistemas,
+aplicaciones y en general cualquier producto obtenido del uso de los datos
+dispuestos en este portal por lo que su utilización se realizara bajo su propia
+cuenta y riesgo. No esta permitido emplear el Nombre de Esri Colombia como
+participe, patrocinador o promotor del uso o reproducción que se haga sobre los
+datos aquí dispuestos debiéndose abstener de realizar cualquier mención escrita,
+gráfica, visual o auditiva o de cualquier otra naturaleza que puedan causar
+confusión en el usuario final, de la participación o apoyo por Esri Colombia."
+
+=== LECTURA DE LA AUDITORÍA ===
+
+PASA. license_class = ATTRIBUTION, redistribution_allowed = true.
+
+- La frase operativa concede los cuatro usos de forma expresa: "la utilización,
+  reproducción, modificación o distribución de los datos impone la obligación
+  de reconocer la autoría" — la obligación es la atribución, no una
+  prohibición.
+- Régimen legal: Ley 1712 de 2014 (acceso a la información pública). Es el
+  mismo esquema Open Data bajo el que ya está clasificado datos.gov.co.
+- Sin restricción comercial. Sin share-alike.
+
+EL PROVEEDOR ES EL DANE, NO ESRI. Esta es exactamente la trampa que hundió la
+capa del SGC pero al revés: aquí el agregador es Esri Colombia y el productor
+es el DANE. La fuente se registra a nombre del DANE y la vía de acceso queda
+anotada, porque la puerta de publicación resuelve `original_source` para que
+un agregador no pueda esconder a su proveedor detrás de sí mismo.
+
+UNA PROHIBICIÓN, no una obligación de publicar: no se puede usar el nombre de
+Esri Colombia como partícipe, patrocinador o promotor. La atribución cita al
+DANE como autor y a Esri Colombia solo como vía de acceso, que es lo que son.
+
+PII — ESTO ES MICRODATO AGREGADO Y HAY QUE TRATARLO COMO TAL. Son conteos por
+manzana, no registros de persona, así que CON-04 y FR-PII-01 se cumplen: no se
+ingiere microdato. Pero FR-PII-03 exige umbral mínimo con marcador de
+supresión, y el riesgo aquí es real: la primera manzana del AOI tiene 15
+personas. Una manzana con 3 habitantes y un dato de condición física señala a
+una persona concreta. El adaptador suprime los atributos sensibles por debajo
+del umbral en vez de publicarlos.

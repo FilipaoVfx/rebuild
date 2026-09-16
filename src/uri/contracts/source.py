@@ -20,6 +20,11 @@ class SourceRegistration(BaseModel):
     license_name: str | None = None
     license_url: str | None = None
     attribution_text: str | None = None
+    #: Exencion de responsabilidad que la licencia obliga a publicar junto al
+    #: dato. Es una obligacion DISTINTA de `attribution_text`: la nota de
+    #: fuente dice de donde viene, esta dice quien no responde de su uso. El
+    #: Copernicus DEM (art. 6c) exige las dos.
+    liability_notice: str | None = None
     redistribution_allowed: bool | None = None
     derivatives_allowed: bool | None = None
     share_alike: bool = False

@@ -1,0 +1,81 @@
+{
+ "aoi_bbox": [
+  -75.7251,
+  4.7878,
+  -75.6748,
+  4.8229
+ ],
+ "event_date": "2026-08-10",
+ "attribution": "Contains modified Copernicus Sentinel data 2026",
+ "limitation": "Reflectancia y retrodispersion observadas, no dano. Una diferencia entre las dos fechas puede ser sombra, agua, obra nueva, cosecha o un tejado repintado. Evidencia para mirar, no veredicto.",
+ "scenes": [
+  {
+   "collection": "sentinel-1-grd",
+   "window": "POST",
+   "scene_id": "S1C_IW_GRDH_1SDV_20260814T105026_20260814T105051_008990_011D78_F126_COG.SAFE",
+   "acquisition": "2026-08-14",
+   "cloud_cover": null,
+   "orbit_direction": "DESCENDING",
+   "relative_orbit": 142,
+   "file": "S1C_IW_GRDH_1SDV_20260814T105026_20260814T105051_008990_011D78_F126_COG.SAFE.png",
+   "bbox": [
+    -75.7251,
+    4.7878,
+    -75.6748,
+    4.8229
+   ],
+   "reason": "a 4 dias del evento, DESCENDING orbita relativa 142 (4 candidatas de 7 halladas); misma geometria que la escena pre (DESCENDING, orbita relativa 142)"
+  },
+  {
+   "collection": "sentinel-1-grd",
+   "window": "PRE",
+   "scene_id": "S1D_IW_GRDH_1SDV_20260808T105039_20260808T105104_004033_007567_BE7E_COG.SAFE",
+   "acquisition": "2026-08-08",
+   "cloud_cover": null,
+   "orbit_direction": "DESCENDING",
+   "relative_orbit": 142,
+   "file": "S1D_IW_GRDH_1SDV_20260808T105039_20260808T105104_004033_007567_BE7E_COG.SAFE.png",
+   "bbox": [
+    -75.7251,
+    4.7878,
+    -75.6748,
+    4.8229
+   ],
+   "reason": "a 2 dias del evento, DESCENDING orbita relativa 142 (6 candidatas de 6 halladas)"
+  },
+  {
+   "collection": "sentinel-2-l2a",
+   "window": "POST",
+   "scene_id": "S2B_MSIL2A_20260820T152649_N0512_R025_T18NVL_20260820T202935.SAFE",
+   "acquisition": "2026-08-20",
+   "cloud_cover": 21.64,
+   "orbit_direction": null,
+   "relative_orbit": null,
+   "file": "S2B_MSIL2A_20260820T152649_N0512_R025_T18NVL_20260820T202935.SAFE.png",
+   "bbox": [
+    -75.7251,
+    4.7878,
+    -75.6748,
+    4.8229
+   ],
+   "reason": "nubosidad 21.6% (minima de 2 escenas utilizables de 7 halladas); a 10 dias del evento"
+  },
+  {
+   "collection": "sentinel-2-l2a",
+   "window": "PRE",
+   "scene_id": "S2A_MSIL2A_20260728T152711_N0512_R025_T18NVL_20260728T231816.SAFE",
+   "acquisition": "2026-07-28",
+   "cloud_cover": 28.47,
+   "orbit_direction": null,
+   "relative_orbit": null,
+   "file": "S2A_MSIL2A_20260728T152711_N0512_R025_T18NVL_20260728T231816.SAFE.png",
+   "bbox": [
+    -75.7251,
+    4.7878,
+    -75.6748,
+    4.8229
+   ],
+   "reason": "nubosidad 28.5% (minima de 1 escenas utilizables de 6 halladas); a 13 dias del evento"
+  }
+ ]
+}

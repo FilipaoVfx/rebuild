@@ -117,6 +117,152 @@ SOURCES: list[SourceRegistration] = [
         ),
     ),
     SourceRegistration(
+        source_id="igac_catastro",
+        display_name="IGAC — Predios catastrales (Risaralda)",
+        tier="B",
+        source_url="https://www.arcgis.com/home/item.html?id=9feea5c2feae40b2bf28255095a9f33a",
+        access_method="api",
+        spatial_reference="EPSG:4326",
+        # UNCLEAR, y no por falta de buscar. La capa cubre el AOI con 47.443
+        # predios —el triple que las huellas de Microsoft— y se descarga en un
+        # minuto. Lo que NO tiene es una sola frase que diga que se puede
+        # hacer con ella: `licenseInfo` esta vacio y la ficha solo trae la
+        # definicion legal de que ES un predio, que describe el objeto y no
+        # concede ningun derecho.
+        #
+        # Disponible y permitido no son lo mismo. Asi se publico la capa del
+        # SGC durante semanas incumpliendo sus terminos (ADR-18).
+        #
+        # Queda registrada para que el control C1 la BLOQUEE por construccion
+        # en vez de quedar como una idea suelta que alguien retome sin releer
+        # la auditoria. Ver db/terms/igac_catastro_20260916.txt.
+        license_class=LicenseClass.UNCLEAR,
+        license_name=None,
+        license_url=None,
+        attribution_text=None,
+        redistribution_allowed=None,
+        derivatives_allowed=None,
+        share_alike=False,
+        quality_score=None,
+        terms_verified_at=None,
+        terms_verified_by=None,
+        terms_snapshot_path="storage://terms/igac_catastro_20260916.txt",
+        verification_notes=(
+            "UNCLEAR. El item de ArcGIS no declara licencia ninguna y su dueno "
+            "es una cuenta personal de IGAC. Cobertura COMPROBADA: 47.443 "
+            "predios en el AOI, con MANZANA_CODIGO que ademas cruzaria con las "
+            "manzanas del DANE. El dato es bueno; los terminos no existen. "
+            "Vias alternativas exploradas y descartadas: en datos.gov.co las "
+            "capas catastrales tampoco declaran licencia, y las que aparecen "
+            "son `federated_href` —punteros a un recurso externo—, asi que los "
+            "terminos del portal no las cubren; un puntero no lava una "
+            "licencia. El geoportal de IGAC no responde. Lo desbloquea que "
+            "IGAC declare terminos, una autorizacion escrita, o encontrar la "
+            "capa ALOJADA en datos.gov.co. Nada de eso es trabajo de "
+            "ingenieria."
+        ),
+    ),
+    SourceRegistration(
+        source_id="dane_censo_2018",
+        display_name="DANE — Censo Nacional de Población y Vivienda 2018 (por manzana)",
+        tier="A",
+        source_url="https://www.arcgis.com/home/item.html?id=340378a6077c4a558847d5e12ceaaeb0",
+        access_method="api",
+        spatial_reference="EPSG:4326",
+        # Ley 1712 de 2014, esquema Open Data. La frase operativa concede los
+        # cuatro usos de forma expresa y la obligacion que impone es la
+        # atribucion, no una prohibicion. Mismo regimen que datos.gov.co.
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="Open Data — Ley 1712 de 2014 (acceso a la informacion publica)",
+        license_url="https://www.arcgis.com/home/item.html?id=340378a6077c4a558847d5e12ceaaeb0",
+        # El autor es el DANE. Esri Colombia es la VIA, y la licencia prohibe
+        # expresamente presentarla como participe o patrocinadora, asi que se
+        # cita por lo que es y no mas.
+        attribution_text=(
+            "DANE — Censo Nacional de Población y Vivienda 2018. "
+            "Acceso vía Esri Colombia (Living Atlas)"
+        ),
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        share_alike=False,
+        quality_score=0.90,
+        terms_verified_at=date(2026, 9, 16),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/dane_censo2018_manzanas_20260916.txt",
+        verification_notes=(
+            "Aviso legal leido verbatim; copia en "
+            "db/terms/dane_censo2018_manzanas_20260916.txt. PASA como "
+            "ATTRIBUTION redistribuible, sin restriccion comercial y sin "
+            "share-alike. EL PROVEEDOR ES EL DANE, NO ESRI: es la trampa del "
+            "SGC al reves —alli el agregador escondia a su proveedor— asi que "
+            "la fuente se registra a nombre del productor y Esri Colombia "
+            "queda como via de acceso. La licencia ademas PROHIBE usar el "
+            "nombre de Esri Colombia como participe, patrocinador o promotor. "
+            "PII: son conteos por manzana, no microdato, asi que CON-04 y "
+            "FR-PII-01 se cumplen; pero FR-PII-03 exige umbral, y el riesgo "
+            "es real — hay manzanas de 15 personas en el AOI y una de 3 con "
+            "un dato de condicion fisica senala a alguien concreto. El "
+            "adaptador suprime los atributos sensibles bajo umbral."
+        ),
+    ),
+    SourceRegistration(
+        source_id="copernicus_dem",
+        display_name="Copernicus DEM GLO-30 (WorldDEM-30)",
+        tier="A",
+        source_url="https://dataspace.copernicus.eu/explore-data/data-collections/"
+        "copernicus-contributing-missions/collections-description/COP-DEM",
+        access_method="api",
+        spatial_reference="EPSG:4326",
+        # Licencia LEIDA, no supuesta. No son los terminos de Sentinel aunque
+        # lleve Copernicus en el nombre: es un producto de Airbus que la UE
+        # sublicencia, con su propio documento.
+        #
+        # El art. 4 concede reproduccion, distribucion, comunicacion al publico
+        # y modificacion, sin clausula de no comercialidad — a diferencia del
+        # SGC y de SERTIT. El art. 9 renuncia a reclamar los IPR del trabajo
+        # propio del usuario, asi que no hay copyleft.
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="Licence for Copernicus DEM instance COP-DEM-GLO-30-F "
+        "Global 30m Full, Free & Open",
+        license_url="https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/"
+        "Data/DEM/resources/license/License-COPDEM-30.pdf",
+        # Art. 6(b): el terreno se recorta y se reproyecta al AOI, asi que la
+        # forma que aplica es la de dato MODIFICADO, no la del art. 6(a).
+        attribution_text=(
+            "produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and "
+            "© Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS "
+            "by the European Union and ESA; all rights reserved"
+        ),
+        # Art. 6(c), literal y obligatorio. Ninguna otra fuente del registro
+        # pide esto, y por eso existe la columna.
+        liability_notice=(
+            "The organisations in charge of the Copernicus programme by law or "
+            "by delegation do not incur any liability for any use of the "
+            "Copernicus WorldDEM-30"
+        ),
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        share_alike=False,
+        quality_score=0.85,
+        terms_verified_at=date(2026, 9, 16),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/copernicus_dem_glo30_licence_20260916.txt",
+        verification_notes=(
+            "Licencia leida verbatim del PDF oficial; copia en "
+            "db/terms/copernicus_dem_glo30_licence_20260916.txt. PASA como "
+            "ATTRIBUTION redistribuible, sin restriccion comercial y sin "
+            "share-alike. TRES OBLIGACIONES QUE SENTINEL NO TIENE: (1) art. 6c "
+            "exige publicar un aviso de no responsabilidad literal, que va en "
+            "liability_notice y tiene que llegar a la pagina; (2) art. 6d "
+            "prohibe dar a entender respaldo oficial, asi que nada de escudos "
+            "de la UE o de ESA en el visor; (3) art. 6e obliga a trasladar "
+            "estas obligaciones a quien reciba el dato de nosotros — es "
+            "propagacion de avisos, no copyleft. AVISO: el GLO-10 esta "
+            "EXPRESAMENTE excluido de distribucion al publico por el preambulo. "
+            "Si alguien sube la resolucion, esta auditoria deja de aplicar."
+        ),
+    ),
+    SourceRegistration(
         source_id="copernicus_sentinel",
         display_name="Copernicus Sentinel (CDSE)",
         tier="A",

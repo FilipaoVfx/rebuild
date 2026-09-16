@@ -469,3 +469,113 @@ def test_un_catalogo_en_seco_no_borra_la_procedencia_de_un_recorte_hecho(db_conn
     assert fila["asset_path"] == "data/sentinel/s2/pre/y.tif"
     assert fila["request_parameters"]["width"] == 560
     db_conn.rollback()
+
+
+# ── Teselado del terreno ────────────────────────────────────────────────
+
+
+def test_las_teselas_calculadas_cubren_el_aoi_entero():
+    """Una tesela de menos deja un agujero en el relieve, y se ve."""
+    for zoom in (11, 12, 13, 14):
+        teselas = sentinel.tiles_covering(AOI, zoom)
+        assert teselas, f"z{zoom} no devolvio ninguna tesela"
+        oeste = min(sentinel.tile_bounds(*t)[0] for t in teselas)
+        sur = min(sentinel.tile_bounds(*t)[1] for t in teselas)
+        este = max(sentinel.tile_bounds(*t)[2] for t in teselas)
+        norte = max(sentinel.tile_bounds(*t)[3] for t in teselas)
+        assert oeste <= AOI[0] and sur <= AOI[1]
+        assert este >= AOI[2] and norte >= AOI[3]
+
+
+def test_cada_zoom_cuadruplica_el_area_de_la_tesela():
+    """Si el eje y se invirtiera, el terreno saldria del reves y en silencio."""
+    for zoom in (11, 12, 13):
+        (o1, s1, e1, n1) = sentinel.tile_bounds(zoom, 0, 0)
+        (o2, s2, e2, n2) = sentinel.tile_bounds(zoom + 1, 0, 0)
+        assert e2 - o2 == pytest.approx((e1 - o1) / 2)
+        # La fila 0 empieza arriba en el esquema XYZ: el norte no se mueve.
+        assert n2 == pytest.approx(n1)
+        assert s2 > s1
+
+
+def test_el_terreno_no_se_pide_por_encima_de_la_resolucion_del_dem():
+    """El DEM son 30 m. A z14 una tesela de 256 px ya va a ~9,5 m/pixel: por
+    encima seria inventar detalle y multiplicar las llamadas por cuatro."""
+    assert sentinel.TERRAIN_MAX_ZOOM == 14
+    o, s, e, n = sentinel.tile_bounds(sentinel.TERRAIN_MAX_ZOOM, 0, 0)
+    metros_por_pixel = (e - o) * 111_320 / sentinel.TILE_SIZE
+    assert metros_por_pixel < 30, "ya se remuestrea por encima del dato"
+
+
+def test_el_terreno_no_se_pide_a_cdse():
+    """CDSE responde 403 COMMON_INSUFFICIENT_PERMISSIONS al DEM: es una
+    Copernicus Contributing Mission y no entra en el tier gratuito de Sentinel
+    Hub. La licencia lo permite, la cuenta no llega, y el dato sale del
+    registro de datos abiertos de AWS — mismo producto, mismos terminos."""
+    assert "amazonaws.com" in sentinel.DEM_BASE_URL
+    assert not hasattr(sentinel.CdseClient, "fetch_terrain_tile")
+
+
+def test_la_codificacion_de_altura_vuelve_a_dar_la_altura():
+    """Terrain-RGB mal codificado no falla: pinta un relieve equivocado.
+
+    Se comprueba el viaje de ida y vuelta con la formula que MapLibre aplica,
+    a las altitudes que de verdad hay en el AOI (Pereira esta a ~1.400 m).
+    """
+    import importlib.util
+
+    ruta = __import__("pathlib").Path(__file__).resolve().parents[1] / "scripts"
+    spec = importlib.util.spec_from_file_location("ft", ruta / "fetch_terrain.py")
+    ft = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(ft)
+    except ImportError:  # pragma: no cover - depende del extra [terrain]
+        pytest.skip('necesita pip install -e ".[terrain]"')
+
+    np = pytest.importorskip("numpy")
+    # Un DEM sintetico NO: es una rampa de prueba de la codificacion, no una
+    # capa de datos. Nunca sale de esta funcion ni toca la base.
+    alturas = np.array([[0.0, 1401.3, 2000.0], [-9999.0, 5286.0, 323.0]])
+    v = np.rint((np.maximum(alturas, 0.0) + 10000.0) / 0.1).astype("int64")
+    r, g, b = (v >> 16) & 255, (v >> 8) & 255, v & 255
+    vuelta = -10000 + (r * 65536 + g * 256 + b) * 0.1
+    assert vuelta[0][1] == pytest.approx(1401.3, abs=0.05)
+    assert vuelta[1][1] == pytest.approx(5286.0, abs=0.05)
+    # El hueco del DEM se fija en 0, no en -9999: un pozo de 10 km de hondo
+    # junto al borde del recorte se veria como un cañon que no existe.
+    assert vuelta[1][0] == pytest.approx(0.0, abs=0.05)
+
+
+def test_el_nombre_del_cog_corresponde_a_la_esquina_del_aoi():
+    import importlib.util
+
+    ruta = __import__("pathlib").Path(__file__).resolve().parents[1] / "scripts"
+    spec = importlib.util.spec_from_file_location("ft2", ruta / "fetch_terrain.py")
+    ft = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ft)
+    # El AOI cae en lat 4-5 N, lon 75-76 W.
+    assert ft.cog_name(4, -76) == "Copernicus_DSM_COG_10_N04_00_W076_00_DEM"
+    assert ft.cog_name(-1, 3) == "Copernicus_DSM_COG_10_S01_00_E003_00_DEM"
+
+
+def test_la_licencia_del_dem_obliga_a_un_aviso_que_llega_a_la_pagina(db_conn):
+    """El art. 6c del WorldDEM-30 exige publicar una exencion literal, que es
+    una obligacion DISTINTA de la nota de fuente. La capa del SGC se publico
+    incumpliendo sus terminos porque la obligacion vivia en un comentario."""
+    from uri.ingestion.loader import register_sources
+
+    register_sources(db_conn)
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "SELECT license_class::text AS lc, redistribution_allowed, share_alike, "
+            "attribution_text, liability_notice FROM rebuild_core.source_register "
+            "WHERE source_id = 'copernicus_dem'"
+        )
+        fila = cur.fetchone()
+    assert fila is not None, "el DEM no esta registrado"
+    assert fila["lc"] == "ATTRIBUTION"
+    assert fila["redistribution_allowed"] is True
+    assert fila["share_alike"] is False
+    assert "Copernicus WorldDEM-30" in fila["attribution_text"]
+    assert "do not incur any liability" in fila["liability_notice"]
+    db_conn.rollback()

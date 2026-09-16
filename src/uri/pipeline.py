@@ -52,6 +52,10 @@ def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport
     damage_version = loader.load_damage_evidence(conn, evidence, source_id="copernicus_ems")
     osm_version, osm_counts = loader.load_osm(conn, osm_path)
     context_version, context_counts = loader.load_context_layers(conn)
+    # Censo 2018 del DANE por manzana. Va ANTES de las features porque
+    # `social_vulnerability` lo lee: cargarlo despues dejaria la feature nula
+    # una corrida mas y el fallo pasaria por "el DANE no alcanza".
+    census_version, census_blocks = loader.load_census_blocks(conn)
 
     sites = loader.derive_sites(conn, damage_version)
     fused = loader.fuse_damage_evidence(conn, as_of=date(2026, 9, 15))
@@ -62,6 +66,7 @@ def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport
             "damage": damage_version,
             "osm": osm_version,
             "context": context_version,
+            "census": census_version,
         },
         counts={
             "evidence": len(evidence),
@@ -69,6 +74,7 @@ def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport
             "fused": fused,
             **osm_counts,
             **context_counts,
+            "census_blocks": census_blocks,
         },
         alerts=alerts,
     )

@@ -34,6 +34,18 @@ from datetime import date, datetime, timedelta
 SOURCE_ID = "copernicus_sentinel"
 
 
+def _assert_usable_source(source_id: str) -> None:
+    """Control C1 para una fuente cualquiera del registro.
+
+    El DEM y las escenas son fuentes DISTINTAS con licencias distintas: si el
+    terreno se colase por la comprobacion de Sentinel, una de las dos podria
+    caer a UNCLEAR sin que la otra se enterase.
+    """
+    from uri.ingestion.loader import assert_source_usable
+
+    assert_source_usable(source_id)
+
+
 def _assert_usable() -> None:
     """Control C1 de `fuentes.md` §6 — una fuente `UNCLEAR` no alimenta nada.
 
@@ -73,6 +85,35 @@ S2_BANDS = ("B02", "B03", "B04", "B08", "B11", "B12")
 #: de 20 m y el servicio las remuestrea. Pedirlas a 10 m no las mejora, pero
 #: mantiene una sola rejilla y evita alinear dos mallas a mano.
 RESOLUTION_M = 10
+
+DEM_SOURCE_ID = "copernicus_dem"
+
+#: Instancia del DEM. GLO-30 es la publica. El GLO-10 esta EXPRESAMENTE
+#: excluido de distribucion al publico por el preambulo de su licencia: subir
+#: la resolucion aqui invalida la auditoria.
+DEM_INSTANCE = "COPERNICUS_30"
+
+#: De donde sale el DEM, y por que NO de la API de proceso de CDSE.
+#:
+#: El primer intento fue pedirlo por `sh.dataspace.copernicus.eu/process/v1`,
+#: con las mismas credenciales que sirven para las escenas. Responde 403
+#: COMMON_INSUFFICIENT_PERMISSIONS: el DEM es una Copernicus Contributing
+#: Mission y no entra en el tier gratuito de Sentinel Hub. La licencia lo
+#: permite; la cuenta no llega.
+#:
+#: El registro de datos abiertos de AWS sirve el MISMO producto de forma
+#: anonima, sin credencial ninguna. La licencia auditada es la misma —lo que
+#: cambia es el transporte, no los terminos.
+DEM_BASE_URL = "https://copernicus-dem-30m.s3.amazonaws.com"
+
+#: Hasta que zoom se generan teselas. El DEM son 30 m por muestra; a z14 una
+#: tesela de 256 px cubre ~9,5 m por pixel, o sea que ya remuestrea por encima
+#: de lo que el dato tiene. Pedir z15 o z16 seria inventar detalle y multiplicar
+#: por cuatro las llamadas para no anadir informacion. MapLibre sobre-amplia
+#: sola por encima del maxzoom declarado.
+TERRAIN_MAX_ZOOM = 14
+TERRAIN_MIN_ZOOM = 11
+TILE_SIZE = 256
 
 
 class CdseAuthMissing(RuntimeError):
@@ -367,23 +408,24 @@ function setup() {
     output: { bands: 4, sampleType: "UINT8" }
   };
 }
-// Retrodispersion a dB y de ahi a 0..255. El rango -25..0 dB cubre desde el
-// agua en calma hasta el reflector urbano; recortar fuera de ahi es lo que
-// evita que un solo pixel brillante aplaste el resto de la imagen.
-function db(v) {
-  var d = 10 * Math.log(Math.max(v, 1e-6)) / Math.LN10;
-  return Math.max(0, Math.min(255, Math.round((d + 25) / 25 * 255)));
+// Cada canal con SU rango, no uno compartido.
+//
+// Medido sobre la escena pre del AOI (percentiles 1 y 99): VV va de -16,7 a
+// +5,8 dB y VH de -24,1 a -3,9. VH esta unos 7 dB por debajo de VV siempre,
+// porque la despolarizacion devuelve menos energia que la copolarizacion.
+// Pasar los dos por un mismo rango dejaba el verde permanentemente por
+// debajo del rojo y tenia toda la imagen en magenta, en la vista y no en el
+// terreno. Con el rango propio de cada banda, la vegetacion sale verde, lo
+// construido violeta por doble rebote y el agua oscura.
+function esc(db, lo, hi) {
+  return Math.max(0, Math.min(255, Math.round((db - lo) / (hi - lo) * 255)));
 }
-// El cociente TAMBIEN en dB, que es restar. Escalarlo lineal (VV/VH va de ~2
-// a ~8) mandaba el azul al tope en casi todo el encuadre y la imagen salia
-// saturada en magenta y amarillo: bonita de lejos e ilegible de cerca.
-// La diferencia VV-VH cae entre 0 y 15 dB en superficie terrestre.
-function ratioDb(vv, vh) {
-  var d = 10 * Math.log(Math.max(vv, 1e-6) / Math.max(vh, 1e-6)) / Math.LN10;
-  return Math.max(0, Math.min(255, Math.round(d / 15 * 255)));
+function db(v) {
+  return 10 * Math.log(Math.max(v, 1e-6)) / Math.LN10;
 }
 function evaluatePixel(s) {
-  return [db(s.VV), db(s.VH), ratioDb(s.VV, s.VH), s.dataMask * 255];
+  var vv = db(s.VV), vh = db(s.VH);
+  return [esc(vv, -18, 6), esc(vh, -25, -3), esc(vv - vh, 0, 18), s.dataMask * 255];
 }"""
 
 
@@ -602,3 +644,44 @@ def select_radar(
         f"{best.orbit_direction} orbita relativa {best.relative_orbit} "
         f"({len(pool)} candidatas de {len(scenes)} halladas){constraint}"
     )
+
+
+# ── Terreno (Copernicus DEM GLO-30) ─────────────────────────────────────
+#
+# Misma API de proceso, misma credencial, otra coleccion y otra licencia.
+# La licencia del DEM NO es la de Sentinel: esta auditada aparte en
+# `db/terms/copernicus_dem_glo30_licence_20260916.txt` y obliga a un aviso de
+# no responsabilidad que Sentinel no pide.
+
+
+def tile_bounds(z: int, x: int, y: int) -> tuple[float, float, float, float]:
+    """Esquinas de una tesela XYZ en EPSG:4326."""
+    import math
+
+    n = 2.0**z
+
+    def lat(yy: float) -> float:
+        return math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * yy / n))))
+
+    return (x / n * 360.0 - 180.0, lat(y + 1), (x + 1) / n * 360.0 - 180.0, lat(y))
+
+
+def tiles_covering(
+    bbox: tuple[float, float, float, float], zoom: int
+) -> list[tuple[int, int, int]]:
+    """Teselas XYZ de un zoom que tocan el bbox."""
+    import math
+
+    min_lon, min_lat, max_lon, max_lat = bbox
+    n = 2.0**zoom
+
+    def xy(lon: float, lat: float) -> tuple[int, int]:
+        rad = math.radians(lat)
+        return (
+            int((lon + 180.0) / 360.0 * n),
+            int((1.0 - math.asinh(math.tan(rad)) / math.pi) / 2.0 * n),
+        )
+
+    x0, y0 = xy(min_lon, max_lat)
+    x1, y1 = xy(max_lon, min_lat)
+    return [(zoom, x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)]
