@@ -89,7 +89,6 @@ def main(bbox: tuple[float, float, float, float], *, dry_run: bool) -> int:
         return 2
 
     considered: list[tuple] = []
-    chosen: dict[tuple[str, str], sentinel.Scene] = {}
 
     # ── Catalogo ────────────────────────────────────────────────────────
     found: dict[tuple[str, str], list[sentinel.Scene]] = {}
@@ -108,36 +107,15 @@ def main(bbox: tuple[float, float, float, float], *, dry_run: bool) -> int:
 
     # ── Seleccion ───────────────────────────────────────────────────────
     print("\nseleccion")
-    for label, _ in WINDOWS:
-        try:
-            scene, reason = sentinel.select_optical(found[(sentinel.S2, label)], window_label=label)
-        except sentinel.NoUsableScene as exc:
-            print(f"   {sentinel.S2} {label}: SIN ESCENA — {exc}")
-            continue
-        chosen[(sentinel.S2, label)] = scene
-        print(f"   {sentinel.S2} {label}: {scene.scene_id[:48]} — {reason}")
-
-    # La post de radar se ata a la geometria de la pre; sin eso la diferencia
-    # mediria el angulo de observacion.
-    radar_pre = None
-    for label, _ in WINDOWS:
-        try:
-            scene, reason = sentinel.select_radar(
-                found[(sentinel.S1, label)],
-                window_label=label,
-                match=radar_pre if label == "POST" else None,
-            )
-        except sentinel.NoUsableScene as exc:
-            print(f"   {sentinel.S1} {label}: SIN ESCENA — {exc}")
-            continue
-        if label == "PRE":
-            radar_pre = scene
-        chosen[(sentinel.S1, label)] = scene
-        print(f"   {sentinel.S1} {label}: {scene.scene_id[:48]} — {reason}")
+    chosen, avisos = sentinel.select_pairs(found, windows=tuple(w[0] for w in WINDOWS))
+    for aviso in avisos:
+        print(f"   {aviso}")
+    for (collection, label), (scene, reason) in sorted(chosen.items()):
+        print(f"   {collection} {label}: {scene.scene_id[:48]} — {reason}")
 
     # ── Recorte del AOI ─────────────────────────────────────────────────
     for (collection, label), scenes in found.items():
-        best = chosen.get((collection, label))
+        best, best_reason = chosen.get((collection, label), (None, None))
         for scene in scenes:
             selected = best is not None and scene.scene_id == best.scene_id
             params: dict = {}
@@ -153,14 +131,7 @@ def main(bbox: tuple[float, float, float, float], *, dry_run: bool) -> int:
                     sentinel.S1_BANDS if collection == sentinel.S1 else sentinel.S2_BANDS
                 )
                 print(f"   escrito {path.relative_to(ROOT)}  ({len(content) / 1024:.0f} KB)")
-            reason = None
-            if selected:
-                reason = (
-                    sentinel.select_optical(scenes, window_label=label)[1]
-                    if collection == sentinel.S2
-                    else sentinel.select_radar(scenes, window_label=label)[1]
-                )
-            considered.append((scene, label, selected, reason, params))
+            considered.append((scene, label, selected, best_reason if selected else None, params))
 
     if not considered:
         print("\nEl catalogo no devolvio ninguna escena que cubra el AOI.", file=sys.stderr)

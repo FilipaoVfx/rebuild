@@ -52,6 +52,10 @@ TOKEN_URL = (
 CATALOG_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/search"
 PROCESS_URL = "https://sh.dataspace.copernicus.eu/process/v1"
 
+#: El catálogo habla STAC y negocia el tipo de contenido: sin `geo+json`
+#: en el Accept responde 406 sin llegar a leer la consulta.
+STAC_ACCEPT = "application/geo+json, application/json;q=0.9"
+
 S1 = "sentinel-1-grd"
 S2 = "sentinel-2-l2a"
 
@@ -201,7 +205,9 @@ class CdseClient:
             "datetime": f"{start.isoformat()}T00:00:00Z/{end.isoformat()}T23:59:59Z",
             "limit": limit,
         }
-        body = json.loads(self._post(CATALOG_URL, payload, accept="application/json"))
+        # El catálogo es STAC: responde `application/geo+json`. Pedir
+        # `application/json` a secas devuelve 406 antes de mirar la consulta.
+        body = json.loads(self._post(CATALOG_URL, payload, accept=STAC_ACCEPT))
         return [_scene_from_feature(feature, collection) for feature in body.get("features", [])]
 
     # ── Proceso ─────────────────────────────────────────────────────────
@@ -436,6 +442,45 @@ def select_optical(scenes: list[Scene], *, window_label: str) -> tuple[Scene, st
         f"de {len(scenes)} halladas); a {abs((best.acquisition.date() - EVENT_DATE).days)} "
         f"dias del evento"
     )
+
+
+def select_pairs(
+    found: dict[tuple[str, str], list[Scene]], *, windows: tuple[str, ...] = ("PRE", "POST")
+) -> tuple[dict[tuple[str, str], tuple[Scene, str]], list[str]]:
+    """Elige la escena de cada colección y ventana, con su motivo.
+
+    Devuelve `(elegidas, avisos)`. El motivo sale de la misma llamada que
+    eligió la escena y no se recalcula después: la selección de radar depende
+    de la escena pre, así que recalcularla sin ese contexto describe una
+    escena distinta de la que quedó marcada. Esa fila diría, con toda la
+    apariencia de procedencia, por qué se eligió algo que no se eligió.
+    """
+    chosen: dict[tuple[str, str], tuple[Scene, str]] = {}
+    warnings: list[str] = []
+
+    for label in windows:
+        try:
+            chosen[(S2, label)] = select_optical(found.get((S2, label), []), window_label=label)
+        except NoUsableScene as exc:
+            warnings.append(f"{S2} {label}: SIN ESCENA — {exc}")
+
+    # La post de radar se ata a la geometría de la pre.
+    radar_pre: Scene | None = None
+    for label in windows:
+        try:
+            scene, reason = select_radar(
+                found.get((S1, label), []),
+                window_label=label,
+                match=radar_pre if label != windows[0] else None,
+            )
+        except NoUsableScene as exc:
+            warnings.append(f"{S1} {label}: SIN ESCENA — {exc}")
+            continue
+        if label == windows[0]:
+            radar_pre = scene
+        chosen[(S1, label)] = (scene, reason)
+
+    return chosen, warnings
 
 
 def select_radar(

@@ -335,3 +335,137 @@ def test_la_base_rechaza_una_escena_de_version_sintetica(db_conn):
     with pytest.raises(psycopg.errors.RaiseException, match="ADR-17"), db_conn.cursor() as cur:
         insertar_escena(cur, sintetica, scene_id="S2_SINTETICA")
     db_conn.rollback()
+
+
+# ── El motivo tiene que describir la escena que quedó elegida ────────────
+
+
+def test_el_motivo_guardado_describe_la_escena_elegida_y_no_otra():
+    """El motivo sale de la llamada que eligió, no de una recalculada después.
+
+    La selección de radar depende de la escena pre. Recalcular el motivo sin
+    ese contexto elige la escena más cercana al evento sin mirar la geometría
+    y devuelve SU motivo, que se guardaría junto a una escena distinta. La
+    fila diría, con toda la apariencia de procedencia, por qué se eligió algo
+    que no se eligió.
+    """
+    pre = scene(
+        "s1_pre", collection=sentinel.S1, cloud=None, day=8, orbit="DESCENDING", relative_orbit=142
+    )
+    # La más cercana al evento va por otra órbita: es la que un recálculo sin
+    # contexto habría descrito.
+    otra_geometria = scene(
+        "s1_post_cerca",
+        collection=sentinel.S1,
+        cloud=None,
+        day=11,
+        orbit="ASCENDING",
+        relative_orbit=48,
+    )
+    compatible = scene(
+        "s1_post_igual",
+        collection=sentinel.S1,
+        cloud=None,
+        day=14,
+        orbit="DESCENDING",
+        relative_orbit=142,
+    )
+    found = {
+        (sentinel.S1, "PRE"): [pre],
+        (sentinel.S1, "POST"): [otra_geometria, compatible],
+        (sentinel.S2, "PRE"): [scene("s2_pre", cloud=10.0, day=8)],
+        (sentinel.S2, "POST"): [scene("s2_post", cloud=20.0, day=14)],
+    }
+    chosen, avisos = sentinel.select_pairs(found)
+    assert avisos == []
+
+    elegida, razon = chosen[(sentinel.S1, "POST")]
+    assert elegida.scene_id == "s1_post_igual"
+    # El motivo nombra la geometría de la elegida, no la de la descartada.
+    assert "DESCENDING" in razon and "142" in razon
+    assert "ASCENDING" not in razon and "48" not in razon
+
+
+def test_una_ventana_sin_escena_utilizable_avisa_sin_tumbar_las_demas():
+    found = {
+        (sentinel.S2, "PRE"): [scene("nublada", cloud=99.0)],
+        (sentinel.S2, "POST"): [scene("despejada", cloud=8.0)],
+        (sentinel.S1, "PRE"): [scene("radar", collection=sentinel.S1, cloud=None)],
+        (sentinel.S1, "POST"): [scene("radar_post", collection=sentinel.S1, cloud=None, day=14)],
+    }
+    chosen, avisos = sentinel.select_pairs(found)
+    assert (sentinel.S2, "PRE") not in chosen
+    assert any("SIN ESCENA" in a and sentinel.S2 in a for a in avisos)
+    # Las otras tres ventanas siguen resolviéndose.
+    assert len(chosen) == 3
+
+
+# ── Re-catalogar no puede perder lo que ya se descargó ───────────────────
+
+
+def _considerada(scene_obj, window, selected, reason, params):
+    return (scene_obj, window, selected, reason, params)
+
+
+def test_recatalogar_actualiza_la_escena_en_vez_de_ignorarla(db_conn):
+    """Con `DO NOTHING` la segunda corrida descargaba y descartaba la fila.
+
+    El recorte quedaba en disco y la base seguía diciendo que esa escena
+    nunca se procesó: dos versiones de la verdad, y la corrida terminaba en
+    verde.
+    """
+    from uri.ingestion.loader import record_satellite_scenes, register_sources
+
+    register_sources(db_conn)
+    s1 = scene("S2A_RECATALOGO", cloud=15.0, day=7)
+    manifest = {"prueba": "recatalogo"}
+
+    # Primera pasada: catálogo en seco, sin parámetros de recorte.
+    record_satellite_scenes(
+        db_conn, [_considerada(s1, "PRE", True, "la menos nublada", {})], manifest=manifest
+    )
+    # Segunda: la descarga real, con la procedencia del recorte.
+    params = {"width": 560, "height": 390, "asset_path": "data/sentinel/s2/pre/x.tif"}
+    _, escritas = record_satellite_scenes(
+        db_conn,
+        [_considerada(s1, "PRE", True, "la menos nublada", params)],
+        manifest={"prueba": "recatalogo-real"},
+    )
+    assert escritas == 1, "la segunda pasada no puede descartarse en silencio"
+
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "SELECT asset_path, request_parameters, processing_date "
+            "FROM rebuild_core.satellite_scene WHERE scene_id = 'S2A_RECATALOGO'"
+        )
+        fila = cur.fetchone()
+    assert fila["asset_path"] == "data/sentinel/s2/pre/x.tif"
+    assert fila["request_parameters"]["width"] == 560
+    assert fila["processing_date"] is not None
+    db_conn.rollback()
+
+
+def test_un_catalogo_en_seco_no_borra_la_procedencia_de_un_recorte_hecho(db_conn):
+    """Correr --dry-run después de una descarga dejaría el GeoTIFF en disco y
+    la fila sin nada que diga con qué parámetros se produjo."""
+    from uri.ingestion.loader import record_satellite_scenes, register_sources
+
+    register_sources(db_conn)
+    s1 = scene("S2A_SECO_DESPUES", cloud=15.0, day=7)
+    params = {"width": 560, "height": 390, "asset_path": "data/sentinel/s2/pre/y.tif"}
+    record_satellite_scenes(
+        db_conn, [_considerada(s1, "PRE", True, "motivo", params)], manifest={"p": 1}
+    )
+    record_satellite_scenes(
+        db_conn, [_considerada(s1, "PRE", True, "motivo", {})], manifest={"p": 2}
+    )
+
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "SELECT asset_path, request_parameters FROM rebuild_core.satellite_scene "
+            "WHERE scene_id = 'S2A_SECO_DESPUES'"
+        )
+        fila = cur.fetchone()
+    assert fila["asset_path"] == "data/sentinel/s2/pre/y.tif"
+    assert fila["request_parameters"]["width"] == 560
+    db_conn.rollback()
