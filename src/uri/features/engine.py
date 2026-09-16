@@ -129,11 +129,16 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
                 -- normalizada contra un techo de 12 km/km2 de via.
                 least(1.0, COALESCE(net.road_m, 0) / 12000.0),
 
-                -- Sin indice de vulnerabilidad social real (DANE no
-                -- alcanzable, OI-F4) la feature queda nula y se declara. El
-                -- 0.5 que habia antes era un valor inventado con aspecto de
-                -- medicion.
-                NULL,
+                -- Vulnerabilidad social MEDIDA, desde el Censo 2018 del DANE
+                -- por manzana. Ponderada por poblacion de la manzana, no por
+                -- su area: una manzana de 400 habitantes pesa lo que pesa su
+                -- gente, no lo que ocupa en el mapa.
+                --
+                -- Sigue siendo NULL donde no hay manzana con dato publicable,
+                -- que es la unica respuesta honesta: la supresion de FR-PII-03
+                -- deja 472 manzanas sin atributos, y rellenarlas con un cero
+                -- las haria pasar por las menos vulnerables del AOI.
+                vuln.value,
 
                 -- Densidad construida desde huellas reales de Microsoft, no
                 -- desde un conteo de segmentos de via. Techo: 0,35 de suelo
@@ -173,9 +178,12 @@ def compute_features(conn: psycopg.Connection, *, feature_version: str, data_ver
                                  ST_Transform(s.centroid, %(srid)s), 200)
             ) built ON true
             LEFT JOIN LATERAL (
-                SELECT sum(p.vulnerability * p.population) / NULLIF(sum(p.population), 0) AS value
-                FROM rebuild_core.population_cell p
-                WHERE c10.geometry IS NOT NULL AND ST_Intersects(p.geometry, c10.geometry)
+                SELECT sum(cb.vulnerability * cb.population)
+                       / NULLIF(sum(cb.population), 0) AS value
+                FROM rebuild_core.census_block cb
+                WHERE c10.geometry IS NOT NULL
+                  AND cb.vulnerability IS NOT NULL
+                  AND ST_Intersects(cb.geometry, c10.geometry)
             ) vuln ON true
             LEFT JOIN LATERAL (
                 SELECT count(*) AS n FROM rebuild_osm_raw.facility f

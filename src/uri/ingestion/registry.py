@@ -117,6 +117,49 @@ SOURCES: list[SourceRegistration] = [
         ),
     ),
     SourceRegistration(
+        source_id="dane_censo_2018",
+        display_name="DANE — Censo Nacional de Población y Vivienda 2018 (por manzana)",
+        tier="A",
+        source_url="https://www.arcgis.com/home/item.html?id=340378a6077c4a558847d5e12ceaaeb0",
+        access_method="api",
+        spatial_reference="EPSG:4326",
+        # Ley 1712 de 2014, esquema Open Data. La frase operativa concede los
+        # cuatro usos de forma expresa y la obligacion que impone es la
+        # atribucion, no una prohibicion. Mismo regimen que datos.gov.co.
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="Open Data — Ley 1712 de 2014 (acceso a la informacion publica)",
+        license_url="https://www.arcgis.com/home/item.html?id=340378a6077c4a558847d5e12ceaaeb0",
+        # El autor es el DANE. Esri Colombia es la VIA, y la licencia prohibe
+        # expresamente presentarla como participe o patrocinadora, asi que se
+        # cita por lo que es y no mas.
+        attribution_text=(
+            "DANE — Censo Nacional de Población y Vivienda 2018. "
+            "Acceso vía Esri Colombia (Living Atlas)"
+        ),
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        share_alike=False,
+        quality_score=0.90,
+        terms_verified_at=date(2026, 9, 16),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/dane_censo2018_manzanas_20260916.txt",
+        verification_notes=(
+            "Aviso legal leido verbatim; copia en "
+            "db/terms/dane_censo2018_manzanas_20260916.txt. PASA como "
+            "ATTRIBUTION redistribuible, sin restriccion comercial y sin "
+            "share-alike. EL PROVEEDOR ES EL DANE, NO ESRI: es la trampa del "
+            "SGC al reves —alli el agregador escondia a su proveedor— asi que "
+            "la fuente se registra a nombre del productor y Esri Colombia "
+            "queda como via de acceso. La licencia ademas PROHIBE usar el "
+            "nombre de Esri Colombia como participe, patrocinador o promotor. "
+            "PII: son conteos por manzana, no microdato, asi que CON-04 y "
+            "FR-PII-01 se cumplen; pero FR-PII-03 exige umbral, y el riesgo "
+            "es real — hay manzanas de 15 personas en el AOI y una de 3 con "
+            "un dato de condicion fisica senala a alguien concreto. El "
+            "adaptador suprime los atributos sensibles bajo umbral."
+        ),
+    ),
+    SourceRegistration(
         source_id="copernicus_dem",
         display_name="Copernicus DEM GLO-30 (WorldDEM-30)",
         tier="A",

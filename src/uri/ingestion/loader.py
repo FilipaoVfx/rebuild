@@ -740,3 +740,75 @@ def assert_source_usable(source_id: str) -> None:
             f"{source_id}: licencia UNCLEAR. No puede alimentar una feature "
             "hasta que la auditoria de fuentes.md §10 la clasifique."
         )
+
+
+# ── Manzanas censales del DANE ──────────────────────────────────────────
+
+
+def load_census_blocks(conn: psycopg.Connection) -> tuple[int, int]:
+    """Carga el Censo 2018 por manzana y devuelve (data_version, filas).
+
+    La supresion de `FR-PII-03` ya viene aplicada por el adaptador; la base la
+    vuelve a exigir con un CHECK. Es deliberado tenerlo en los dos sitios: el
+    adaptador impide que el dato sensible entre, y el CHECK impide que entre
+    por otra puerta que alguien anada despues.
+    """
+    import json as _json
+
+    from uri.ingestion.adapters import dane
+
+    assert_source_usable(dane.SOURCE_ID)
+    manzanas = dane.load_blocks()
+
+    content_hash = hashlib.sha256(
+        _json.dumps(sorted(m["block_id"] or "" for m in manzanas), sort_keys=True).encode()
+    ).hexdigest()
+    version = _publish_version(
+        conn,
+        source_id=dane.SOURCE_ID,
+        record_count=len(manzanas),
+        content_hash=content_hash,
+        is_synthetic=False,
+        manifest={
+            "censo": 2018,
+            "agregacion": "manzana",
+            "aoi_bbox": list(PEREIRA_BBOX),
+            "poblacion_total": sum(m["population"] for m in manzanas),
+            "umbral_pii": dane.PII_THRESHOLD,
+            "manzanas_suprimidas": sum(1 for m in manzanas if m["pii_suppressed"]),
+            "metodo_vulnerabilidad": (
+                "Media de cuatro indicadores normalizados: estrato invertido, "
+                "analfabetismo, mayores de 70 y condicion fisica. Pesos iguales "
+                "por decision explicita del proyecto. NO es un indice oficial "
+                "del DANE ni esta validado contra nada."
+            ),
+            "limitacion": (
+                "Censo de 2018 sobre un sismo de 2026: la poblacion de una "
+                "manzana pudo cambiar en ocho anos, y el propio sismo la "
+                "cambio. Es la mejor medicion disponible, no una medicion "
+                "del dia del evento."
+            ),
+        },
+    )
+
+    escritas = 0
+    with conn.cursor() as cur:
+        for m in manzanas:
+            cur.execute(
+                """
+                INSERT INTO rebuild_core.census_block (
+                    block_id, municipality, geometry, population, illiterate,
+                    over_70, disabled, no_education, stratum, vulnerability,
+                    pii_suppressed, data_version
+                ) VALUES (
+                    %(block_id)s, %(municipality)s, ST_GeomFromGeoJSON(%(geometry)s),
+                    %(population)s, %(illiterate)s, %(over_70)s, %(disabled)s,
+                    %(no_education)s, %(stratum)s, %(vulnerability)s,
+                    %(pii_suppressed)s, %(version)s
+                )
+                ON CONFLICT (block_id, data_version) DO NOTHING
+                """,
+                {**m, "version": version},
+            )
+            escritas += cur.rowcount
+    return version, escritas
