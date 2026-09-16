@@ -93,6 +93,9 @@
       <button role="tab" aria-selected="false" data-panel="p-sites">
         Sitios <span class="count" id="count-sites"></span>
       </button>
+      <button role="tab" aria-selected="false" data-panel="p-opportunities">
+        Oportunidades <span class="count" id="opp-count"></span>
+      </button>
       <button role="tab" aria-selected="false" data-panel="p-portfolio">
         Portafolio <span class="count" id="count-portfolio"></span>
       </button>
@@ -103,6 +106,13 @@
     </nav>
 
     <div class="panel" id="p-map">
+      <!-- La barra de contexto va EN FLUJO, encima del mapa, y no flotando
+           sobre el: superpuesta chocaba con el aviso de capas y con el panel
+           de la derecha, y solo asomaban dos botones. -->
+      <div class="context-bar" id="context-bar">
+        <div class="context-buttons"></div>
+        <p class="context-question" id="context-question"></p>
+      </div>
       <div class="map-wrap">
         <div id="map"></div>
         <div class="map-panel" id="layer-control"></div>
@@ -118,6 +128,14 @@
       </div>
     </div>
     <div class="panel" id="p-sites" hidden><div class="loading">Cargando sitios…</div></div>
+    <div class="panel" id="p-opportunities" hidden>
+      <p class="note">
+        Cada oportunidad combina <strong>lugar + problema + evidencia +
+        intervención + impacto + viabilidad</strong>. El score ordena la lista;
+        lo que se lee primero es el problema.
+      </p>
+      <div id="opportunity-list" class="opp-list"></div>
+    </div>
     <div class="panel" id="p-portfolio" hidden>
       <div class="portfolio"><p class="loading">Ejecute una optimización para ver el portafolio.</p></div>
     </div>

@@ -130,6 +130,11 @@ def main(profile: str) -> int:
         details[site["site_id"]] = client.get(f"/api/v1/sites/{site['site_id']}").json()
     write(data / "details.json", details)
 
+    # Las oportunidades son la entidad central del producto: la vista las
+    # consume sin saber que la poblacion viene del DANE, el dano de Copernicus
+    # y la red peatonal de OSM.
+    write(data / "opportunities.json", client.get("/api/v1/opportunities").json())
+
     write(data / "sources.json", client.get("/api/v1/data-sources").json())
     write(data / "alerts.json", client.get("/api/v1/quality/alerts").json())
 

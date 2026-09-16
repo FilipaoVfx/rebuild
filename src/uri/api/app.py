@@ -25,8 +25,10 @@ from uri.contracts import (
     LayerProvenance,
     Provenance,
 )
+from uri.contracts import opportunity as opportunity_contracts
 from uri.contracts.enums import PROFILE_ALLOWS, ExportProfile, LicenseClass
 from uri.db import api_connection, close_pool, fetch_all, fetch_one, open_pool
+from uri.opportunities import generate_opportunities
 from uri.reporting.exports import (
     ExportBlocked,
     attribution_block,
@@ -866,5 +868,85 @@ def layer_geojson(conn: Conn, layer: str) -> Response:
     )
 
 
+@app.get(f"{API_PREFIX}/opportunities")
+def list_opportunities(conn: Conn, limit: int = Query(200, le=500)) -> Response:
+    """Oportunidades de recuperación: la entidad central del producto.
+
+    Un `site` dice dónde. Una oportunidad dice qué problema hay ahí, qué lo
+    sustenta, qué se podría hacer, a quién beneficiaría y si es viable — que
+    es lo que hace falta para decidir.
+
+    Desacopla la UI de las tablas: quien consume esto no necesita saber que la
+    población viene de manzanas del DANE, el daño de Copernicus EMS y la red
+    peatonal de OSM.
+    """
+    rows = fetch_all(
+        conn,
+        """
+        SELECT s.site_id, s.area_m2, s.evidence_count,
+               ST_X(s.centroid) AS lon, ST_Y(s.centroid) AS lat,
+               fu.damage_class::text AS damage_class, fu.damage_confidence,
+               fu.independent_sources,
+               f.population_10min, f.park_deficit, f.social_vulnerability,
+               f.risk_score, f.land_use_compatibility, f.pedestrian_accessibility,
+               f.building_density, f.school_access, f.health_access,
+               f.community_access, f.site_area AS site_area_m2
+        FROM rebuild_core.site s
+        JOIN rebuild_analytics.site_feature f USING (site_id)
+        LEFT JOIN rebuild_core.site_damage_fusion fu USING (site_id)
+        WHERE s.state = 'CANDIDATE'
+        ORDER BY s.site_id
+        LIMIT %s
+        """,
+        (limit,),
+    )
+
+    sitios = []
+    for row in rows:
+        clases = {}
+        if row.get("damage_class"):
+            clases[row["damage_class"]] = int(row.get("evidence_count") or 0)
+        sitios.append(
+            {
+                "site_id": row["site_id"],
+                "features": {k: row.get(k) for k in row if k != "site_id"},
+                "evidence": opportunity_contracts.EvidenceSummary(
+                    damage_observations=int(row.get("evidence_count") or 0),
+                    damage_classes=clases,
+                    source_ids=["copernicus_ems"],
+                    agreement=(
+                        float(row["damage_confidence"])
+                        if row.get("damage_confidence") is not None
+                        else None
+                    ),
+                ),
+                "provenance": {"feature_version": pipeline.FEATURE_VERSION},
+            }
+        )
+
+    oportunidades = generate_opportunities(sitios)
+    # Se ordenan por idoneidad, pero lo que la vista muestra primero es el
+    # problema: el score ordena y no titula.
+    oportunidades.sort(key=lambda o: o.suitability, reverse=True)
+
+    centros = {r["site_id"]: (r["lon"], r["lat"]) for r in rows}
+    payload = []
+    for o in oportunidades:
+        item = o.model_dump(mode="json")
+        lon, lat = centros.get(o.site_id, (None, None))
+        item["lon"], item["lat"] = lon, lat
+        item["unknowns"] = o.unknowns
+        item["blocked"] = o.blocked
+        payload.append(item)
+
+    return Response(
+        content=json.dumps({"opportunities": payload}, ensure_ascii=False),
+        media_type="application/json",
+    )
+
+
+# El mount de la raiz va SIEMPRE el ultimo: sirve el visor en '/' y se
+# traga cualquier ruta que se registre por debajo. Un endpoint nuevo
+# escrito detras responde 404 sin que nada falle ni avise.
 if VIEWER_DIR.exists():
     app.mount("/", StaticFiles(directory=VIEWER_DIR, html=True), name="viewer")

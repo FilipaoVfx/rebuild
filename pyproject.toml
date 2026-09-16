@@ -63,6 +63,7 @@ layers = [
     "uri.api",
     "uri.reporting",
     "uri.optimizer",
+    "uri.opportunities",
     "uri.scoring",
     "uri.constraints",
     "uri.features",
