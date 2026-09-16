@@ -218,6 +218,7 @@ class CdseClient:
         *,
         evalscript: str,
         resolution_m: int = RESOLUTION_M,
+        image_format: str = "image/tiff",
     ) -> tuple[bytes, dict]:
         """Recorta el AOI de una escena y lo devuelve como GeoTIFF.
 
@@ -251,11 +252,11 @@ class CdseClient:
             "output": {
                 "width": width,
                 "height": height,
-                "responses": [{"identifier": "default", "format": {"type": "image/tiff"}}],
+                "responses": [{"identifier": "default", "format": {"type": image_format}}],
             },
             "evalscript": evalscript,
         }
-        content = self._post(PROCESS_URL, payload, accept="image/tiff")
+        content = self._post(PROCESS_URL, payload, accept=image_format)
         # La procedencia NO lleva credenciales. Guarda qué se pidió.
         request_parameters = {
             "url": PROCESS_URL,
@@ -267,6 +268,7 @@ class CdseClient:
             "scene_id": scene.scene_id,
             "time_range": payload["input"]["data"][0]["dataFilter"]["timeRange"],
             "evalscript_sha256": _sha256(evalscript),
+            "format": image_format,
         }
         return content, request_parameters
 
@@ -307,6 +309,79 @@ function evaluatePixel(s) {{
 
 
 EVALSCRIPTS = {S1: s1_evalscript, S2: s2_evalscript}
+
+
+# ── Evalscripts de VISTA ────────────────────────────────────────────────
+#
+# Producto SEPARADO del de análisis, y a propósito. El GeoTIFF float32 de
+# arriba es el que alimenta los índices; estos emiten PNG de 8 bits, ya
+# estirados para que un ojo humano distinga algo. Ese estiramiento es una
+# decisión de presentación: cambia cómo se ve y no cambia lo que se mide.
+#
+# Mezclarlos sería el error clásico. Quien mirase una imagen realzada y
+# creyera estar viendo el dato mediría contraste inventado por la rampa.
+# Por eso viven en funciones distintas, con su propio sha256 en la
+# procedencia, y el de análisis nunca se reescala.
+#
+# Lo que estas imágenes muestran es REFLECTANCIA y RETRODISPERSIÓN. Una
+# mancha oscura no es un edificio caído: puede ser sombra, agua, asfalto
+# nuevo o un tejado repintado. Siguen sin ser daño.
+
+#: Ganancia de la composición verdadero color. 2.5 es el valor que usa el
+#: propio Sentinel Hub en sus ejemplos: la reflectancia de superficie rara
+#: vez pasa de 0.4, así que sin ganancia la imagen sale casi negra.
+TRUE_COLOR_GAIN = 2.5
+
+
+def s2_preview_evalscript() -> str:
+    """Verdadero color: B04 rojo, B03 verde, B02 azul."""
+    return f"""//VERSION=3
+function setup() {{
+  return {{
+    input: [{{ bands: ["B04", "B03", "B02", "dataMask"] }}],
+    output: {{ bands: 4, sampleType: "UINT8" }}
+  }};
+}}
+function stretch(v) {{
+  return Math.max(0, Math.min(255, Math.round(v * {TRUE_COLOR_GAIN} * 255)));
+}}
+function evaluatePixel(s) {{
+  // El canal alfa viene de dataMask: fuera de la huella de la escena el
+  // pixel es transparente en vez de negro, que se leeria como suelo oscuro.
+  return [stretch(s.B04), stretch(s.B03), stretch(s.B02), s.dataMask * 255];
+}}"""
+
+
+def s1_preview_evalscript() -> str:
+    """Composición de radar: VV en rojo, VH en verde, VV/VH en azul.
+
+    Es la composición habitual de S1 porque separa lo que interesa: lo
+    construido devuelve mucho en VV, la vegetación despolariza y sube en VH,
+    y el cociente marca el agua y el suelo desnudo. En pantalla: rosados y
+    blancos para lo urbano, verdes para vegetación, oscuro para agua.
+    """
+    return """//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: ["VV", "VH", "dataMask"] }],
+    output: { bands: 4, sampleType: "UINT8" }
+  };
+}
+// Retrodispersion a dB y de ahi a 0..255. El rango -25..0 dB cubre desde el
+// agua en calma hasta el reflector urbano; recortar fuera de ahi es lo que
+// evita que un solo pixel brillante aplaste el resto de la imagen.
+function db(v) {
+  var d = 10 * Math.log(Math.max(v, 1e-6)) / Math.LN10;
+  return Math.max(0, Math.min(255, Math.round((d + 25) / 25 * 255)));
+}
+function evaluatePixel(s) {
+  var ratio = s.VV / Math.max(s.VH, 1e-6);
+  return [db(s.VV), db(s.VH), Math.max(0, Math.min(255, Math.round(ratio * 25))),
+          s.dataMask * 255];
+}"""
+
+
+PREVIEW_EVALSCRIPTS = {S1: s1_preview_evalscript, S2: s2_preview_evalscript}
 
 
 # ── Utilidades ──────────────────────────────────────────────────────────
