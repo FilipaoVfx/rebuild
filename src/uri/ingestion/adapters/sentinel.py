@@ -444,6 +444,45 @@ def select_optical(scenes: list[Scene], *, window_label: str) -> tuple[Scene, st
     )
 
 
+def select_pairs(
+    found: dict[tuple[str, str], list[Scene]], *, windows: tuple[str, ...] = ("PRE", "POST")
+) -> tuple[dict[tuple[str, str], tuple[Scene, str]], list[str]]:
+    """Elige la escena de cada colección y ventana, con su motivo.
+
+    Devuelve `(elegidas, avisos)`. El motivo sale de la misma llamada que
+    eligió la escena y no se recalcula después: la selección de radar depende
+    de la escena pre, así que recalcularla sin ese contexto describe una
+    escena distinta de la que quedó marcada. Esa fila diría, con toda la
+    apariencia de procedencia, por qué se eligió algo que no se eligió.
+    """
+    chosen: dict[tuple[str, str], tuple[Scene, str]] = {}
+    warnings: list[str] = []
+
+    for label in windows:
+        try:
+            chosen[(S2, label)] = select_optical(found.get((S2, label), []), window_label=label)
+        except NoUsableScene as exc:
+            warnings.append(f"{S2} {label}: SIN ESCENA — {exc}")
+
+    # La post de radar se ata a la geometría de la pre.
+    radar_pre: Scene | None = None
+    for label in windows:
+        try:
+            scene, reason = select_radar(
+                found.get((S1, label), []),
+                window_label=label,
+                match=radar_pre if label != windows[0] else None,
+            )
+        except NoUsableScene as exc:
+            warnings.append(f"{S1} {label}: SIN ESCENA — {exc}")
+            continue
+        if label == windows[0]:
+            radar_pre = scene
+        chosen[(S1, label)] = (scene, reason)
+
+    return chosen, warnings
+
+
 def select_radar(
     scenes: list[Scene], *, window_label: str, match: Scene | None = None
 ) -> tuple[Scene, str]:

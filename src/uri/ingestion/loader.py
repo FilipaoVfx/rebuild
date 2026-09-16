@@ -622,6 +622,11 @@ def record_satellite_scenes(
     puede auditar; sin ellas es una afirmacion sin respaldo.
 
     `scenes` son tuplas (scene, collection, window, selected, reason, params).
+
+    Re-catalogar la misma escena la actualiza en vez de ignorarla. Con
+    `DO NOTHING` una segunda corrida descargaba los recortes y descartaba
+    silenciosamente la fila que los describia, dejando el disco y la base
+    contando cosas distintas.
     """
     import json as _json
 
@@ -654,7 +659,31 @@ def record_satellite_scenes(
                     %s, %s, %s, %s, ST_GeomFromGeoJSON(%s), %s, %s, %s, %s, %s,
                     %s, %s, %s::jsonb, %s, %s, %s
                 )
-                ON CONFLICT (scene_id, collection) DO NOTHING
+                ON CONFLICT (scene_id, collection) DO UPDATE SET
+                    event_window = EXCLUDED.event_window,
+                    acquisition_date = EXCLUDED.acquisition_date,
+                    footprint = EXCLUDED.footprint,
+                    cloud_cover = EXCLUDED.cloud_cover,
+                    platform = EXCLUDED.platform,
+                    processing_baseline = EXCLUDED.processing_baseline,
+                    orbit_direction = EXCLUDED.orbit_direction,
+                    relative_orbit = EXCLUDED.relative_orbit,
+                    selected = EXCLUDED.selected,
+                    selection_reason = EXCLUDED.selection_reason,
+                    data_version = EXCLUDED.data_version,
+                    -- Un catalogo en seco NO borra la procedencia de un recorte
+                    -- que si se hizo: sin esta guarda, correr --dry-run despues
+                    -- de una descarga deja el GeoTIFF en disco y la fila sin
+                    -- nada que diga con que parametros se produjo.
+                    request_parameters = CASE
+                        WHEN EXCLUDED.request_parameters <> '{}'::jsonb
+                        THEN EXCLUDED.request_parameters
+                        ELSE rebuild_core.satellite_scene.request_parameters
+                    END,
+                    asset_path = COALESCE(
+                        EXCLUDED.asset_path, rebuild_core.satellite_scene.asset_path),
+                    processing_date = COALESCE(
+                        EXCLUDED.processing_date, rebuild_core.satellite_scene.processing_date)
                 """,
                 (
                     scene.scene_id,
