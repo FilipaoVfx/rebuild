@@ -52,6 +52,10 @@ TOKEN_URL = (
 CATALOG_URL = "https://sh.dataspace.copernicus.eu/catalog/v1/search"
 PROCESS_URL = "https://sh.dataspace.copernicus.eu/process/v1"
 
+#: El catálogo habla STAC y negocia el tipo de contenido: sin `geo+json`
+#: en el Accept responde 406 sin llegar a leer la consulta.
+STAC_ACCEPT = "application/geo+json, application/json;q=0.9"
+
 S1 = "sentinel-1-grd"
 S2 = "sentinel-2-l2a"
 
@@ -201,7 +205,9 @@ class CdseClient:
             "datetime": f"{start.isoformat()}T00:00:00Z/{end.isoformat()}T23:59:59Z",
             "limit": limit,
         }
-        body = json.loads(self._post(CATALOG_URL, payload, accept="application/json"))
+        # El catálogo es STAC: responde `application/geo+json`. Pedir
+        # `application/json` a secas devuelve 406 antes de mirar la consulta.
+        body = json.loads(self._post(CATALOG_URL, payload, accept=STAC_ACCEPT))
         return [_scene_from_feature(feature, collection) for feature in body.get("features", [])]
 
     # ── Proceso ─────────────────────────────────────────────────────────
