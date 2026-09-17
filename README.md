@@ -139,6 +139,12 @@ Tres reglas gobiernan lo que la interfaz puede afirmar:
   contraste a partir de ruido.
 - **El puntaje ordena, pero no titula.** Cada tarjeta lleva el titular del
   problema; la idoneidad y la descomposición exacta viven donde se piden.
+- **El portafolio cuenta a quién no alcanza.** Las celdas que ningún proyecto
+  toca se agrupan, se ordenan por población y se pueden abrir en el mapa. Cada
+  hueco dice si **algún** candidato lo alcanzaría: sobre el AOI actual, las
+  102.285 personas no alcanzadas —el 53,8 %— están fuera del área de influencia
+  de los 115 candidatos, no solo de los 19 seleccionados. El cuello de botella
+  no es el presupuesto, es dónde se generan los sitios.
 
 Construido con React, TypeScript, Tailwind, MapLibre GL y deck.gl. Las
 dependencias entran al bundle en tiempo de construcción, así que el sitio

@@ -35,6 +35,7 @@ export function MapCanvas() {
     sites, oppBySite, layers, context, view, selectedSiteId, selectSite,
     hoverSiteId, setHoverSiteId, visibleOpportunities, scenario, coverage,
     showRelief, terrain, showTerrain, discrimination,
+    unreached, selectedClusterId, selectCluster,
   } = useStore();
 
   const mapRef = useRef<MapRef>(null);
@@ -191,6 +192,33 @@ export function MapCanvas() {
       }),
     ] : []),
 
+    ...(view === 'portafolio' && unreached.clusters.length ? [
+      new ScatterplotLayer({
+        id: 'unreached',
+        data: unreached.clusters.flatMap((c) =>
+          c.cells.map((cell) => ({ ...cell, clusterId: c.id }))),
+        getPosition: (d) => [d.lon, d.lat],
+        // Un campo, no una mancha: 1.248 celdas pintadas en grande tapan los
+        // proyectos, que son el sujeto de esta vista. El hueco se lee por
+        // extensión, no por el tamaño de cada punto.
+        getRadius: (d) => 18 + Math.sqrt(Math.max(0, d.population)) * 1.8,
+        radiusUnits: 'meters',
+        radiusMinPixels: 1,
+        radiusMaxPixels: 6,
+        stroked: false,
+        getFillColor: (d) => {
+          const activo = selectedClusterId === null || d.clusterId === selectedClusterId;
+          return activo ? [248, 113, 113, 135] : [248, 113, 113, 30];
+        },
+        pickable: true,
+        onClick: (info) => {
+          const o = info.object as { clusterId?: string } | null;
+          if (o?.clusterId) selectCluster(o.clusterId === selectedClusterId ? null : o.clusterId);
+        },
+        updateTriggers: { getFillColor: [selectedClusterId] },
+      }),
+    ] : []),
+
     ...(view === 'portafolio' && coverage ? [
       new ArcLayer({
         id: 'portfolio-arcs',
@@ -251,15 +279,26 @@ export function MapCanvas() {
   ];
 
   /* Encuadre progresivo: ciudad → sitio. */
+  const cluster = useMemo(
+    () => unreached.clusters.find((c) => c.id === selectedClusterId) ?? null,
+    [unreached.clusters, selectedClusterId],
+  );
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     if (selected) {
       map.flyTo({ center: [selected.lon, selected.lat], zoom: 16.2, duration: 850, essential: true });
+    } else if (cluster) {
+      // Un hueco es un área, no un punto: se encuadra por su extensión.
+      const [minx, miny, maxx, maxy] = cluster.bbox;
+      map.fitBounds([[minx, miny], [maxx, maxy]], {
+        padding: 90, maxZoom: 16, duration: 850, essential: true,
+      });
     } else {
       map.flyTo({ center: CENTER, zoom: 14.2, duration: 750, essential: true });
     }
-  }, [selected]);
+  }, [selected, cluster]);
 
   /* Relieve real del terreno: capa opcional, declarada como tal. */
   useEffect(() => {
@@ -321,6 +360,14 @@ export function MapCanvas() {
         html: `<b>${Math.round(c.population)} personas</b><br/>` +
           (c.covered_by ? `<span style="color:#34d399">alcanzada por ${c.covered_by}</span>`
             : '<span style="color:#8e9aab">sin proyecto que la alcance</span>'),
+        style,
+      };
+    }
+    if (layer.id === 'unreached') {
+      const c = object as unknown as { population: number; clusterId: string };
+      return {
+        html: `<b>${Math.round(c.population)} personas sin alcanzar</b><br/>` +
+          `<span style="color:#8e9aab">${c.clusterId}</span>`,
         style,
       };
     }

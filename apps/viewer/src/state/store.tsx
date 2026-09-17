@@ -6,6 +6,7 @@ import {
   IS_STATIC, loadAlerts, loadCore, loadCoverage, loadDetails, loadLayer, loadSentinel,
   loadSources, loadTerrain, type LayerName, type SentinelScene, type TerrainIndex,
 } from '../data';
+import { clusterUnreached, type UnreachedSummary } from '../lib/clusters';
 import { contextByKey, discriminationOf, type Discrimination } from '../lib/contexts';
 import type { ContextKey } from '../lib/palette';
 import type {
@@ -46,6 +47,8 @@ interface Store {
 
   visibleOpportunities: Opportunity[];
   discrimination: Discrimination;
+  unreached: UnreachedSummary;
+  selectedClusterId: string | null; selectCluster: (id: string | null) => void;
   isStatic: boolean;
 }
 
@@ -80,6 +83,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [scenarioId, setScenarioId] = useState('');
   const [showRelief, setShowRelief] = useState(false);
   const [showTerrain, setShowTerrain] = useState(false);
+  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [compare, setCompare] = useState<string[]>([]);
   const [technical, setTechnical] = useState(false);
   const [query, setQuery] = useState('');
@@ -127,6 +131,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     requestLayers(['sites', ...contextLayers(context)]);
   }, [core, context, requestLayers]);
 
+  /* La vista de portafolio pregunta si algún candidato alcanzaría cada hueco,
+     y eso se responde con los catchments, los enciendan o no los contextos. */
+  useEffect(() => {
+    if (!core || view !== 'portafolio') return;
+    requestLayers(['catchments']);
+  }, [core, view, requestLayers]);
+
   const scenario = useMemo(
     () => core?.scenarios.find((s) => s.scenario_id === scenarioId) ?? null,
     [core, scenarioId],
@@ -140,6 +151,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch(() => { if (alive) setCoverage(null); });
     return () => { alive = false; };
   }, [scenarioId]);
+
+  /* Quién queda fuera. Se calcula sobre las mismas celdas y los mismos
+     catchments que usó el optimizador, no sobre una aproximación aparte. */
+  const unreached = useMemo(
+    () => clusterUnreached(coverage?.cells ?? [], core?.sites ?? [], layers.catchments),
+    [coverage, core, layers.catchments],
+  );
 
   /* Se mide con los mismos valores que pinta el mapa, no con otros. */
   const discrimination = useMemo(() => {
@@ -211,6 +229,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     onlyBuildable, setOnlyBuildable,
     visibleOpportunities,
     discrimination,
+    unreached,
+    selectedClusterId,
+    selectCluster: (id) => { setSelectedClusterId(id); if (id) setSelectedSiteId(null); },
     isStatic: IS_STATIC,
   };
 

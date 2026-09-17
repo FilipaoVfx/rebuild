@@ -102,6 +102,26 @@ Esa tercera regla es la traducción a interfaz de «cobertura ≠ información»
 (`docs/plan/estado-actual.md` §2). Estaba medida en un documento y ahora está en
 la pantalla donde se toma la decisión.
 
+**4. El portafolio cuenta a quién NO alcanza.** Una cifra de cobertura sin su
+contracara es una métrica que solo puede halagar. La vista de portafolio agrupa
+las celdas que ningún proyecto alcanza en componentes conexas de la malla —no es
+un clustering con parámetros que ajustar, es la malla que ya existe— y las lista
+ordenadas por población, clicables.
+
+Cada hueco declara además si **algún** candidato lo alcanzaría, seleccionado o
+no, evaluando las celdas contra los mismos catchments que usó el optimizador.
+Esa distinción no es cosmética: separa un límite de presupuesto de un límite de
+generación de sitios, y son problemas distintos con dueños distintos.
+
+Sobre el AOI actual la respuesta es incómoda y por eso importa: **las 102.285
+personas no alcanzadas —el 53,8 % del AOI— están fuera del área de influencia de
+los 115 candidatos, no solo de los 19 seleccionados.** Ninguna celda, cero. Eso
+explica del todo el `stop_reason: cobertura_saturada` y reubica el cuello de
+botella: los sitios se generan donde Copernicus mapeó daño, y más de la mitad de
+la población vive fuera del alcance peatonal de todos ellos. Subir el
+presupuesto no mueve esa cifra; conseguir más evidencia o cambiar el criterio de
+generación de sitios, sí.
+
 ---
 
 ## Consecuencias
@@ -119,6 +139,11 @@ ficha. Estaban en la API y no se veían; ahora se ven cuando se piden.
 versión de scoring y las alertas de licencia están en una barra permanente, no
 en una pestaña. La atribución del mapa se construye desde `provenance`, no desde
 una constante en el código.
+
+**La cobertura deja de poder leerse sola.** «46,2 % de la población alcanzada»
+y «ninguno de los 115 candidatos alcanza al 53,8 % restante» son la misma
+medición contada entera. La segunda mitad no cabía en el visor anterior, y sin
+ella la primera invita a concluir que falta presupuesto.
 
 **El riesgo que ADR-15 señalaba no desaparece: se traslada.** Una interfaz más
 persuasiva sobre un modelo con dos ejes sin fuente puede afirmar más de lo que

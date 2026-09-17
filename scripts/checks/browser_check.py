@@ -184,6 +184,27 @@ async def main(base: str, prefix: str) -> int:
         if not proyectos:
             errors.append("el portafolio no listo proyectos")
 
+        # ── Quién queda fuera ────────────────────────────────────────────
+        #
+        # La contracara de la cifra de cobertura. Si esta lista desaparece, el
+        # visor vuelve a contar solo a quien alcanza, que es la mitad que
+        # favorece al portafolio.
+        huecos = await page.locator('[data-uri="unreached-cluster"]').count()
+        print("huecos de cobertura listados:", huecos)
+        if not huecos:
+            errors.append("el portafolio no lista la poblacion que no alcanza")
+        else:
+            primero = await page.locator('[data-uri="unreached-cluster"]').first.inner_text()
+            if "personas sin alcanzar" not in primero.lower():
+                errors.append("un hueco no reporta la poblacion que deja fuera")
+            # Un hueco tiene que decir si algun candidato lo alcanzaria: es lo
+            # que distingue un limite de presupuesto de uno de generacion de
+            # sitios, y son problemas con dueños distintos.
+            if "candidato" not in primero.lower():
+                errors.append("un hueco no dice si algun candidato lo alcanzaria")
+            await page.locator('[data-uri="unreached-cluster"]').first.click()
+            await page.wait_for_timeout(1500)
+
         # Relieve 3D: deck.gl dibuja en su propio lienzo sobre el de MapLibre.
         relieve = page.locator('[data-uri="layer-toggle"]').first
         await relieve.click()

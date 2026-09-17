@@ -1,3 +1,4 @@
+import type { UnreachedSummary } from '../lib/clusters';
 import { cop, n, pct } from '../lib/format';
 import { INTERVENTION_COLOR, rgbCss } from '../lib/palette';
 import { useStore } from '../state/store';
@@ -7,6 +8,7 @@ export function PortfolioView() {
   const {
     scenario, coverage, selectSite, selectedSiteId, setView,
     showRelief, setShowRelief, showTerrain, setShowTerrain, terrain, oppBySite,
+    unreached, selectedClusterId, selectCluster,
   } = useStore();
 
   if (!scenario) {
@@ -78,6 +80,12 @@ export function PortfolioView() {
                 value={cop(scenario.total_population ? scenario.total_cost / scenario.total_population : null)} />
         </Panel>
       </div>
+
+      <UnreachedPanel
+        unreached={unreached}
+        selectedClusterId={selectedClusterId}
+        selectCluster={selectCluster}
+      />
 
       <Panel className="p-4">
         <SectionTitle>Capas del portafolio</SectionTitle>
@@ -178,6 +186,125 @@ export function PortfolioView() {
       </Panel>
     </div>
   );
+}
+
+/**
+ * Quién queda fuera.
+ *
+ * Es la contracara de la cifra de cobertura y responde algo que el resto de la
+ * vista no puede: si un hueco está fuera del alcance de TODOS los candidatos,
+ * el cuello de botella no es el presupuesto ni el optimizador — es el paso que
+ * genera sitios, y eso tiene otro dueño y otra solución.
+ */
+function UnreachedPanel({ unreached, selectedClusterId, selectCluster }: {
+  unreached: UnreachedSummary;
+  selectedClusterId: string | null;
+  selectCluster: (id: string | null) => void;
+}) {
+  if (!unreached.clusters.length) {
+    return (
+      <Panel className="p-4">
+        <SectionTitle>Quién queda fuera</SectionTitle>
+        <div className="mt-2.5">
+          <Empty>El portafolio alcanza todas las celdas con población.</Empty>
+        </div>
+      </Panel>
+    );
+  }
+
+  const fueraDeTodo = unreached.populationOutsideEveryCatchment;
+  const share = unreached.totalPopulation ? fueraDeTodo / unreached.totalPopulation : 0;
+  const estructural = share > 0.99;
+
+  return (
+    <Panel className={estructural ? 'border-warn/30 p-4' : 'p-4'}>
+      <SectionTitle right={
+        <span className="text-[10px] text-mute-400">{unreached.clusters.length} huecos</span>
+      }>
+        Quién queda fuera
+      </SectionTitle>
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <Stat size="sm" label="Población no alcanzada" value={n(unreached.totalPopulation)}
+              tone="warn" sub={`${n(unreached.totalCells)} celdas`} />
+        <Stat size="sm" label="Fuera de todo candidato" value={n(fueraDeTodo)}
+              tone={estructural ? 'bad' : 'warn'}
+              sub={`${pct(share)} de lo no alcanzado`} />
+      </div>
+
+      {estructural ? (
+        <div className="mt-3 rounded-lg border border-bad/30 bg-bad/5 px-2.5 py-2 text-[11px] leading-snug text-bad">
+          <b>Ninguno de los {unreached.candidatesTotal} candidatos alcanza a estas personas</b>,
+          no solo los seleccionados. El límite no es el presupuesto ni el optimizador: los sitios
+          se generan donde hay evidencia de daño, y esta población vive fuera del alcance peatonal
+          de todos ellos. Ampliar la cobertura aquí exige más evidencia o otro criterio de
+          generación de sitios, no más dinero.
+        </div>
+      ) : (
+        <Note>
+          {n(unreached.totalPopulation - fueraDeTodo)} personas sí están dentro del área de
+          influencia de algún candidato no seleccionado: ese hueco sí lo cerraría más presupuesto.
+        </Note>
+      )}
+
+      <div className="mt-3 flex flex-col gap-1.5">
+        {unreached.clusters.slice(0, 12).map((c) => {
+          const alcanzable = c.populationInSomeCatchment > 0;
+          const activo = c.id === selectedClusterId;
+          return (
+            <button
+              key={c.id}
+              data-uri="unreached-cluster"
+              onClick={() => selectCluster(activo ? null : c.id)}
+              className={[
+                'flex w-full items-start gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors',
+                activo ? 'border-warn/50 bg-warn/5' : 'border-ink-700 bg-ink-850 hover:border-mute-400/40',
+              ].join(' ')}
+            >
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                    style={{ background: alcanzable ? 'var(--color-warn)' : 'var(--color-bad)' }} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12px] font-medium">
+                  {n(c.population)} personas sin alcanzar
+                </span>
+                <span className="block text-[10px] text-mute-400">
+                  {n(c.cells.length)} celdas · a {formatDistance(c.distanceToNearestSite)} del
+                  sitio más cercano
+                </span>
+                <span className="mt-0.5 block text-[10px]"
+                      style={{ color: alcanzable ? 'var(--color-warn)' : 'var(--color-bad)' }}>
+                  {alcanzable
+                    ? `${n(c.populationInSomeCatchment)} alcanzables por un candidato no seleccionado`
+                    : 'ningún candidato lo alcanza'}
+                </span>
+              </span>
+              <span className="num shrink-0 text-right text-[11px] text-mute-400">
+                {pct(c.population / unreached.totalPopulation)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {unreached.clusters.length > 12 && (
+        <p className="mt-2 text-[10px] text-mute-500">
+          y {unreached.clusters.length - 12} huecos más, todos por debajo de{' '}
+          {n(unreached.clusters[12].population)} personas.
+        </p>
+      )}
+
+      <Note>
+        Los huecos son componentes conexas de la malla de celdas que ningún proyecto alcanza, no
+        un agrupamiento con parámetros que ajustar. La distancia se mide desde el centroide
+        ponderado por población hasta el sitio candidato más cercano.
+      </Note>
+    </Panel>
+  );
+}
+
+function formatDistance(m: number): string {
+  if (!Number.isFinite(m) || m <= 0) return '—';
+  return m < 950 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`;
 }
 
 function Toggle({ checked, onChange, label, help, badge, disabled }: {
