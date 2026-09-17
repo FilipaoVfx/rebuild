@@ -29,8 +29,8 @@ Lo que ya corre: ingesta versionada con registro de licencias · fusión de
 evidencia multifuente (ADR-16) · grafo peatonal con pgRouting y catchments de
 red · restricciones duras antes del scoring · modelo ponderado con
 descomposición exacta y contrafactuales · optimizador greedy con redundancia y
-equidad · API versionada con procedencia obligatoria · visor cartográfico
-denso en datos · exportes con puerta de licencia por perfil.
+equidad · API versionada con procedencia obligatoria · visor de decisión en
+cinco vistas · exportes con puerta de licencia por perfil.
 
 123 pruebas, lint y fronteras de módulo verificadas en CI. Arranque en
 [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -106,7 +106,47 @@ que se derive será `DAMAGE_EVIDENCE`, nunca `CONFIRMED_DAMAGE`
 vacías hasta que haya credenciales: sembrarlas con escenas inventadas sería
 justo lo que ADR-17 prohíbe.
 
-La V1 **no entrega una aplicación web de propósito general**: entrega una API versionada, un paquete de evidencia exportable y un único visor cartográfico hecho a medida. El razonamiento está en [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md).
+## El visor
+
+El visor es la superficie principal del producto, junto a la API y al paquete de
+evidencia ([ADR-21](docs/adr/ADR-21-el-visor-como-superficie-principal.md), que
+deroga el recorte de pantallas de [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md)).
+Cinco vistas, una pregunta cada una:
+
+| Vista | Pregunta |
+|---|---|
+| Situación | ¿Qué está pasando en el territorio? |
+| Oportunidades | ¿Dónde podemos actuar, y por qué ahí? |
+| Escenarios | ¿Qué cambia si cambian las prioridades? |
+| Portafolio | ¿Qué combinación de proyectos tiene sentido? |
+| Evidencia | ¿En qué nos estamos basando, y qué no sabemos? |
+
+El mapa tiene seis contextos —situación, daño, necesidad, déficit, acceso,
+oportunidades— y cada uno enciende **solo** lo que responde a su pregunta,
+partiendo de todo apagado. No hay basemap de terceros: el tejido urbano se
+dibuja con las huellas de Microsoft y la malla de OSM ya versionadas, así que lo
+que se ve es dato con `data_version`, no un tile servido por otro.
+
+Tres reglas gobiernan lo que la interfaz puede afirmar:
+
+- **`UNKNOWN` tiene color propio**, ni verde ni rojo, y las condiciones sin
+  fuente se cuentan en cada ficha. Un sitio sin dato para un eje se pinta gris
+  neutro, nunca en un extremo de la rampa.
+- **Un eje cubierto puede no ordenar nada, y el visor lo dice.**
+  `pedestrian_accessibility` vale 1,0 en 112 de 115 sitios: cobertura del 100 %
+  y cero capacidad de separar. El visor mide la discriminación del eje activo y
+  cuando no ordena lo declara, además de no estirar la rampa para no fabricar
+  contraste a partir de ruido.
+- **El puntaje ordena, pero no titula.** Cada tarjeta lleva el titular del
+  problema; la idoneidad y la descomposición exacta viven donde se piden.
+
+Construido con React, TypeScript, Tailwind, MapLibre GL y deck.gl. Las
+dependencias entran al bundle en tiempo de construcción, así que el sitio
+publicado no carga ningún script de terceros.
+
+```bash
+cd apps/viewer && npm ci && npm run build
+```
 
 ## Documentación
 
@@ -139,6 +179,8 @@ La V1 **no entrega una aplicación web de propósito general**: entrega una API 
 | [ADR-17](docs/adr/ADR-17-prohibicion-de-datos-sinteticos.md) | Se prohíben los datos sintéticos, y la base lo impone |
 | [ADR-18](docs/adr/ADR-18-retirada-de-la-capa-del-sgc.md) | Se retira la capa del SGC, y la procedencia se sella por fuente |
 | [ADR-19](docs/adr/ADR-19-cambio-satelital-no-es-dano.md) | Un cambio satelital no es daño, y el esquema lo impide |
+| [ADR-20](docs/adr/ADR-20-la-oportunidad-es-la-entidad-central.md) | La oportunidad de recuperación sustituye al sitio como entidad central |
+| [ADR-21](docs/adr/ADR-21-el-visor-como-superficie-principal.md) | El visor pasa a ser la superficie principal, y se reescribe |
 
 ## Principios que gobiernan el diseño
 
@@ -155,7 +197,7 @@ La V1 **no entrega una aplicación web de propósito general**: entrega una API 
 ```
 src/uri/          contracts · ingestion · features · constraints · scoring
                   optimizer · reporting · api   (fronteras forzadas por CI)
-apps/viewer/      visor de decisión: mapa interactivo, tabla densa, detalle
+apps/viewer/      visor de decisión (React + MapLibre + deck.gl): cinco vistas
 db/migrations/    rebuild_core · rebuild_analytics · rebuild_osm_raw · rebuild_osm_derived
 scripts/          dev_db · migrate · run_pipeline · serve · build_static · checks
 docs/             producto (PRD/SRS/ARD) · planificación · ADR

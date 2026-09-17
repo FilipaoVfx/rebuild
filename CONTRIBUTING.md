@@ -12,7 +12,20 @@ export PYTHONPATH=src
 
 .venv/bin/python scripts/migrate.py --reset
 .venv/bin/python scripts/run_pipeline.py      # ingesta -> features -> score -> portafolio
+
+# El visor es una aplicación con build propio. La API monta `apps/viewer/dist`,
+# así que sin este paso `/` responde 404 y solo contesta `/api/v1`.
+cd apps/viewer && npm ci && npm run build && cd -
+
 ./scripts/serve.sh                            # API + visor en http://127.0.0.1:8099
+```
+
+Para trabajar en el visor conviene el servidor de desarrollo de Vite, que
+recarga en caliente y consulta la API del paso anterior:
+
+```bash
+cd apps/viewer && npm run dev      # http://127.0.0.1:5173
+npm run typecheck                  # lo mismo que verifica CI
 ```
 
 El pipeline completo tarda ~12 s sobre el dataset de referencia de Pereira.

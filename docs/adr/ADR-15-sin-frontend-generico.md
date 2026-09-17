@@ -1,11 +1,20 @@
 # ADR-15 — La V1 no entrega una aplicación web de propósito general
 
-**Estado:** aceptada
+**Estado:** superada en su §Decisión por [ADR-21](ADR-21-el-visor-como-superficie-principal.md)
 **Fecha:** 2026-09-13
 **Documentos padre:** PRD v1.0 §38-41, §54; SRS v0.1 §8.7; ARD v0.1 ADR-13
 **Continúa la numeración del ARD**
 
 ---
+
+> **Actualización (2026-09-17, [ADR-21](ADR-21-el-visor-como-superficie-principal.md)).**
+> La lista de pantallas prohibidas y el recorte de calendario quedan derogados:
+> el visor se reescribe en React y pasa a ser la superficie principal. Lo que
+> sobrevive es el criterio de admisión —una pantalla entra si permite una
+> decisión que el paquete de evidencia no permite— y el riesgo que este ADR
+> señaló, que no desaparece sino que se traslada a la interfaz. El argumento de
+> abajo se conserva porque explica por qué la superficie estuvo recortada hasta
+> aquí.
 
 ## Contexto
 

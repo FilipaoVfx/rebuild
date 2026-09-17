@@ -38,7 +38,7 @@ from uri.reporting.exports import (
 from uri.scoring.model import INTERVENTION_CATALOG
 
 API_PREFIX = "/api/v1"
-VIEWER_DIR = Path(__file__).resolve().parents[3] / "apps" / "viewer"
+VIEWER_DIR = Path(__file__).resolve().parents[3] / "apps" / "viewer" / "dist"
 
 
 @asynccontextmanager

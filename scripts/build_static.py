@@ -5,6 +5,10 @@ GitHub Pages sirve archivos, no procesos: no hay optimizador que correr ni
 consultas que filtrar. El paquete vuelca lo que la API devolveria y el visor
 lo consume en modo estatico.
 
+El visor se construye aparte (`cd apps/viewer && npm run build`) y este script
+empaqueta su `dist/`. Los assets van con hash y sin ninguna referencia a un
+CDN: MapLibre y deck.gl entran al bundle desde npm en tiempo de construccion.
+
 Dos consecuencias que el propio visor declara en pantalla:
 
 - Los escenarios van PRECALCULADOS a presupuestos fijos. Pedir uno distinto
@@ -30,7 +34,8 @@ from uri.api.app import app  # noqa: E402
 from uri.contracts import CONTRIBUTING_SOURCES_SQL  # noqa: E402
 from uri.db import worker_connection  # noqa: E402
 
-VIEWER = ROOT / "apps" / "viewer"
+#: El visor es una aplicacion con build propio; lo que se publica es su `dist`.
+VIEWER_DIST = ROOT / "apps" / "viewer" / "dist"
 DIST = ROOT / "dist"
 
 #: Presupuestos precalculados, en miles de millones de COP.
@@ -56,6 +61,10 @@ LAYERS = (
 
 class PublicationBlocked(RuntimeError):
     """Una fuente que contribuye no permite redistribucion."""
+
+
+class ViewerNotBuilt(RuntimeError):
+    """El visor no esta construido: falta `npm run build` en apps/viewer."""
 
 
 def assert_publishable(profile: str) -> None:
@@ -103,20 +112,32 @@ def main(profile: str) -> int:
         shutil.rmtree(DIST)
     DIST.mkdir()
 
-    print("copiando el visor")
-    for name in ("index.html", "styles.css", "app.js"):
-        shutil.copy2(VIEWER / name, DIST / name)
-    shutil.copytree(VIEWER / "vendor", DIST / "vendor")
+    if not (VIEWER_DIST / "index.html").exists():
+        raise ViewerNotBuilt(
+            f"No existe {VIEWER_DIST / 'index.html'}.\n"
+            "El visor se construye antes de empaquetar:\n"
+            "  cd apps/viewer && npm ci && npm run build"
+        )
 
-    # El modo estatico se activa desde el HTML publicado, no con una bandera
-    # en el codigo: el mismo app.js sirve para ambos despliegues.
-    index = (DIST / "index.html").read_text(encoding="utf-8")
+    print("copiando el visor construido")
+    shutil.copytree(VIEWER_DIST, DIST, dirs_exist_ok=True)
+
+    # El modo estatico se activa desde el HTML publicado, no con una bandera en
+    # el codigo: el mismo bundle sirve para ambos despliegues. Se inyecta justo
+    # despues de `<head>` y no junto a una etiqueta concreta porque los assets
+    # llevan hash en el nombre y cambian en cada build.
+    index_path = DIST / "index.html"
+    index = index_path.read_text(encoding="utf-8")
+    if "<head>" not in index:
+        raise ViewerNotBuilt(
+            "El index.html del visor no tiene <head>: no se puede inyectar el modo estatico."
+        )
     index = index.replace(
-        '<script src="vendor/maplibre-gl.js"></script>',
-        '<script>window.URI_STATIC_BASE = "data";</script>\n'
-        '<script src="vendor/maplibre-gl.js"></script>',
+        "<head>",
+        '<head>\n    <script>window.URI_STATIC_BASE = "data";</script>',
+        1,
     )
-    (DIST / "index.html").write_text(index, encoding="utf-8")
+    index_path.write_text(index, encoding="utf-8")
 
     data = DIST / "data"
     client = TestClient(app)
@@ -223,3 +244,6 @@ if __name__ == "__main__":
     except PublicationBlocked as exc:
         print(f"\nBLOQUEADO\n{exc}", file=sys.stderr)
         raise SystemExit(2) from exc
+    except ViewerNotBuilt as exc:
+        print(f"\nVISOR SIN CONSTRUIR\n{exc}", file=sys.stderr)
+        raise SystemExit(3) from exc
