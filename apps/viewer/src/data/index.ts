@@ -90,6 +90,7 @@ export async function loadCoverage(scenarioId: string): Promise<Coverage> {
 
 export interface TerrainIndex {
   minzoom: number; maxzoom: number; encoding?: 'mapbox' | 'terrarium';
+  aoi_bbox?: [number, number, number, number];
   attribution?: string; liability_notice?: string;
 }
 export async function loadTerrain(): Promise<TerrainIndex | null> {

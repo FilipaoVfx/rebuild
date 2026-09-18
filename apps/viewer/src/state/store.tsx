@@ -8,7 +8,6 @@ import {
   type TerrainIndex,
 } from '../data';
 import type { BaseMapKey } from '../lib/basemap';
-import { clusterUnreached, type UnreachedSummary } from '../lib/clusters';
 import { contextByKey, discriminationOf, layersFor, type Discrimination } from '../lib/contexts';
 import type { ContextKey } from '../lib/palette';
 import type {
@@ -17,6 +16,9 @@ import type {
 } from '../types';
 
 export type ImageryMode = 'none' | 'sentinel' | string;
+
+/** Umbral de idoneidad por defecto (ADR-23). */
+export const DEFAULT_MIN_SUITABILITY = 64;
 
 interface Store {
   provenance: Provenance;
@@ -43,7 +45,6 @@ interface Store {
   scenarioId: string; setScenarioId: (id: string) => void;
   scenario: Scenario | null;
   coverage: Coverage | null;
-  showRelief: boolean; setShowRelief: (v: boolean) => void;
   showTerrain: boolean; setShowTerrain: (v: boolean) => void;
 
   /** Tipo de mapa: cartografía base de OSM (clara u oscura) o solo datos (ADR-22 §8). */
@@ -63,11 +64,12 @@ interface Store {
   technical: boolean; setTechnical: (v: boolean) => void;
   query: string; setQuery: (q: string) => void;
   onlyBuildable: boolean; setOnlyBuildable: (v: boolean) => void;
+  /** Idoneidad mínima visible (0–100). Por defecto 64: lo que se ve es lo que
+   *  el modelo distingue con claridad; bajarlo muestra todo (ADR-23). */
+  minSuitability: number; setMinSuitability: (v: number) => void;
 
   visibleOpportunities: Opportunity[];
   discrimination: Discrimination;
-  unreached: UnreachedSummary;
-  selectedClusterId: string | null; selectCluster: (id: string | null) => void;
   isStatic: boolean;
 }
 
@@ -102,7 +104,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [hoverSiteId, setHoverSiteId] = useState<string | null>(null);
   const [scenarioId, setScenarioId] = useState('');
-  const [showRelief, setShowRelief] = useState(false);
   const [showTerrain, setShowTerrain] = useState(false);
   const [baseMap, setBaseMap] = useState<BaseMapKey>('calles');
   const [imagery, setImagery] = useState<ImageryMode>('none');
@@ -110,11 +111,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [swipe, setSwipe] = useState(0.5);
   const [highlightedAdminId, setHighlightedAdminId] = useState<number | null>(null);
   const [communeFilter, setCommuneFilter] = useState<string | null>(null);
-  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
   const [compare, setCompare] = useState<string[]>([]);
   const [technical, setTechnical] = useState(false);
   const [query, setQuery] = useState('');
   const [onlyBuildable, setOnlyBuildable] = useState(false);
+  const [minSuitability, setMinSuitability] = useState(DEFAULT_MIN_SUITABILITY);
 
   useEffect(() => {
     loadCore()
@@ -164,13 +165,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     requestLayers(['sites', ...layersFor(context)]);
   }, [core, context, requestLayers]);
 
-  /* La vista de portafolio pregunta si algún candidato alcanzaría cada hueco
-     (catchments) y nombra el barrio de cada hueco (límites administrativos),
-     los enciendan o no los contextos. Territorio necesita los contornos del
-     localizador aunque el mapa no los dibuje. */
+  /* Territorio necesita los contornos del localizador aunque el mapa no los dibuje. */
   useEffect(() => {
     if (!core) return;
-    if (view === 'portafolio') requestLayers(['catchments', 'admin_areas']);
     if (view === 'territorio') requestLayers(['admin_areas', 'reference_regions']);
   }, [core, view, requestLayers]);
 
@@ -187,15 +184,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .catch(() => { if (alive) setCoverage(null); });
     return () => { alive = false; };
   }, [scenarioId]);
-
-  /* Quién queda fuera. Se calcula sobre las mismas celdas y los mismos
-     catchments que usó el optimizador, no sobre una aproximación aparte. */
-  const unreached = useMemo(
-    () => clusterUnreached(
-      coverage?.cells ?? [], core?.sites ?? [], layers.catchments, layers.admin_areas,
-    ),
-    [coverage, core, layers.catchments, layers.admin_areas],
-  );
 
   /* Se mide con los mismos valores que pinta el mapa, no con otros. Un
      contexto neutro no evalúa nada, así que no hay eje que medir. */
@@ -230,8 +218,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     if (communeFilter) list = list.filter((o) => o.place?.commune === communeFilter);
     if (onlyBuildable) list = list.filter((o) => !o.blocked && o.intervention !== 'NO_BUILD');
+    if (minSuitability > 0) list = list.filter((o) => o.suitability >= minSuitability);
     return list.sort((a, b) => b.suitability - a.suitability);
-  }, [core, query, onlyBuildable, communeFilter]);
+  }, [core, query, onlyBuildable, communeFilter, minSuitability]);
 
   if (error) {
     return (
@@ -273,7 +262,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     selectSite: setSelectedSiteId,
     hoverSiteId, setHoverSiteId,
     scenarioId, setScenarioId, scenario, coverage,
-    showRelief, setShowRelief,
     showTerrain, setShowTerrain,
     baseMap, setBaseMap,
     imagery, setImagery,
@@ -288,11 +276,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     technical, setTechnical,
     query, setQuery,
     onlyBuildable, setOnlyBuildable,
+    minSuitability, setMinSuitability,
     visibleOpportunities,
     discrimination,
-    unreached,
-    selectedClusterId,
-    selectCluster: (id) => { setSelectedClusterId(id); if (id) setSelectedSiteId(null); },
     isStatic: IS_STATIC,
   };
 

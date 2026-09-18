@@ -74,22 +74,21 @@ premisas del PRD.
 > `budget_binding`) en vez de dejar que el control parezca roto. Ver
 > [estado actual](docs/plan/estado-actual.md) §3.
 
-### Relieve de cobertura en 3D
+### Cobertura del portafolio (en la API, ya no en pantalla)
 
-El mapa puede extruir la población en columnas con **deck.gl**, donde la altura
-es la población medida de cada celda y el color dice si algún proyecto del
-portafolio la alcanza. No hay edificios 3D: no existe la fuente de altura
-(`building_footprint` no la trae y OSM tiene `building:levels` en 3 elementos
-del AOI), y extruir 15.024 huellas exigiría inventar 15.021 alturas.
+El optimizador sigue calculando, por escenario, qué celdas alcanza cada
+proyecto (`/api/v1/scenarios/{id}/coverage`): sobre el AOI actual el portafolio
+de 25 MM COP alcanza **87.715 de 190.000 personas (46,2 %)** en 610 de 1.858
+celdas, y los 19 aportes marginales caen de 16.248 personas a 30. La vista que
+lo dibujaba en 3D se retiró del visor ([ADR-23](docs/adr/ADR-23-menos-portafolio-mas-explicacion.md)):
+los costos son estimados sin fuente oficial y los pesos no tienen dueño
+institucional, así que la lista de proyectos no es hoy un producto que
+presentar. Escenarios conserva el motivo de parada y la equidad.
 
-Lo que la vista responde y la tabla no: el portafolio alcanza **87.715 de
-190.000 personas (46,2 %)** en 610 de 1.858 celdas. Las columnas apagadas son
-población que ningún proyecto seleccionado tiene a 10 minutos. Los 19 arcos —
-uno por proyecto, no uno por par sitio-celda — muestran el desplome del aporte
-marginal: 16.248 personas el primero, 30 el último.
-
-deck.gl se carga **en diferido**: 575 KB comprimidos que no paga quien solo
-quiere la tabla.
+No hay edificios 3D: no existe la fuente de altura (`building_footprint` no la
+trae y OSM tiene `building:levels` en 3 elementos del AOI), y extruir 15.024
+huellas exigiría inventar 15.021 alturas. El relieve real del terreno (Copernicus
+DEM) sí está, en Territorio.
 
 ### Evidencia de cambio satelital (fase 1)
 
@@ -111,8 +110,10 @@ justo lo que ADR-17 prohíbe.
 El visor es la superficie principal del producto, junto a la API y al paquete de
 evidencia ([ADR-21](docs/adr/ADR-21-el-visor-como-superficie-principal.md), que
 deroga el recorte de pantallas de [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md)).
-Seis vistas, una pregunta cada una; la primera es la que abre
-([ADR-22](docs/adr/ADR-22-territorio-como-vista-de-entrada.md)):
+Cinco vistas, una pregunta cada una; la primera es la que abre
+([ADR-22](docs/adr/ADR-22-territorio-como-vista-de-entrada.md)). La vista
+Portafolio se retiró ([ADR-23](docs/adr/ADR-23-menos-portafolio-mas-explicacion.md));
+el optimizador sigue en la API y en Escenarios:
 
 | Vista | Pregunta |
 |---|---|
@@ -120,7 +121,6 @@ Seis vistas, una pregunta cada una; la primera es la que abre
 | Situación | ¿Qué está pasando en el territorio? |
 | Oportunidades | ¿Dónde podemos actuar, y por qué ahí? |
 | Escenarios | ¿Qué cambia si cambian las prioridades? |
-| Portafolio | ¿Qué combinación de proyectos tiene sentido? |
 | Evidencia | ¿En qué nos estamos basando, y qué no sabemos? |
 
 El mapa tiene siete contextos —territorio, situación, daño, necesidad, déficit,
@@ -171,12 +171,12 @@ Tres reglas gobiernan lo que la interfaz puede afirmar:
   contraste a partir de ruido.
 - **El puntaje ordena, pero no titula.** Cada tarjeta lleva el titular del
   problema; la idoneidad y la descomposición exacta viven donde se piden.
-- **El portafolio cuenta a quién no alcanza.** Las celdas que ningún proyecto
-  toca se agrupan, se ordenan por población y se pueden abrir en el mapa. Cada
-  hueco dice si **algún** candidato lo alcanzaría: sobre el AOI actual, las
-  102.285 personas no alcanzadas —el 53,8 %— están fuera del área de influencia
-  de los 115 candidatos, no solo de los 19 seleccionados. El cuello de botella
-  no es el presupuesto, es dónde se generan los sitios.
+- **Lo que se ve por defecto es lo que el modelo distingue con claridad.**
+  Oportunidades abre con idoneidad ≥ 64 (34 de 105) y un control para bajar el
+  umbral hasta ver todas; las demás siguen en el mapa, atenuadas.
+- **El lateral explica el contexto activo.** Cada opción de la barra inferior
+  tiene su panel: qué variables usa, cómo se calculan, con qué fuente y hasta
+  dónde llegan (ADR-23).
 
 Construido con React, TypeScript, Tailwind, MapLibre GL y deck.gl. Las
 dependencias entran al bundle en tiempo de construcción, así que el sitio
@@ -208,6 +208,7 @@ cd apps/viewer && npm ci && npm run build
 | [Fuentes](docs/plan/fuentes.md) | Consumo técnico y régimen de licencia de cada fuente, con los controles que lo hacen cumplible |
 | [Conexiones](docs/plan/conexiones.md) | Endpoints verificados y recetas de conexión por fuente |
 | [Antigüedad de la edificación](docs/plan/antiguedad-de-la-edificacion.md) | Research: el año de construcción es catastral (AMCO) y no está publicado; alternativas abiertas por época |
+| [Cobertura de daño en la ciudad](docs/plan/cobertura-de-dano-ciudad.md) | Research: la Alcaldía publica ~7.700 inspecciones de daño edificio por edificio para toda Pereira; qué falta para usarlas |
 
 **Decisiones posteriores al ARD**
 
@@ -221,6 +222,7 @@ cd apps/viewer && npm ci && npm run build
 | [ADR-20](docs/adr/ADR-20-la-oportunidad-es-la-entidad-central.md) | La oportunidad de recuperación sustituye al sitio como entidad central |
 | [ADR-21](docs/adr/ADR-21-el-visor-como-superficie-principal.md) | El visor pasa a ser la superficie principal, y se reescribe |
 | [ADR-22](docs/adr/ADR-22-territorio-como-vista-de-entrada.md) | El territorio es la vista de entrada, y cada dato dice dónde está |
+| [ADR-23](docs/adr/ADR-23-menos-portafolio-mas-explicacion.md) | Se retira la vista Portafolio; idoneidad mínima 64 por defecto; el lateral explica el contexto activo |
 
 ## Principios que gobiernan el diseño
 

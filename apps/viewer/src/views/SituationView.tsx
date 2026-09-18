@@ -3,6 +3,7 @@ import { contextByKey } from '../lib/contexts';
 import { n, pct } from '../lib/format';
 import { RAMPS, rgbCss, sample } from '../lib/palette';
 import { useStore } from '../state/store';
+import { ContextIntro } from '../components/ContextIntro';
 import { Bar, Note, Panel, SectionTitle, Stat } from '../components/ui';
 
 export function SituationView() {
@@ -46,6 +47,8 @@ export function SituationView() {
 
   return (
     <div className="flex flex-col gap-3 p-3">
+      <ContextIntro />
+
       <Panel className="p-4">
         <SectionTitle>Lectura del AOI</SectionTitle>
         <p className="mt-2.5 text-[13px] leading-relaxed text-mute-200">
@@ -210,8 +213,8 @@ export function SituationView() {
           <p className="mt-2 text-[12px] leading-relaxed text-mute-300">
             El escenario de {(scenarios[0].budget_cop / 1e9).toFixed(0)} MM COP selecciona{' '}
             <b className="text-paper">{scenarios[0].items.length} proyectos</b>.{' '}
-            <button className="underline hover:text-paper" onClick={() => setView('portafolio')}>
-              Ver el portafolio
+            <button className="underline hover:text-paper" onClick={() => setView('escenarios')}>
+              Ver los escenarios
             </button>
           </p>
         </Panel>

@@ -259,8 +259,7 @@ export type GeoJSON = {
   }[];
 };
 
-export type ViewKey =
-  | 'territorio' | 'situacion' | 'oportunidades' | 'escenarios' | 'portafolio' | 'evidencia';
+export type ViewKey = 'territorio' | 'situacion' | 'oportunidades' | 'escenarios' | 'evidencia';
 
 /** `GET /api/v1/territory` — ¿Dónde estamos? (ADR-22). */
 export interface Territory {

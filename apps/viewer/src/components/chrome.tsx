@@ -11,7 +11,6 @@ const NAV: { key: ViewKey; label: string; question: string }[] = [
   { key: 'situacion', label: 'Situación', question: '¿Qué está pasando?' },
   { key: 'oportunidades', label: 'Oportunidades', question: '¿Dónde podemos actuar?' },
   { key: 'escenarios', label: 'Escenarios', question: '¿Qué cambia si cambian las prioridades?' },
-  { key: 'portafolio', label: 'Portafolio', question: '¿Qué combinación tiene sentido?' },
   { key: 'evidencia', label: 'Evidencia', question: '¿En qué nos estamos basando?' },
 ];
 

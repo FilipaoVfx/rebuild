@@ -161,8 +161,8 @@ export function ScenariosView() {
               De {n(opportunities.length)} oportunidades, este escenario selecciona{' '}
               <b className="text-paper">{scenario.items.length}</b> y alcanza{' '}
               <b className="text-paper">{n(scenario.total_population)}</b> personas.{' '}
-              <button className="underline hover:text-paper" onClick={() => setView('portafolio')}>
-                Ver el portafolio
+              <button className="underline hover:text-paper" onClick={() => setView('oportunidades')}>
+                Ver las oportunidades
               </button>
             </p>
           </Panel>

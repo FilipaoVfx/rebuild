@@ -41,7 +41,8 @@ CONTEXTS = (
 #: mentira pequeña.
 RETIRED = ("SERTIT", "SGC", "Servicio Geologico", "Servicio Geológico")
 
-VIEWS = ("territorio", "situacion", "oportunidades", "escenarios", "portafolio", "evidencia")
+#: Sin "portafolio": la vista se retiro (ADR-23); el optimizador sigue en la API.
+VIEWS = ("territorio", "situacion", "oportunidades", "escenarios", "evidencia")
 
 
 async def main(base: str, prefix: str) -> int:
@@ -192,6 +193,24 @@ async def main(base: str, prefix: str) -> int:
             leyenda = await page.locator('[data-uri="legend"]').inner_text()
             if not leyenda.strip():
                 errors.append(f"el contexto '{key}' no describe su leyenda")
+            # El texto lateral sigue al contexto (ADR-23): cada opcion de la
+            # barra inferior explica sus variables. Territorio conserva su
+            # propio "donde estamos".
+            if key == "TERRITORIO":
+                donde = await page.locator('[data-uri="where-are-we"]').count()
+                intro_t = await page.locator(
+                    '[data-uri="context-intro"][data-context="TERRITORIO"]'
+                ).count()
+                if not donde and not intro_t:
+                    errors.append("con el contexto TERRITORIO el lateral no dice donde estamos")
+            else:
+                intro = page.locator(f'[data-uri="context-intro"][data-context="{key}"]')
+                if not await intro.count():
+                    errors.append(f"el lateral no explica el contexto '{key}'")
+                else:
+                    texto = (await intro.inner_text()).lower()
+                    if "fuente:" not in texto or "límite" not in texto and "limite" not in texto:
+                        errors.append(f"la explicacion de '{key}' no cita fuentes ni limites")
         await page.screenshot(path=f"/tmp/{prefix}_contextos.png")
 
         # Un eje cubierto puede no ordenar nada, y el visor tiene que decirlo
@@ -221,14 +240,29 @@ async def main(base: str, prefix: str) -> int:
         # La vista explica el metodo antes de listar resultados (ADR-22 §9), y
         # lo dice como lo que es: multicriterio explicable, no aprendizaje
         # automatico ni prediccion.
+        await page.locator('[data-uri="method-toggle"]').click()
+        await page.wait_for_timeout(500)
         metodo = (await page.locator('[data-uri="method"]').inner_text()).lower()
         for needed in ("multicriterio", "restricciones", "pesos", "no hay aprendizaje"):
             if needed not in metodo:
                 errors.append(f"el panel de metodo no dice '{needed}'")
         tarjetas = await page.locator('[data-uri="opportunity-card"]').count()
-        print("tarjetas de oportunidad:", tarjetas)
+        print("tarjetas de oportunidad (idoneidad >= 64):", tarjetas)
         if not tarjetas:
             errors.append("no se listo ninguna oportunidad")
+        # El umbral de idoneidad por defecto oculta parte de la lista; "Ver
+        # todas" la recupera entera (ADR-23).
+        umbral = await page.locator('[data-uri="suitability-range"]').input_value()
+        if umbral != "64":
+            errors.append(f"el umbral de idoneidad por defecto es {umbral}, no 64")
+        await page.locator('[data-uri="suitability-filter"] button:has-text("Ver todas")').click()
+        await page.wait_for_timeout(800)
+        todas = await page.locator('[data-uri="opportunity-card"]').count()
+        print("tarjetas con 'Ver todas':", todas)
+        if todas <= tarjetas:
+            errors.append("bajar el umbral de idoneidad no muestra mas oportunidades")
+        await page.locator('[data-uri="suitability-filter"] button:has-text("≥ 64")').click()
+        await page.wait_for_timeout(500)
 
         # Una barra de 0 px no rompe nada y no se ve: hay que comprobarla.
         barras = await page.evaluate(
@@ -290,52 +324,30 @@ async def main(base: str, prefix: str) -> int:
             errors.append("la camara no volvio al AOI al cerrar la ficha")
         print("la camara se movio al seleccionar:", centro_sitio != centro_aoi)
 
-        # ── Escenarios y portafolio ──────────────────────────────────────
+        # ── Escenarios ───────────────────────────────────────────────────
         await page.locator('[data-uri="nav"][data-view="escenarios"]').click()
         await page.wait_for_timeout(1500)
         escenarios = await page.locator("main, div").first.inner_text()
         del escenarios
         await page.screenshot(path=f"/tmp/{prefix}_escenarios.png")
 
-        await page.locator('[data-uri="nav"][data-view="portafolio"]').click()
-        await page.wait_for_selector('[data-uri="portfolio-items"] li', timeout=60000)
-        proyectos = await page.locator('[data-uri="portfolio-items"] li').count()
-        print("proyectos del portafolio:", proyectos)
-        if not proyectos:
-            errors.append("el portafolio no listo proyectos")
-
-        # ── Quién queda fuera ────────────────────────────────────────────
-        #
-        # La contracara de la cifra de cobertura. Si esta lista desaparece, el
-        # visor vuelve a contar solo a quien alcanza, que es la mitad que
-        # favorece al portafolio.
-        huecos = await page.locator('[data-uri="unreached-cluster"]').count()
-        print("huecos de cobertura listados:", huecos)
-        if not huecos:
-            errors.append("el portafolio no lista la poblacion que no alcanza")
-        else:
-            primero = await page.locator('[data-uri="unreached-cluster"]').first.inner_text()
-            if "personas sin alcanzar" not in primero.lower():
-                errors.append("un hueco no reporta la poblacion que deja fuera")
-            # Un hueco tiene que decir si algun candidato lo alcanzaria: es lo
-            # que distingue un limite de presupuesto de uno de generacion de
-            # sitios, y son problemas con dueños distintos.
-            if "candidato" not in primero.lower():
-                errors.append("un hueco no dice si algun candidato lo alcanzaria")
-            await page.locator('[data-uri="unreached-cluster"]').first.click()
-            await page.wait_for_timeout(1500)
-
-        # Relieve 3D: deck.gl dibuja en su propio lienzo sobre el de MapLibre.
-        relieve = page.locator('[data-uri="layer-toggle"]').first
-        await relieve.click()
-        await page.wait_for_timeout(4000)
-        lienzos = await page.evaluate(
-            "() => document.querySelectorAll('[data-uri=\"map\"] canvas').length"
-        )
-        print("lienzos tras activar el relieve:", lienzos)
-        if lienzos < 2:
-            errors.append("deck.gl no anadio su lienzo al mapa")
-        await page.screenshot(path=f"/tmp/{prefix}_portafolio.png")
+        # Relieve real del terreno, desde Territorio: deck.gl dibuja en su
+        # propio lienzo sobre el de MapLibre.
+        await page.locator('[data-uri="nav"][data-view="territorio"]').click()
+        await page.wait_for_timeout(1500)
+        relieve = page.locator('[data-uri="imagery-toggle"][data-layer="Relieve real del terreno"]')
+        if await relieve.count() and await relieve.locator("input").is_enabled():
+            await relieve.click()
+            await page.wait_for_timeout(4000)
+            lienzos = await page.evaluate(
+                "() => document.querySelectorAll('[data-uri=\"map\"] canvas').length"
+            )
+            print("lienzos tras activar el relieve:", lienzos)
+            if lienzos < 2:
+                errors.append("deck.gl no anadio su lienzo al mapa")
+            await relieve.click()
+            await page.wait_for_timeout(800)
+        await page.screenshot(path=f"/tmp/{prefix}_relieve.png")
 
         # ── Evidencia ────────────────────────────────────────────────────
         await page.locator('[data-uri="nav"][data-view="evidencia"]').click()

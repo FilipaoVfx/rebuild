@@ -6,7 +6,6 @@ import { OpportunityDetail } from './components/OpportunityDetail';
 import { StoreProvider, useStore } from './state/store';
 import { EvidenceView } from './views/EvidenceView';
 import { OpportunitiesView } from './views/OpportunitiesView';
-import { PortfolioView } from './views/PortfolioView';
 import { ScenariosView } from './views/ScenariosView';
 import { SituationView } from './views/SituationView';
 import { TerritoryView } from './views/TerritoryView';
@@ -28,7 +27,6 @@ function Layout() {
     situacion: SituationView,
     oportunidades: OpportunitiesView,
     escenarios: ScenariosView,
-    portafolio: PortfolioView,
     evidencia: EvidenceView,
   }[view];
 

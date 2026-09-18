@@ -2,7 +2,7 @@ import type { PickingInfo } from '@deck.gl/core';
 import { CollisionFilterExtension, MaskExtension, PathStyleExtension } from '@deck.gl/extensions';
 import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox';
 import {
-  ArcLayer, BitmapLayer, ColumnLayer, GeoJsonLayer, PathLayer, ScatterplotLayer, TextLayer,
+  BitmapLayer, GeoJsonLayer, PathLayer, ScatterplotLayer, TextLayer,
 } from '@deck.gl/layers';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Map, { ScaleControl, useControl, type MapRef, type ViewState } from 'react-map-gl/maplibre';
@@ -63,10 +63,9 @@ function bboxRing([w, s, e, n]: BBox): [number, number][] {
 
 export function MapCanvas() {
   const {
-    sites, oppBySite, layers, context, view, selectedSiteId, selectSite,
-    hoverSiteId, setHoverSiteId, visibleOpportunities, scenario, coverage,
-    showRelief, terrain, showTerrain, discrimination,
-    unreached, selectedClusterId, selectCluster,
+    sites, oppBySite, layers, context, selectedSiteId, selectSite,
+    hoverSiteId, setHoverSiteId, visibleOpportunities,
+    terrain, showTerrain, discrimination,
     territory, sentinel, imagery, imageryCollection, swipe, setSwipe, highlightedAdminId,
     baseMap,
   } = useStore();
@@ -128,11 +127,6 @@ export function MapCanvas() {
   const gj = (name: string): GeoJSON | undefined => layers[name as never] as GeoJSON | undefined;
 
   const selected = selectedSiteId ? sites.find((s) => s.site_id === selectedSiteId) ?? null : null;
-
-  const portfolioSites = useMemo(
-    () => new Set((scenario?.items ?? []).map((i) => i.site_id)),
-    [scenario],
-  );
 
   /* ── Imagen de fondo ──────────────────────────────────────────────── */
   const scenes = useMemo(() => {
@@ -472,62 +466,6 @@ export function MapCanvas() {
       }),
     ] : []),
 
-    /* --- relieve de cobertura: altura = población medida --- */
-    ...(showRelief && coverage ? [
-      new ColumnLayer({
-        id: 'relief',
-        data: coverage.cells,
-        diskResolution: 4,
-        radius: 34,
-        extruded: true,
-        getPosition: (d) => [d.lon, d.lat],
-        getElevation: (d) => d.population * 1.6,
-        getFillColor: (d) => (d.covered_by ? [52, 211, 153, 210] : [58, 69, 83, 150]),
-        pickable: true,
-      }),
-    ] : []),
-
-    ...(view === 'portafolio' && unreached.clusters.length ? [
-      new ScatterplotLayer({
-        id: 'unreached',
-        data: unreached.clusters.flatMap((c) =>
-          c.cells.map((cell) => ({ ...cell, clusterId: c.id }))),
-        getPosition: (d) => [d.lon, d.lat],
-        // Un campo, no una mancha: 1.248 celdas pintadas en grande tapan los
-        // proyectos, que son el sujeto de esta vista. El hueco se lee por
-        // extensión, no por el tamaño de cada punto.
-        getRadius: (d) => 18 + Math.sqrt(Math.max(0, d.population)) * 1.8,
-        radiusUnits: 'meters',
-        radiusMinPixels: 1,
-        radiusMaxPixels: 6,
-        stroked: false,
-        getFillColor: (d) => {
-          const activo = selectedClusterId === null || d.clusterId === selectedClusterId;
-          return activo ? [248, 113, 113, 135] : [248, 113, 113, 30];
-        },
-        pickable: true,
-        onClick: (info) => {
-          const o = info.object as { clusterId?: string } | null;
-          if (o?.clusterId) selectCluster(o.clusterId === selectedClusterId ? null : o.clusterId);
-        },
-        updateTriggers: { getFillColor: [selectedClusterId] },
-      }),
-    ] : []),
-
-    ...(view === 'portafolio' && coverage ? [
-      new ArcLayer({
-        id: 'portfolio-arcs',
-        data: coverage.arcs,
-        getSourcePosition: (d) => d.from,
-        getTargetPosition: (d) => d.to,
-        getSourceColor: [240, 180, 41, 210],
-        getTargetColor: [52, 211, 153, 180],
-        getWidth: 1.6,
-        getHeight: 0.4,
-        pickable: true,
-      }),
-    ] : []),
-
     /* --- hitos: un punto y su nombre, los importantes primero --- */
     ...(on('landmarks') && visibleLandmarks.length && zoom >= 14 ? [
       new ScatterplotLayer({
@@ -634,11 +572,7 @@ export function MapCanvas() {
       id: 'sites',
       data: sites,
       getPosition: (d) => [d.lon, d.lat],
-      getRadius: (d) => {
-        const inPortfolio = portfolioSites.has(d.site_id);
-        const base = neutral ? 9 : 26;
-        return base + (inPortfolio && !neutral ? 26 : 0) + (d.site_id === selectedSiteId ? 18 : 0);
-      },
+      getRadius: (d) => (neutral ? 9 : 26) + (d.site_id === selectedSiteId ? 18 : 0),
       radiusUnits: 'meters',
       radiusMinPixels: neutral ? 2.5 : 4.5,
       radiusMaxPixels: neutral ? 7 : 22,
@@ -671,17 +605,13 @@ export function MapCanvas() {
         getFillColor: [context, selectedSiteId, visibleIds, stretch, neutral, lightTheme],
         getLineColor: [selectedSiteId, hoverSiteId],
         getLineWidth: [selectedSiteId],
-        getRadius: [selectedSiteId, portfolioSites, neutral],
+        getRadius: [selectedSiteId, neutral],
       },
       transitions: { getFillColor: 240 },
     }),
   ];
 
   /* Encuadre progresivo: ciudad → comuna → sitio. */
-  const cluster = useMemo(
-    () => unreached.clusters.find((c) => c.id === selectedClusterId) ?? null,
-    [unreached.clusters, selectedClusterId],
-  );
   const highlightedComuna = useMemo(
     () => territory?.comunas.find((c) => c.osm_id === highlightedAdminId) ?? null,
     [territory, highlightedAdminId],
@@ -692,12 +622,6 @@ export function MapCanvas() {
     if (!map) return;
     if (selected) {
       map.flyTo({ center: [selected.lon, selected.lat], zoom: 16.2, duration: 850, essential: true });
-    } else if (cluster) {
-      // Un hueco es un área, no un punto: se encuadra por su extensión.
-      const [minx, miny, maxx, maxy] = cluster.bbox;
-      map.fitBounds([[minx, miny], [maxx, maxy]], {
-        padding: 90, maxZoom: 16, duration: 850, essential: true,
-      });
     } else if (highlightedComuna) {
       const [minx, miny, maxx, maxy] = highlightedComuna.bbox;
       map.fitBounds([[minx, miny], [maxx, maxy]], {
@@ -706,7 +630,7 @@ export function MapCanvas() {
     } else {
       map.flyTo({ center: CENTER, zoom: HOME_ZOOM, duration: 750, essential: true });
     }
-  }, [selected, cluster, highlightedComuna]);
+  }, [selected, highlightedComuna]);
 
   /* Relieve real del terreno: capa opcional, declarada como tal. Cambiar de
      tipo de mapa reemplaza el estilo y se lleva las fuentes añadidas a mano,
@@ -724,6 +648,9 @@ export function MapCanvas() {
             tileSize: 256,
             minzoom: terrain.minzoom ?? 11,
             maxzoom: terrain.maxzoom ?? 14,
+            /* Solo hay teselas del AOI: sin `bounds`, MapLibre pediría las de
+               alrededor y cada una sería un 404. */
+            bounds: terrain.aoi_bbox,
             /* Lo que dice el índice, no una constante: `fetch_terrain.py`
                codifica con la fórmula de Mapbox y así lo declara. */
             encoding: terrain.encoding ?? 'mapbox',
@@ -802,27 +729,6 @@ export function MapCanvas() {
     if (layer.id === 'population') {
       const p = object.properties as Record<string, number>;
       return { html: `<b>${Math.round(p.population)} personas</b><br/><span style="color:#8e9aab">celda derivada</span>`, style };
-    }
-    if (layer.id === 'relief') {
-      const c = object as unknown as { population: number; covered_by: string | null };
-      return {
-        html: `<b>${Math.round(c.population)} personas</b><br/>` +
-          (c.covered_by ? `<span style="color:#34d399">alcanzada por ${c.covered_by}</span>`
-            : '<span style="color:#8e9aab">sin proyecto que la alcance</span>'),
-        style,
-      };
-    }
-    if (layer.id === 'unreached') {
-      const c = object as unknown as { population: number; clusterId: string };
-      return {
-        html: `<b>${Math.round(c.population)} personas sin alcanzar</b><br/>` +
-          `<span style="color:#8e9aab">${c.clusterId}</span>`,
-        style,
-      };
-    }
-    if (layer.id === 'portfolio-arcs') {
-      const a = object as unknown as { site_id: string; rank: number; population: number };
-      return { html: `<b>#${a.rank} · ${a.site_id}</b><br/>${Math.round(a.population)} personas nuevas`, style };
     }
     if (layer.id === 'green') return named('espacio verde (OSM)', String((object.properties as Record<string, unknown>).label));
     if (layer.id === 'facilities') return named('equipamiento (OSM)', String((object.properties as Record<string, unknown>).label));

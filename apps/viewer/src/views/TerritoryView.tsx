@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { fecha, n, pct } from '../lib/format';
 import { useStore } from '../state/store';
 import type { GeoJSON, Territory } from '../types';
+import { ContextIntro } from '../components/ContextIntro';
 import { Empty, Note, Panel, SectionTitle, Stat } from '../components/ui';
 
 /**
@@ -17,7 +18,7 @@ export function TerritoryView() {
   const {
     territory, layers, setView, setContext, highlightedAdminId, setHighlightedAdminId,
     sentinel, imagery, setImagery, imageryCollection, setImageryCollection,
-    terrain, showTerrain, setShowTerrain, isStatic,
+    terrain, showTerrain, setShowTerrain, isStatic, context,
   } = useStore();
 
   if (!territory) {
@@ -37,7 +38,10 @@ export function TerritoryView() {
 
   return (
     <div className="flex flex-col gap-3 p-3">
-      <Panel className="p-4">
+      {/* El primer panel sigue al contexto del mapa (ADR-23): «¿Dónde estamos?»
+          es el de Territorio; cualquier otro contexto explica aquí sus variables. */}
+      {context !== 'TERRITORIO' ? <ContextIntro /> : (
+      <Panel data-uri="where-are-we" className="p-4">
         <SectionTitle>¿Dónde estamos?</SectionTitle>
         <p className="mt-2 text-[11px] tracking-wide text-mute-400">
           {city?.country ?? 'Colombia'} › {city?.department ?? 'Risaralda'} › <b className="text-paper">{city?.display_name ?? 'Pereira'}</b>
@@ -59,6 +63,7 @@ export function TerritoryView() {
           <Note>Población según {city.population_source}{city.wikidata ? ` (${city.wikidata})` : ''}. No es el censo.</Note>
         )}
       </Panel>
+      )}
 
       <Panel className="p-4">
         <SectionTitle>El sismo</SectionTitle>

@@ -1,16 +1,18 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { FACTOR_LABEL, cop, n, pct } from '../lib/format';
 import { INTERVENTION_COLOR, rgbCss } from '../lib/palette';
-import { useStore } from '../state/store';
+import { DEFAULT_MIN_SUITABILITY, useStore } from '../state/store';
 import type { Opportunity } from '../types';
+import { ContextIntro } from '../components/ContextIntro';
 import { Bar, Chip, Empty, Note, Panel, SectionTitle, StatusBadge } from '../components/ui';
 
 export function OpportunitiesView() {
   const {
     visibleOpportunities, opportunities, query, setQuery, onlyBuildable, setOnlyBuildable,
     selectSite, selectedSiteId, compare, toggleCompare, clearCompare, siteById,
-    communeFilter, setCommuneFilter,
+    communeFilter, setCommuneFilter, minSuitability, setMinSuitability,
   } = useStore();
+  const aboveThreshold = opportunities.filter((o) => o.suitability >= minSuitability).length;
   const [showCompare, setShowCompare] = useState(true);
   /* FR-UI-04: filtrar por comuna. Las que aparecen son las que tienen oportunidades. */
   const communes = useMemo(() => {
@@ -28,7 +30,46 @@ export function OpportunitiesView() {
 
   return (
     <div className="flex flex-col gap-3 p-3">
+      <ContextIntro />
       <MethodPanel />
+
+      <Panel data-uri="suitability-filter" className="p-3.5">
+        <SectionTitle right={
+          <span className="num text-[10px] text-mute-400">{aboveThreshold} de {opportunities.length}</span>
+        }>
+          Idoneidad mínima
+        </SectionTitle>
+        <div className="mt-2.5 flex items-center gap-3">
+          <input
+            data-uri="suitability-range"
+            type="range" min={0} max={100} step={1}
+            value={minSuitability}
+            onChange={(e) => setMinSuitability(Number(e.target.value))}
+            aria-label="Idoneidad mínima visible"
+            className="w-full accent-[var(--color-accent)]"
+          />
+          <span className="num w-10 shrink-0 text-right text-[15px] font-semibold text-accent">
+            {minSuitability}
+          </span>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <Chip active={minSuitability === DEFAULT_MIN_SUITABILITY}
+                onClick={() => setMinSuitability(DEFAULT_MIN_SUITABILITY)}
+                title="El umbral por defecto: lo que el modelo distingue con claridad">
+            ≥ {DEFAULT_MIN_SUITABILITY}
+          </Chip>
+          <Chip active={minSuitability === 0} onClick={() => setMinSuitability(0)}
+                title="Mostrar las 105 oportunidades, incluidas las de idoneidad baja">
+            Ver todas
+          </Chip>
+          <Chip active={minSuitability === 75} onClick={() => setMinSuitability(75)}>≥ 75</Chip>
+        </div>
+        <Note>
+          La idoneidad va de 0 a 100 y <b>ordena, no titula</b>: es la suma exacta de los factores del
+          modelo, ponderados y con la afinidad de la intervención. Las que quedan bajo el umbral no
+          desaparecen del mapa: se atenúan.
+        </Note>
+      </Panel>
 
       <Panel className="p-3.5">
         <SectionTitle>Buscar</SectionTitle>
@@ -127,7 +168,8 @@ export function OpportunitiesView() {
  */
 function MethodPanel() {
   const { sites, opportunities, scenario, provenance, setView, territory } = useStore();
-  const [open, setOpen] = useState(true);
+  /* Plegado por defecto: el panel de contexto ya lista las variables; este cuenta el proceso. */
+  const [open, setOpen] = useState(false);
   const candidates = sites.filter((s) => s.state === 'CANDIDATE').length;
   const excluded = sites.length - candidates;
   const buildable = opportunities.filter((o) => !o.blocked && o.intervention !== 'NO_BUILD').length;
@@ -190,12 +232,14 @@ function MethodPanel() {
       </>,
     },
     {
-      title: 'Del sitio al portafolio',
+      title: 'Del sitio al escenario',
       body: <>
-        Con un presupuesto, un algoritmo greedy elige en cada paso el candidato que suma más población{' '}
-        <i>nueva</i> por peso invertido, sin doble conteo y midiendo el efecto sobre la equidad de acceso.
-        {scenario && <> El escenario actual selecciona <b className="text-paper">{scenario.items.length}</b> proyectos.</>}{' '}
-        <button className="underline hover:text-paper" onClick={() => setView('portafolio')}>Ver el portafolio</button>
+        Con un presupuesto y unos pesos, un algoritmo greedy elige en cada paso el candidato que suma
+        más población <i>nueva</i> por peso invertido, sin doble conteo y midiendo el efecto sobre la
+        equidad de acceso. Es el mismo modelo, con las prioridades cambiadas: sirve para ver qué
+        oportunidades resisten un cambio de prioridades y cuáles no.
+        {scenario && <> El escenario actual selecciona <b className="text-paper">{scenario.items.length}</b> de {n(scenario.considered)} candidatos.</>}{' '}
+        <button className="underline hover:text-paper" onClick={() => setView('escenarios')}>Ver los escenarios</button>
       </>,
     },
   ];
