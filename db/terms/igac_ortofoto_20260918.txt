@@ -1,0 +1,73 @@
+IGAC — Ortoimagen 1:1.000 de Pereira (servicio orto66001000pereira)
+Auditoría del 2026-09-18. VEREDICTO: UNCLEAR, con vía de desbloqueo concreta.
+
+=== QUÉ HAY ===
+
+Servicio: https://mapas.igac.gov.co/image/services/orto/orto66001000pereira/ImageServer
+          (WMS en …/ImageServer/WMSServer). 66001 = código DANE de Pereira; 1000 = escala.
+Cómo se encontró: es la capa base del web map municipal "Ortofoto AMCO (1:1.000)"
+(ArcGIS Online, ítem 78b1518e35504db08d1b829c0c9a8ba8, org de la Alcaldía de Pereira,
+snippet "Ortofoto AMCO Urbano", licenseInfo y accessInformation VACÍOS). El web map no
+tiene capas operativas: solo esta base, servida por el IGAC.
+
+Estado del servidor durante toda la auditoría: HTTP 502 (mapas.igac.gov.co/image/rest y
+el WMS). No se pudo leer serviceDescription, copyrightText ni fecha de toma.
+
+=== RÉGIMEN APLICABLE ===
+
+Resolución IGAC 616 del 1 de julio de 2020 — "por medio de la cual se determinan los
+datos abiertos del Instituto Geográfico Agustín Codazzi (IGAC) y se adopta la licencia
+Creative Commons CC-BY 4.0". Citada literalmente en la Resolución IGAC 853 de 2022
+(Plan Nacional de Cartografía Básica, PDF oficial en igac.gov.co, leído el 2026-09-18):
+
+  "Que la Resolución IGAC 616 del 1 de julio de 2020, determinó los datos abiertos del
+  IGAC y adoptó la licencia abierta Creative Commons CC-BY 4.0, estableciendo que los
+  datos cuya titularidad y/o autoría es propia del IGAC, en materia de cartografía,
+  catastro, geodesia, geografía y agrología, serán dispuestos de manera digital y
+  libre."
+
+La misma 853/2022 recuerda que la Res. 1421 de 2021 permite que TERCEROS "registren,
+validen y oficialicen productos cartográficos básicos, a saber: Modelos Digitales de
+Terreno (MDT), Ortoimágenes (Orto) y Base de datos cartográfica vectorial (Carto)".
+
+FAQ de Colombia en Mapas (IGAC), literal: "el usuario podrá utilizar los datos
+entregados sin restricción, teniendo en cuenta que deberá dar los créditos de autor al
+IGAC" e indicar "si se ha realizado algún cambio a los datos originales". Excluye los
+datos "con restricción gubernamental" (solo entidades públicas) y los de reserva legal
+(permiso del Ministerio de Defensa).
+
+=== POR QUÉ SIGUE EN UNCLEAR ===
+
+La licencia aplica a datos "cuya titularidad y/o autoría es propia del IGAC". El
+producto se llama "Ortofoto AMCO" en el portal municipal y su ficha lo describe como
+"la ortofoto proporcionada por el AMCO": pudo producirse en convenio con el Área
+Metropolitana Centro Occidente (gestor catastral, Catastro Multipropósito) y
+oficializarse vía Res. 1421/2021, caso en el que la titular sería AMCO y la CC BY del
+IGAC no la cubriría. Ante duda, UNCLEAR (fuentes.md §10, paso 5).
+
+=== QUÉ LO DESBLOQUEA ===
+
+Cualquiera de estas, con copia archivada aquí:
+1. El copyrightText / description del ImageServer cuando vuelva a responder, si
+   declara al IGAC como productor (y la fecha de toma).
+2. La ficha del producto en Colombia en Mapas (colombiaenmapas.gov.co) con entidad
+   productora IGAC y licencia CC BY 4.0.
+3. Respuesta de contactenos@igac.gov.co confirmando titularidad y licencia.
+4. Texto íntegro de la Res. 616/2020 archivado en db/terms/igac_res616_2020.txt
+   (vlex.com.co/vid/resolucion-numero-616-2020-846199912 o igac.gov.co).
+
+Con eso la fila pasa a ATTRIBUTION con:
+  attribution_text = "IGAC — Ortoimagen 1:1.000, Pereira (<año>). CC BY 4.0.
+                      Imagen reproyectada y teselada (modificada)."
+
+=== CONSUMO ===
+
+Nunca desde el navegador (fuentes.md §11.1-11.2): el adaptador pide GetMap por
+tesela XYZ en EPSG:3857 y archiva las teselas con su índice. Mientras esté en UNCLEAR
+las escribe en data/ortofoto/.sandbox/, que no se publica.
+
+=== NOTA COLATERAL ===
+
+La Res. 616/2020 también podría reabrir igac_catastro (auditoría del 2026-09-16, que
+no la encontró). Hoy el gestor catastral de Pereira es AMCO, así que la titularidad
+tampoco es obvia allí. Fuera de alcance de esta auditoría.

@@ -60,3 +60,28 @@ jobs:
       # el build falla. Es el unico control que atrapa esa clase de error.
       - name: Pruebas
         run: pytest -q
+
+  # El visor se verifica aparte: no necesita base de datos, y un error de tipos
+  # o un build roto tiene que aparecer aqui y no al desplegar.
+  viewer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/viewer/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: apps/viewer
+        run: npm ci
+
+      - name: Tipos
+        working-directory: apps/viewer
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: apps/viewer
+        run: npm run build

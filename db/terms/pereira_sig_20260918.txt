@@ -1,0 +1,77 @@
+Alcaldía de Pereira — SIG municipal (SIGPER) en ArcGIS Online, org Zdpg0E6lri7EggIc
+Auditoría del 2026-09-18. VEREDICTO: ATTRIBUTION — solo para los ítems que declaran
+licencia. Los que no la declaran siguen en UNCLEAR (ver "QUÉ NO ENTRA").
+
+Portal: https://mapas-pereira.opendata.arcgis.com/ (Hub "Portal Geográfico del
+municipio de Pereira", ítem e98ff35c6dd7488ebe8aa2bd21d13119). 353 ítems en la org.
+
+=== ÍTEMS QUE ENTRAN (con licencia declarada en la ficha) ===
+
+1. "Equipamientos actual" — Feature Service, ítem 3e6a1a40b02b43d8a4dff55791cf2cd6
+   https://services3.arcgis.com/Zdpg0E6lri7EggIc/arcgis/rest/services/Equipamientos_actual/FeatureServer/0
+   332 polígonos. Campos: FID, NOMBRE, TIPO, Fuente, Area (m2). WKID 9377 (origen
+   nacional MAGNA-SIRGAS). Modificado 2024-10-29.
+   accessInformation (literal): "Secretaria de Planeación Municipal del Municipio de
+   Pereira / Corporación Autónoma regional del Risaralda / Área metropolitana centro
+   occidente (Catastro Multipropósito)"
+   description (literal): "Capa que identifica los Equipamientos colectivos en base a
+   la actualización y depuración de la capa de equipamientos colectivos del acuerdo
+   35, la ortofoto proporcionada por el AMCO, información suministrada por diferentes
+   secretarias, visitas de campo en el marco de lo definido del decreto 1232 de 2020
+   del municipio en el proceso de revisión del POT."
+
+2. "Espacio Público actual" — Feature Service, ítem 4d058c2ef1814ad4b8bc2ed09b81b238
+   https://services3.arcgis.com/Zdpg0E6lri7EggIc/arcgis/rest/services/Espacio_Público_actual/FeatureServer/0
+   Misma licencia y misma accessInformation que el anterior.
+
+licenseInfo de AMBOS ítems (literal, completo):
+
+  "Datos abiertos de uso libre bajo el marco de la Ley 1712 de 2014 sobre
+  Transparencia y Acceso a la Información Pública Nacional. Los datos abiertos son
+  información pública dispuesta en formatos que permiten su uso y reutilización bajo
+  licencia abierta y sin restricciones legales para su aprovechamiento. Se deben
+  respetar derechos de autor, dando el apropiado crédito al municipio de Pereira y
+  entidades que proporcionaron dicha información"
+
+Lectura por los cinco ejes de fuentes.md §1: descarga sí; open data sí ("uso libre",
+"licencia abierta y sin restricciones legales"); uso comercial no excluido;
+redistribución sí ("uso y reutilización"); derivados sí ("aprovechamiento"). La única
+obligación es la atribución al municipio y a las entidades que proporcionaron la
+información. Mismo régimen que dane_censo_2018 (Ley 1712, esquema Open Data).
+
+Atribución literal adoptada:
+  "Alcaldía de Pereira — Secretaría de Planeación Municipal (SIGPER); CARDER; AMCO
+  (Catastro Multipropósito). Datos abiertos, Ley 1712 de 2014"
+
+=== QUÉ NO ENTRA, Y POR QUÉ ===
+
+Ítems de la misma org SIN licenseInfo ni copyrightText (comprobado ítem por ítem el
+2026-09-18): Comunas_Actual (98c2c505…), Comunas del municipio de Pereira
+(8ab9d517…), Barrios del municipio de Pereira (900f6ace… y shapefile 83a2ef26…),
+Corregimientos_Actual, Red_vial, Red_Peatonal, Cartografia_Base, Nomenclatura
+domiciliaria (547d6bc2…), mapaortofoto (9b922623…), Ortofoto AMCO (1:1.000)
+(78b1518e…), Instituciones Educativas, Equipamiento urbano, y el resto.
+
+La portada del Hub dice (literal): "En cumplimiento del ARTÍCULO 682. ACCESO A DATOS
+LIBRES (Acuerdo municipal 035 de 2016). Para garantizar el acceso a la información
+generada o derivada del presente plan de ordenamiento territorial y basado en la Ley
+1712 de 2014, la administración deberá proporcionar el acceso a la misma, basada en
+sistemas de información que facilite la accesibilidad a los datos abiertos, donde se
+garantice los derechos de autor y "el habeas data" [...]". Y el pie: "Copyright 2017.
+Municipio de Pereira."
+
+Eso responde al eje "descarga" y no a los otros cuatro (fuentes.md §10: "'Es público'
+no responde ninguno de los cinco ejes"), y además reserva expresamente los derechos
+de autor. Por eso los términos del portal NO se extienden a los ítems que no declaran
+los suyos: la regla del propio proyecto es que la ficha del dataset manda, y aquí la
+ficha del dataset está vacía. Comunas y barrios salen de OSM (ODbL, ya aprobada), que
+en el AOI trae 15 comunas (admin_level=8) y 228 barrios (admin_level=9).
+
+Nomenclatura domiciliaria no entra NUNCA, con o sin licencia: es dirección a nivel de
+predio (SRS §6, FR-PII-01).
+
+=== QUÉ DESBLOQUEARÍA EL RESTO ===
+
+Que SIGPER (sigper@pereira.gov.co, Cra. 7 No. 18-55 piso 6) copie en licenseInfo de
+cada ítem el mismo texto que ya usa en Equipamientos y Espacio Público. Es un campo
+de la ficha, no una decisión nueva.

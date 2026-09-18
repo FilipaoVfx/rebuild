@@ -13,3 +13,7 @@ dist/
 # (data/sentinel/README.md). Un binario por escena no anade reproducibilidad.
 data/sentinel/**/*.tif
 data/sentinel/**/*.tiff
+
+# Ortofotos (ADR-22): teselas reconstruibles desde el indice, ~20 MB por fuente.
+# El sandbox nunca se versiona: es donde caen las fuentes en UNCLEAR.
+data/ortofoto/

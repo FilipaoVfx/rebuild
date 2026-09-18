@@ -26,6 +26,19 @@ curl -X POST --data-urlencode "data@db/seed/pereira.overpass" \
 
 Refrescarlo es publicar una `data_version` nueva, no editar la anterior.
 
+El extracto de **lugares** (`pereira_places.overpass`) va aparte a propósito:
+este alimenta el grafo peatonal y la matriz de features, y aquel solo nombra y
+delimita. Se refresca igual:
+
+```bash
+curl -X POST -A "uri-pipeline/0.1" --data-urlencode "data@db/seed/pereira_places.overpass" \
+  https://overpass-api.de/api/interpreter \
+  | gzip -9 > db/seed/osm_places_pereira.json.gz
+```
+
+Las capas municipales se refrescan con `scripts/fetch_pereira_sig.py`, que
+pasa por el control C1 antes de escribir un byte.
+
 ## Los demás extractos
 
 | Archivo | Fuente | Licencia |
@@ -34,7 +47,11 @@ Refrescarlo es publicar una `data_version` nueva, no editar la anterior.
 | `ms_buildings_pereira.geojson.gz` | Microsoft Building Footprints — 15.024 huellas | **ODbL** (share-alike, igual que OSM) |
 | `osm_landuse_pereira.json.gz` | OpenStreetMap, `landuse` del AOI — 219 polígonos | ODbL 1.0 |
 | `megabus_estaciones.json` | Megabús — estaciones | `UNCLEAR`, sin auditar (OI-F2). **El adaptador no está cableado** |
-| `pereira.overpass`, `pereira_landuse.overpass` | Consultas Overpass que reproducen los dos extractos de OSM | — |
+| `osm_places_pereira.json.gz` | OpenStreetMap, lugares del AOI + ~0,01° — 437 límites administrativos (perímetro urbano, comunas, barrios), 47 nombres de lugar, 135 ríos y quebradas, 164 hitos, 148 arterias (ADR-22) | ODbL 1.0 |
+| `natural_earth_colombia_risaralda.geojson.gz` | Natural Earth — contornos de Colombia (50m) y Risaralda (10m) para el localizador | **Dominio público** (`db/terms/natural_earth_terms_20260918.txt`) |
+| `pereira_sig_equipamientos.geojson.gz` | Alcaldía de Pereira, SIGPER — "Equipamientos actual", 332 polígonos con nombre y tipo | Datos abiertos, Ley 1712 de 2014, con atribución (`db/terms/pereira_sig_20260918.txt`) |
+| `pereira_sig_espacio_publico.geojson.gz` | Alcaldía de Pereira, SIGPER — "Espacio Público actual", 341 polígonos. **Sin el campo `DIRECCION`**: no se pide ni se archiva | Ídem |
+| `pereira.overpass`, `pereira_landuse.overpass`, `pereira_places.overpass` | Consultas Overpass que reproducen los tres extractos de OSM | — |
 
 Cada uno se refresca publicando una `data_version` nueva, nunca editando la
 anterior: `core.dataset_version` es inmutable por trigger (`FR-ING-02`).

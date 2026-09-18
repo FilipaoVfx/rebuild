@@ -34,6 +34,15 @@ class SiteSummary(BaseModel):
     top_score: float | None = None
     lon: float
     lat: float
+    # ADR-22 — identidad de lugar, derivada de OSM (rebuild_osm_derived.site_place).
+    # NULL es "sin fuente", y el visor lo dice; nunca se rellena.
+    neighborhood: str | None = None
+    neighborhood_method: str | None = None
+    commune: str | None = None
+    corner_label: str | None = None
+    nearest_landmark: str | None = None
+    nearest_landmark_m: float | None = None
+    place_line: str | None = None
 
 
 class SiteListResponse(BaseModel):

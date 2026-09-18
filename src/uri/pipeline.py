@@ -22,7 +22,7 @@ from uri.constraints import CONSTRAINT_SET_V1, evaluate_constraints
 from uri.contracts import InterventionType
 from uri.features.engine import compute_features
 from uri.features.network import build_pedestrian_graph, compute_catchments
-from uri.ingestion import loader
+from uri.ingestion import loader, places
 from uri.optimizer.greedy import Candidate, PortfolioResult, select_portfolio
 from uri.scoring import score_site
 from uri.scoring.model import SCORING_VERSION
@@ -56,9 +56,17 @@ def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport
     # `social_vulnerability` lo lee: cargarlo despues dejaria la feature nula
     # una corrida mas y el fallo pasaria por "el DANE no alcanza".
     census_version, census_blocks = loader.load_census_blocks(conn)
+    # Lugares (ADR-22): comunas, barrios, rios, hitos y arterias de OSM; los
+    # contornos del localizador; y las capas municipales con licencia. Nada
+    # de esto alimenta una feature — nombra y delimita.
+    places_version, places_counts = loader.load_osm_places(conn)
+    regions_version, regions = loader.load_reference_regions(conn)
+    municipal_version, municipal_counts = loader.load_municipal_layers(conn)
+    basemap_version = loader.record_basemap(conn)
 
     sites = loader.derive_sites(conn, damage_version)
     fused = loader.fuse_damage_evidence(conn, as_of=date(2026, 9, 15))
+    place_stats = places.enrich_site_places(conn, data_version=places_version)
     alerts = loader.raise_coverage_alerts(conn)
 
     return PipelineReport(
@@ -67,6 +75,10 @@ def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport
             "osm": osm_version,
             "context": context_version,
             "census": census_version,
+            "places": places_version,
+            "regions": regions_version,
+            "municipal": municipal_version,
+            "basemap": basemap_version,
         },
         counts={
             "evidence": len(evidence),
@@ -75,6 +87,11 @@ def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport
             **osm_counts,
             **context_counts,
             "census_blocks": census_blocks,
+            **{f"places_{k}": v for k, v in places_counts.items()},
+            "regions": regions,
+            **{f"municipal_{k}": v for k, v in municipal_counts.items()},
+            "sites_con_barrio": place_stats["total"] - place_stats["sin_barrio"],
+            "sites_con_comuna": place_stats["total"] - place_stats["sin_comuna"],
         },
         alerts=alerts,
     )

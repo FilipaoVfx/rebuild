@@ -1,0 +1,25 @@
+{
+ "source_id": "osm",
+ "product": "Protomaps Basemap (planetiler)",
+ "file": "pereira_basemap.pmtiles",
+ "sha256": "536613e359e469a95fd02b0092ea51ed2e988a6d1890914ffb7a632c5661931f",
+ "bbox": [
+  -75.8,
+  4.75,
+  -75.62,
+  4.86
+ ],
+ "minzoom": 0,
+ "maxzoom": 15,
+ "tile_type": "mvt",
+ "basemap_version": "4.15.2",
+ "planetiler_version": "0.10.2",
+ "planet_build": "https://build.protomaps.com/20260917.pmtiles",
+ "osm_replication_time": "2026-09-17T04:00:00Z",
+ "osm_replication_seq": 122829,
+ "extract_command": "pmtiles extract https://build.protomaps.com/20260917.pmtiles pereira_basemap.pmtiles --bbox=-75.80,4.75,-75.62,4.86 --maxzoom=15",
+ "attribution": "© OpenStreetMap contributors",
+ "license": "ODbL 1.0 (obra producida). Diseno del estilo: Protomaps, CC0/BSD-3. Tipografia: Noto Sans, OFL 1.1.",
+ "limitation": "Cartografia base de contexto: lo que OSM sabe de Pereira a la fecha de replica. No es evidencia ni alimenta ninguna feature.",
+ "retrieved_at": "2026-09-18T17:45:28.939931+00:00"
+}
