@@ -25,6 +25,17 @@ export function OpportunityDetail({ site, opp }: { site: Site; opp: Opportunity 
   const color = opp ? rgbCss(INTERVENTION_COLOR[opp.intervention] ?? [240, 180, 41]) : 'var(--color-mute-400)';
   const inCompare = compare.includes(site.site_id);
   const best: Recommendation | undefined = detail?.recommendations?.[0];
+  /* El lugar va primero (ADR-22): antes de saber qué se propone, dónde es. */
+  const place = opp?.place ?? {
+    neighborhood: site.neighborhood ?? null,
+    neighborhood_method: site.neighborhood_method ?? null,
+    commune: site.commune ?? null,
+    corner_label: site.corner_label ?? null,
+    nearest_landmark: site.nearest_landmark ?? null,
+    nearest_landmark_m: site.nearest_landmark_m ?? null,
+    place_line: site.place_line ?? null,
+  };
+  const hasPlace = Boolean(place.neighborhood || place.commune || place.corner_label || place.nearest_landmark);
 
   return (
     <aside data-uri="detail"
@@ -38,7 +49,37 @@ export function OpportunityDetail({ site, opp }: { site: Site; opp: Opportunity 
                 {site.site_id}
               </span>
             </div>
-            <h2 className="mt-1 text-lg leading-tight font-semibold tracking-tight">
+            <div data-uri="place-line" className="mt-1.5">
+              {hasPlace ? (
+                <>
+                  <p className="text-[13px] leading-snug font-semibold text-paper">
+                    {place.neighborhood ? `Barrio ${place.neighborhood}` : <span className="text-mute-400">barrio sin fuente</span>}
+                    {' · '}
+                    {place.commune ? `Comuna ${place.commune}` : <span className="text-mute-400">comuna sin fuente</span>}
+                    {place.neighborhood_method === 'NEAREST_PLACE' && (
+                      <span className="ml-1.5 rounded border border-dashed border-ink-500 px-1 text-[9px] font-normal text-mute-300"
+                            title="Ningún polígono de barrio contiene el sitio: se tomó el nombre de lugar más cercano en OSM">
+                        aproximado
+                      </span>
+                    )}
+                  </p>
+                  {(place.corner_label || place.nearest_landmark) && (
+                    <p className="mt-0.5 text-[11px] text-mute-300">
+                      {place.corner_label}
+                      {place.corner_label && place.nearest_landmark && ' · '}
+                      {place.nearest_landmark && (
+                        place.nearest_landmark_m !== null
+                          ? `a ${Math.round(place.nearest_landmark_m)} m de ${place.nearest_landmark}`
+                          : `cerca de ${place.nearest_landmark}`
+                      )}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <NoSource>ubicación</NoSource>
+              )}
+            </div>
+            <h2 className="mt-2 text-lg leading-tight font-semibold tracking-tight">
               {opp?.intervention_label ?? site.top_intervention_label ?? 'Sitio sin recomendación'}
             </h2>
             <p className="mt-0.5 text-[11px] text-mute-400">

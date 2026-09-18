@@ -166,6 +166,11 @@ export function SituationView() {
                       {site.site_id.replace('site_', '#')}
                     </span>
                   </div>
+                  <div className="truncate text-[10px] text-mute-400">
+                    {site.neighborhood
+                      ? `${site.neighborhood}${site.commune ? ` · ${site.commune}` : ''}`
+                      : site.commune ? `Comuna ${site.commune}` : 'barrio sin fuente'}
+                  </div>
                   <div className="mt-1.5">
                     <Bar value={value}
                          color={value === null ? undefined : rgbCss(sample(ramp, value))}

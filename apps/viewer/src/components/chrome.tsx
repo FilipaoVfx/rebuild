@@ -1,10 +1,13 @@
+import { BASEMAPS } from '../lib/basemap';
 import { CONTEXTS, contextByKey } from '../lib/contexts';
 import { RAMPS, rgbCss } from '../lib/palette';
-import { useStore } from '../state/store';
+import { CITY_LINE, useStore } from '../state/store';
 import type { ViewKey } from '../types';
 import { Chip } from './ui';
 
+/* Territorio primero: dónde estamos, antes de qué pasa (ADR-22). */
 const NAV: { key: ViewKey; label: string; question: string }[] = [
+  { key: 'territorio', label: 'Territorio', question: '¿Dónde estamos?' },
   { key: 'situacion', label: 'Situación', question: '¿Qué está pasando?' },
   { key: 'oportunidades', label: 'Oportunidades', question: '¿Dónde podemos actuar?' },
   { key: 'escenarios', label: 'Escenarios', question: '¿Qué cambia si cambian las prioridades?' },
@@ -23,8 +26,9 @@ export function TopBar() {
             <div className="text-[12px] font-semibold tracking-tight sm:text-[13px]">
               Urban Recovery Intelligence
             </div>
-            <div className="hidden text-[10px] text-mute-400 sm:block">
-              Pereira, Risaralda · sismo M7,4 del 10-08-2026
+            <div data-uri="city-line" className="text-[10px] text-mute-400">
+              <span className="sm:hidden">{CITY_LINE.split(' · ')[0]}</span>
+              <span className="hidden sm:inline">{CITY_LINE} · sismo M7,4 del 10-08-2026</span>
             </div>
           </div>
         </div>
@@ -35,6 +39,7 @@ export function TopBar() {
               key={n.key}
               data-uri="nav"
               data-view={n.key}
+              data-active={view === n.key ? 'true' : 'false'}
               onClick={() => setView(n.key)}
               title={n.question}
               className={[
@@ -188,6 +193,23 @@ export function Legend() {
   const { context, discrimination } = useStore();
   const def = contextByKey(context);
   const ramp = RAMPS[context];
+  if (def.categoricalLegend) {
+    /* Un contexto de orientación no tiene rampa que explicar: dice qué es cada trazo. */
+    return (
+      <div data-uri="legend"
+           className="pointer-events-none rounded-lg border border-ink-600 bg-ink-950/97 px-2.5 py-2 shadow-lg shadow-black/50">
+        <ul className="grid grid-cols-2 gap-x-3 gap-y-1 text-[9px] text-mute-300">
+          {def.categoricalLegend.map((item) => (
+            <li key={item.label} className="flex items-center gap-1.5">
+              <span className="inline-block h-0 w-4 border-t-2"
+                    style={{ borderColor: item.color, borderStyle: item.dashed ? 'dashed' : 'solid' }} />
+              {item.label}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
   return (
     <div data-uri="legend"
          className="pointer-events-none rounded-lg border border-ink-600 bg-ink-950/97 px-2.5 py-2 shadow-lg shadow-black/50">
@@ -216,19 +238,34 @@ export function Legend() {
 }
 
 export function Breadcrumb() {
-  const { selectedSiteId, selectSite, oppBySite } = useStore();
+  const { selectedSiteId, selectSite, oppBySite, siteById, territory, setHighlightedAdminId } = useStore();
   const opp = selectedSiteId ? oppBySite.get(selectedSiteId) : undefined;
+  const site = selectedSiteId ? siteById.get(selectedSiteId) : undefined;
+  const place = opp?.place ?? (site ? {
+    commune: site.commune ?? null, neighborhood: site.neighborhood ?? null,
+  } : null);
+  const city = territory?.city?.display_name ?? 'Pereira';
+  const sep = <span className="text-ink-500">›</span>;
   return (
-    <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-ink-600 bg-ink-950/97 px-2 py-1.5 text-[11px] shadow-lg shadow-black/50">
+    <div data-uri="breadcrumb"
+         className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-lg border border-ink-600 bg-ink-950/97 px-2 py-1.5 text-[11px] shadow-lg shadow-black/50">
       <button
-        onClick={() => selectSite(null)}
+        onClick={() => { selectSite(null); setHighlightedAdminId(null); }}
         className={selectedSiteId ? 'text-mute-400 hover:text-paper' : 'font-medium text-paper'}
       >
-        AOI Pereira
+        {city}
       </button>
       {selectedSiteId && (
         <>
-          <span className="text-ink-500">/</span>
+          {sep}
+          <span className={place?.commune ? 'text-mute-200' : 'text-mute-500'}>
+            {place?.commune ? `Comuna ${place.commune}` : 'comuna sin fuente'}
+          </span>
+          {sep}
+          <span className={place?.neighborhood ? 'text-mute-200' : 'text-mute-500'}>
+            {place?.neighborhood ?? 'barrio sin fuente'}
+          </span>
+          {sep}
           <span className="font-medium text-paper">
             {opp?.intervention_label ?? selectedSiteId}
           </span>
@@ -238,6 +275,50 @@ export function Breadcrumb() {
       {!selectedSiteId && (
         <span className="ml-1.5 hidden border-l border-ink-700 pl-2 text-[10px] text-mute-500 sm:inline">
           clic en un sitio para ver su oportunidad
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Tipo de mapa (ADR-22 §8). Calles y Oscuro son OpenStreetMap servido por
+ * nosotros; Datos es el mapa original sin cartografía base. Si el extracto no
+ * está publicado en este despliegue, solo queda Datos y el control lo dice.
+ */
+export function MapTypeSwitcher() {
+  const { baseMap, setBaseMap, territory } = useStore();
+  const available = territory?.imagery.basemap?.available ?? false;
+  const replica = territory?.imagery.basemap?.osm_replication_time;
+  return (
+    <div className="pointer-events-auto flex flex-col items-end gap-1">
+      <div data-uri="basemap-switcher"
+           className="flex gap-0.5 rounded-lg border border-ink-600 bg-ink-950/97 p-0.5 text-[11px] shadow-lg shadow-black/50">
+        {BASEMAPS.map((b) => {
+          const disabled = b.key !== 'datos' && !available;
+          return (
+            <button
+              key={b.key}
+              data-uri="basemap"
+              data-basemap={b.key}
+              data-active={baseMap === b.key ? 'true' : 'false'}
+              disabled={disabled}
+              onClick={() => setBaseMap(b.key)}
+              title={disabled ? 'Sin extracto de cartografía base en este despliegue' : b.help}
+              className={[
+                'rounded-md px-2.5 py-1 font-medium transition-colors',
+                baseMap === b.key ? 'bg-ink-700 text-paper' : 'text-mute-300 hover:bg-ink-850 hover:text-paper',
+                disabled ? 'cursor-not-allowed opacity-40' : '',
+              ].join(' ')}
+            >
+              {b.label}
+            </button>
+          );
+        })}
+      </div>
+      {baseMap !== 'datos' && replica && (
+        <span className="hidden rounded bg-ink-950/80 px-1.5 text-[9px] text-mute-400 sm:inline">
+          OpenStreetMap · réplica {replica.slice(0, 10)}
         </span>
       )}
     </div>

@@ -39,8 +39,28 @@ así que el extracto archivado es lo único que permite reconstruir una
 dependa de que Overpass esté en pie.
 
 **Todas las fuentes están versionadas** en `db/seed/`: daño de Copernicus EMS,
-huellas de Microsoft, uso de suelo y red de OSM, estaciones de Megabús. El
-pipeline corre sin descargar nada. El extracto del SGC se borró: archivarlo
+huellas de Microsoft, uso de suelo, red y lugares de OSM (comunas, barrios,
+ríos, hitos), contornos de Natural Earth, equipamientos y espacio público de la
+Alcaldía de Pereira, estaciones de Megabús. El pipeline corre sin descargar
+nada. Los refrescos son manuales y con red:
+
+```bash
+.venv/bin/python scripts/fetch_pereira_sig.py          # capas municipales con licencia declarada
+.venv/bin/python scripts/fetch_ortofoto.py pereira_ortofoto_post --dry-run   # ortofoto, con puerta
+```
+
+La cartografía base de calles (`data/basemap/pereira_basemap.pmtiles`) se
+refresca con el CLI de Protomaps y se documenta en `data/basemap/basemap.json`:
+
+```bash
+pmtiles extract https://build.protomaps.com/YYYYMMDD.pmtiles data/basemap/pereira_basemap.pmtiles \
+  --bbox=-75.80,4.75,-75.62,4.86 --maxzoom=15
+```
+
+`fetch_ortofoto.py` escribe en `data/ortofoto/.sandbox/` mientras la fuente
+siga en `UNCLEAR`: se puede mirar en local, no se sirve ni se publica. Cuando
+la fila del registro cambie, el mismo comando escribe en `data/ortofoto/<fuente>/`
+y el visor la enciende. El extracto del SGC se borró: archivarlo
 en un repositorio público era redistribuirlo (ADR-18).
 
 ```bash

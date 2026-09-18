@@ -27,7 +27,10 @@ from uri.contracts import (
 )
 from uri.contracts import opportunity as opportunity_contracts
 from uri.contracts.enums import PROFILE_ALLOWS, ExportProfile, LicenseClass
+from uri.contracts.event import EVENT
+from uri.contracts.place import format_place_line
 from uri.db import api_connection, close_pool, fetch_all, fetch_one, open_pool
+from uri.ingestion.loader import PEREIRA_BBOX
 from uri.opportunities import generate_opportunities
 from uri.reporting.exports import (
     ExportBlocked,
@@ -113,6 +116,25 @@ def build_provenance(conn, *, include_constraints: bool = False) -> Provenance:
     )
 
 
+#: Identidad de lugar de un sitio (ADR-22), derivada de OSM. Se une con LEFT
+#: JOIN: un sitio sin barrio sigue existiendo, y sus columnas llegan NULL.
+PLACE_COLUMNS = """
+               sp.neighborhood, sp.neighborhood_method, sp.commune, sp.corner_label,
+               sp.nearest_landmark, sp.nearest_landmark_m
+""".strip()
+
+
+def place_line(row: dict) -> str | None:
+    metros = row.get("nearest_landmark_m")
+    return format_place_line(
+        row.get("neighborhood"),
+        row.get("commune"),
+        row.get("corner_label"),
+        row.get("nearest_landmark"),
+        float(metros) if metros is not None else None,
+    )
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -160,10 +182,12 @@ def list_sites(
                f.population_10min, f.park_deficit, f.social_vulnerability,
                f.risk_score, f.land_use_compatibility, f.pedestrian_accessibility,
                f.households_10min, f.park_area_per_capita, f.building_density,
-               f.school_access, f.health_access, f.community_access, f.site_area
+               f.school_access, f.health_access, f.community_access, f.site_area,
+               {PLACE_COLUMNS}
         FROM rebuild_core.site s
         JOIN rebuild_analytics.site_feature f USING (site_id)
         LEFT JOIN rebuild_core.site_damage_fusion fu USING (site_id)
+        LEFT JOIN rebuild_osm_derived.site_place sp USING (site_id)
         WHERE {" AND ".join(where)}
         ORDER BY s.site_id
         LIMIT %(limit)s
@@ -194,6 +218,7 @@ def list_sites(
                 top_intervention=top_intervention,
                 top_intervention_label=top_label,
                 top_score=top_score,
+                place_line=place_line(row),
             )
         )
 
@@ -208,16 +233,18 @@ def list_sites(
 def site_detail(conn: Conn, site_id: str) -> schemas.SiteDetail:
     row = fetch_one(
         conn,
-        """
+        f"""
         SELECT s.site_id, s.state::text, s.area_m2, s.area_is_estimated, s.evidence_count,
                ST_X(s.centroid) AS lon, ST_Y(s.centroid) AS lat,
                fu.damage_class::text AS damage_class, fu.damage_confidence,
                fu.independent_sources, fu.contributing_sources, fu.agreement_ratio,
                fu.any_field_validated, fu.observation_age_days, fu.drivers AS fusion_drivers,
+               {PLACE_COLUMNS},
                f.*
         FROM rebuild_core.site s
         JOIN rebuild_analytics.site_feature f USING (site_id)
         LEFT JOIN rebuild_core.site_damage_fusion fu USING (site_id)
+        LEFT JOIN rebuild_osm_derived.site_place sp USING (site_id)
         WHERE s.site_id = %s AND f.feature_version = %s
         """,
         (site_id, pipeline.FEATURE_VERSION),
@@ -312,6 +339,7 @@ def site_detail(conn: Conn, site_id: str) -> schemas.SiteDetail:
             top_intervention=recommendations[0].intervention if recommendations else None,
             top_intervention_label=(recommendations[0].display_name if recommendations else None),
             top_score=recommendations[0].score if recommendations else None,
+            place_line=place_line(row),
         ),
         features={k: (float(row[k]) if row.get(k) is not None else None) for k in feature_keys},
         confidence_drivers=row["confidence_drivers"],
@@ -323,28 +351,94 @@ def site_detail(conn: Conn, site_id: str) -> schemas.SiteDetail:
     )
 
 
-@app.post(f"{API_PREFIX}/scenarios", response_model=schemas.ScenarioOut)
-def create_scenario(conn: Conn, request: schemas.ScenarioRequest) -> schemas.ScenarioOut:
+def _run_scenario(
+    conn,
+    *,
+    budget_cop: float,
+    weights: dict[str, float] | None,
+    allowed: list[InterventionType] | None,
+    max_projects: int | None,
+    baseline: dict[int, float] | None = None,
+):
+    """Puntua, optimiza y devuelve (resultado, pesos, hash candidatos, hash matriz).
+
+    Es lo que un escenario ES: una corrida determinista sobre el conjunto de
+    candidatos actual. Crear uno lo persiste; listarlos lo vuelve a correr con
+    los parametros guardados, porque el resultado completo —equidad, motivo de
+    parada, acumulados— no se guarda y recalcularlo es mas barato y mas honesto
+    que persistir una copia que podria dejar de coincidir con los candidatos.
+    """
     from uri.scoring.model import DEFAULT_WEIGHTS
 
-    weights = request.weights or DEFAULT_WEIGHTS
+    weights = weights or DEFAULT_WEIGHTS
+    rows = pipeline.candidate_features(conn)
+    scored = pipeline.score_candidates(rows, weights=weights, allowed=allowed)
+    candidate_hash, matrix_hash = pipeline.hash_candidate_set(rows)
+    candidates = pipeline.build_candidates_for_optimizer(conn, scored)
+    # El acceso de partida no depende del escenario y es lo unico lento (~1 s):
+    # quien lista varios lo calcula una vez y lo pasa.
+    if baseline is None:
+        baseline = pipeline.baseline_public_space_access(conn)
+    result = pipeline.optimize(
+        candidates, budget=budget_cop, max_projects=max_projects, baseline_access=baseline
+    )
+    return result, weights, candidate_hash, matrix_hash
+
+
+def _scenario_out(
+    *,
+    scenario_id: str,
+    name: str,
+    budget_cop: float,
+    weights,
+    result,
+    candidate_hash,
+    matrix_hash,
+    provenance,
+) -> schemas.ScenarioOut:
+    return schemas.ScenarioOut(
+        scenario_id=scenario_id,
+        name=name,
+        budget_cop=budget_cop,
+        weights=weights,
+        items=[
+            schemas.PortfolioItemOut(
+                **{
+                    **i.__dict__,
+                    "intervention": i.intervention.value,
+                    "intervention_label": INTERVENTION_CATALOG[i.intervention]["display_name"],
+                }
+            )
+            for i in result.items
+        ],
+        total_cost=result.total_cost,
+        total_population=result.total_population,
+        objective_value=result.objective_value,
+        considered=result.considered,
+        stop_reason=result.stop_reason,
+        budget_binding=result.budget_binding,
+        skipped_over_budget=result.skipped_over_budget,
+        equity_before=result.equity_before,
+        equity_after=result.equity_after,
+        candidate_set_hash=candidate_hash,
+        feature_matrix_hash=matrix_hash,
+        provenance=provenance,
+    )
+
+
+@app.post(f"{API_PREFIX}/scenarios", response_model=schemas.ScenarioOut)
+def create_scenario(conn: Conn, request: schemas.ScenarioRequest) -> schemas.ScenarioOut:
     allowed = (
         [InterventionType(i) for i in request.allowed_interventions]
         if request.allowed_interventions
         else None
     )
-
-    rows = pipeline.candidate_features(conn)
-    scored = pipeline.score_candidates(rows, weights=weights, allowed=allowed)
-    candidate_hash, matrix_hash = pipeline.hash_candidate_set(rows)
-
-    candidates = pipeline.build_candidates_for_optimizer(conn, scored)
-    baseline = pipeline.baseline_public_space_access(conn)
-    result = pipeline.optimize(
-        candidates,
-        budget=request.budget_cop,
+    result, weights, candidate_hash, matrix_hash = _run_scenario(
+        conn,
+        budget_cop=request.budget_cop,
+        weights=request.weights,
+        allowed=allowed,
         max_projects=request.max_projects,
-        baseline_access=baseline,
     )
 
     provenance = build_provenance(conn, include_constraints=True)
@@ -410,52 +504,72 @@ def create_scenario(conn: Conn, request: schemas.ScenarioRequest) -> schemas.Sce
         )
     conn.commit()
 
-    return schemas.ScenarioOut(
+    return _scenario_out(
         scenario_id=scenario_id,
         name=request.name,
         budget_cop=request.budget_cop,
         weights=weights,
-        items=[
-            schemas.PortfolioItemOut(
-                **{
-                    **i.__dict__,
-                    "intervention": i.intervention.value,
-                    "intervention_label": INTERVENTION_CATALOG[i.intervention]["display_name"],
-                }
-            )
-            for i in result.items
-        ],
-        total_cost=result.total_cost,
-        total_population=result.total_population,
-        objective_value=result.objective_value,
-        considered=result.considered,
-        stop_reason=result.stop_reason,
-        budget_binding=result.budget_binding,
-        skipped_over_budget=result.skipped_over_budget,
-        equity_before=result.equity_before,
-        equity_after=result.equity_after,
-        candidate_set_hash=candidate_hash,
-        feature_matrix_hash=matrix_hash,
+        result=result,
+        candidate_hash=candidate_hash,
+        matrix_hash=matrix_hash,
         provenance=provenance,
     )
 
 
-@app.get(f"{API_PREFIX}/scenarios", response_model=list[dict])
-def list_scenarios(conn: Conn) -> list[dict]:
-    return fetch_all(
+@app.get(f"{API_PREFIX}/scenarios", response_model=list[schemas.ScenarioOut])
+def list_scenarios(conn: Conn) -> list[schemas.ScenarioOut]:
+    """Los escenarios guardados, completos y con la MISMA forma que devuelve
+    crearlos — que es la que `build_static.py` vuelca y el visor consume.
+
+    Un resumen con conteos servia para una tabla; el visor necesita los
+    proyectos, la equidad y el motivo de parada, y en vivo los leia de un
+    objeto que no los traia. Se recalculan con los parametros guardados: es
+    determinista sobre el mismo conjunto de candidatos, y si el conjunto
+    cambio, `candidate_set_hash` lo delata en vez de servir un resultado
+    viejo como si fuera actual.
+    """
+    stored = fetch_all(
         conn,
         """
-        SELECT s.scenario_id, s.display_name AS name, s.budget_cop, s.weights,
-               s.created_at::text AS created_at, s.candidate_set_hash, s.is_synthetic,
-               count(ss.site_id) AS projects,
-               COALESCE(sum(ss.cost_cop), 0) AS total_cost,
-               COALESCE(sum(ss.marginal_population), 0) AS population_served
-        FROM rebuild_core.scenario s
-        LEFT JOIN rebuild_core.scenario_site ss USING (scenario_id)
-        GROUP BY s.scenario_id
-        ORDER BY s.created_at DESC
+        SELECT scenario_id, display_name, budget_cop, weights, allowed_interventions,
+               candidate_set_hash
+        FROM rebuild_core.scenario
+        ORDER BY budget_cop, created_at
         """,
     )
+    if not stored:
+        return []
+    provenance = build_provenance(conn, include_constraints=True)
+    baseline = pipeline.baseline_public_space_access(conn)
+    out: list[schemas.ScenarioOut] = []
+    for row in stored:
+        allowed_values = list(row["allowed_interventions"] or [])
+        allowed = (
+            [InterventionType(v) for v in allowed_values]
+            if 0 < len(allowed_values) < len(InterventionType)
+            else None
+        )
+        result, weights, candidate_hash, matrix_hash = _run_scenario(
+            conn,
+            budget_cop=float(row["budget_cop"]),
+            weights=row["weights"],
+            allowed=allowed,
+            max_projects=None,
+            baseline=baseline,
+        )
+        out.append(
+            _scenario_out(
+                scenario_id=row["scenario_id"],
+                name=row["display_name"],
+                budget_cop=float(row["budget_cop"]),
+                weights=weights,
+                result=result,
+                candidate_hash=candidate_hash,
+                matrix_hash=matrix_hash,
+                provenance=provenance,
+            )
+        )
+    return out
 
 
 @app.get(f"{API_PREFIX}/data-sources", response_model=list[schemas.SourceOut])
@@ -814,21 +928,103 @@ def layer_geojson(conn: Conn, layer: str) -> Response:
             "SELECT footprint_id::text AS id, ST_AsGeoJSON(geometry, 6) AS g "
             "FROM rebuild_core.building_footprint"
         ),
+        # Las vias llevan su nombre y su clase: la clase dibuja la jerarquia
+        # (una avenida no es una escalera) y el nombre es lo que orienta. Las
+        # arterias que el grafo peatonal excluye entran aqui, y solo aqui.
         "roads": (
-            "SELECT osm_id::text AS id, highway AS label, "
-            "ST_AsGeoJSON(geometry, 6) AS g FROM rebuild_osm_raw.road"
+            "SELECT osm_id::text AS id, highway AS label, display_name, "
+            "ST_AsGeoJSON(geometry, 6) AS g FROM rebuild_osm_raw.road "
+            "UNION ALL "
+            "SELECT osm_id::text AS id, highway AS label, display_name, "
+            "ST_AsGeoJSON(geometry, 6) AS g FROM rebuild_osm_raw.arterial_road"
         ),
         "evidence": (
             "SELECT evidence_id::text AS id, damage_class::text AS label, "
             "ST_AsGeoJSON(geometry) AS g FROM rebuild_core.damage_evidence"
         ),
         "green": (
-            "SELECT osm_id::text AS id, leisure AS label, ST_AsGeoJSON(geometry) AS g "
-            "FROM rebuild_osm_raw.green_space"
+            "SELECT osm_id::text AS id, leisure AS label, display_name, "
+            "ST_AsGeoJSON(geometry) AS g FROM rebuild_osm_raw.green_space"
         ),
         "facilities": (
-            "SELECT osm_id::text AS id, category AS label, ST_AsGeoJSON(geometry) AS g "
-            "FROM rebuild_osm_raw.facility"
+            "SELECT osm_id::text AS id, category AS label, display_name, "
+            "ST_AsGeoJSON(geometry) AS g FROM rebuild_osm_raw.facility"
+        ),
+        # ── Lugares (ADR-22) ──
+        # Comunas y barrios recortados al AOI mas un kilometro y simplificados
+        # a ~2 m: se dibujan como contorno, y un contorno de un barrio entero
+        # a resolucion de levantamiento pesa diez veces mas de lo que se ve.
+        "admin_areas": (
+            "SELECT osm_id::text AS id, admin_level, display_name, wikidata, "
+            "ST_X(ST_PointOnSurface(geometry)) AS label_lon, "
+            "ST_Y(ST_PointOnSurface(geometry)) AS label_lat, "
+            "ST_AsGeoJSON(ST_SimplifyPreserveTopology(geometry, 0.00002), 6) AS g "
+            "FROM rebuild_osm_raw.admin_area "
+            "WHERE ST_Intersects(geometry, ST_Expand(ST_MakeEnvelope(%(min_lon)s, %(min_lat)s, "
+            "%(max_lon)s, %(max_lat)s, 4326), 0.009)) "
+            "ORDER BY admin_level, display_name"
+        ),
+        "places": (
+            "SELECT osm_id::text AS id, place AS label, display_name, wikidata, population, "
+            "ST_AsGeoJSON(geometry, 6) AS g FROM rebuild_osm_raw.place_point"
+        ),
+        "waterways": (
+            "SELECT osm_id::text AS id, waterway AS label, display_name, "
+            "ST_AsGeoJSON(ST_SimplifyPreserveTopology(geometry, 0.00001), 6) AS g "
+            "FROM rebuild_osm_raw.waterway"
+        ),
+        "landmarks": (
+            "SELECT osm_id::text AS id, kind AS label, subkind, display_name, wikidata, priority, "
+            "ST_AsGeoJSON(geometry, 6) AS g FROM rebuild_osm_raw.landmark ORDER BY priority"
+        ),
+        # Un punto por nombre de via, en el medio de su tramo mas largo y con
+        # el angulo del tramo: es lo que necesita una etiqueta para tumbarse
+        # sobre la calle en vez de flotar. Se calcula aqui (ADR-13).
+        "road_labels": (
+            """
+            WITH named AS (
+                SELECT display_name, highway, geometry FROM rebuild_osm_raw.road
+                WHERE display_name IS NOT NULL
+                UNION ALL
+                SELECT display_name, highway, geometry FROM rebuild_osm_raw.arterial_road
+                WHERE display_name IS NOT NULL
+            ),
+            merged AS (
+                SELECT display_name,
+                       (array_agg(highway ORDER BY CASE highway
+                            WHEN 'motorway' THEN 0 WHEN 'trunk' THEN 1 WHEN 'primary' THEN 2
+                            WHEN 'secondary' THEN 3 WHEN 'tertiary' THEN 4 ELSE 9 END))[1]
+                           AS highway,
+                       (ST_Dump(ST_LineMerge(ST_Collect(geometry)))).geom AS geom
+                FROM named GROUP BY display_name
+            ),
+            longest AS (
+                SELECT DISTINCT ON (display_name) display_name, highway, geom
+                FROM merged
+                WHERE ST_GeometryType(geom) = 'ST_LineString'
+                ORDER BY display_name, ST_Length(geom) DESC
+            )
+            SELECT display_name AS id, highway AS label, display_name,
+                   round(ST_Length(geom::geography)) AS length_m,
+                   degrees(ST_Azimuth(ST_LineInterpolatePoint(geom, 0.45),
+                                      ST_LineInterpolatePoint(geom, 0.55))) AS azimuth,
+                   ST_AsGeoJSON(ST_LineInterpolatePoint(geom, 0.5), 6) AS g
+            FROM longest
+            """
+        ),
+        "municipal_facilities": (
+            "SELECT facility_id::text AS id, facility_type AS label, display_name, area_m2, "
+            "ST_AsGeoJSON(ST_SimplifyPreserveTopology(geometry, 0.00001), 6) AS g "
+            "FROM rebuild_core.municipal_facility"
+        ),
+        "municipal_public_space": (
+            "SELECT space_id::text AS id, space_type AS label, display_name, area_m2, "
+            "ST_AsGeoJSON(ST_SimplifyPreserveTopology(geometry, 0.00001), 6) AS g "
+            "FROM rebuild_core.municipal_public_space"
+        ),
+        "reference_regions": (
+            "SELECT region_id AS id, level AS label, display_name, "
+            "ST_AsGeoJSON(geometry, 4) AS g FROM rebuild_core.reference_region"
         ),
         "risk": (
             "SELECT zone_id::text AS id, risk_level AS label, ST_AsGeoJSON(geometry) AS g "
@@ -846,7 +1042,11 @@ def layer_geojson(conn: Conn, layer: str) -> Response:
     if layer not in queries:
         raise HTTPException(404, f"capa {layer} desconocida")
 
-    params = (pipeline.FEATURE_VERSION,) if layer == "catchments" else None
+    params: object = None
+    if layer == "catchments":
+        params = (pipeline.FEATURE_VERSION,)
+    elif layer == "admin_areas":
+        params = dict(zip(("min_lon", "min_lat", "max_lon", "max_lat"), PEREIRA_BBOX, strict=True))
     rows = fetch_all(conn, queries[layer], params)
     features = [
         {
@@ -882,7 +1082,7 @@ def list_opportunities(conn: Conn, limit: int = Query(200, le=500)) -> Response:
     """
     rows = fetch_all(
         conn,
-        """
+        f"""
         SELECT s.site_id, s.area_m2, s.evidence_count,
                ST_X(s.centroid) AS lon, ST_Y(s.centroid) AS lat,
                fu.damage_class::text AS damage_class, fu.damage_confidence,
@@ -890,10 +1090,12 @@ def list_opportunities(conn: Conn, limit: int = Query(200, le=500)) -> Response:
                f.population_10min, f.park_deficit, f.social_vulnerability,
                f.risk_score, f.land_use_compatibility, f.pedestrian_accessibility,
                f.building_density, f.school_access, f.health_access,
-               f.community_access, f.site_area AS site_area_m2
+               f.community_access, f.site_area AS site_area_m2,
+               {PLACE_COLUMNS}
         FROM rebuild_core.site s
         JOIN rebuild_analytics.site_feature f USING (site_id)
         LEFT JOIN rebuild_core.site_damage_fusion fu USING (site_id)
+        LEFT JOIN rebuild_osm_derived.site_place sp USING (site_id)
         WHERE s.state = 'CANDIDATE'
         ORDER BY s.site_id
         LIMIT %s
@@ -901,15 +1103,31 @@ def list_opportunities(conn: Conn, limit: int = Query(200, le=500)) -> Response:
         (limit,),
     )
 
+    place_keys = (
+        "neighborhood",
+        "neighborhood_method",
+        "commune",
+        "corner_label",
+        "nearest_landmark",
+        "nearest_landmark_m",
+    )
     sitios = []
     for row in rows:
         clases = {}
         if row.get("damage_class"):
             clases[row["damage_class"]] = int(row.get("evidence_count") or 0)
+        # La zona es el barrio y la comuna, o lo que haya de los dos. Sin
+        # ninguno queda None y la ficha dice "sin fuente".
+        zona = " · ".join(
+            f"{etiqueta} {row[k]}"
+            for etiqueta, k in (("Barrio", "neighborhood"), ("Comuna", "commune"))
+            if row.get(k)
+        )
         sitios.append(
             {
                 "site_id": row["site_id"],
-                "features": {k: row.get(k) for k in row if k != "site_id"},
+                "zone": zona or None,
+                "features": {k: row.get(k) for k in row if k != "site_id" and k not in place_keys},
                 "evidence": opportunity_contracts.EvidenceSummary(
                     damage_observations=int(row.get("evidence_count") or 0),
                     damage_classes=clases,
@@ -930,6 +1148,16 @@ def list_opportunities(conn: Conn, limit: int = Query(200, le=500)) -> Response:
     oportunidades.sort(key=lambda o: o.suitability, reverse=True)
 
     centros = {r["site_id"]: (r["lon"], r["lat"]) for r in rows}
+    lugares = {
+        r["site_id"]: {
+            **{
+                k: (float(r[k]) if k == "nearest_landmark_m" and r.get(k) is not None else r.get(k))
+                for k in place_keys
+            },
+            "place_line": place_line(r),
+        }
+        for r in rows
+    }
     payload = []
     for o in oportunidades:
         item = o.model_dump(mode="json")
@@ -937,12 +1165,316 @@ def list_opportunities(conn: Conn, limit: int = Query(200, le=500)) -> Response:
         item["lon"], item["lat"] = lon, lat
         item["unknowns"] = o.unknowns
         item["blocked"] = o.blocked
+        item["place"] = lugares.get(o.site_id)
         payload.append(item)
 
     return Response(
         content=json.dumps({"opportunities": payload}, ensure_ascii=False),
         media_type="application/json",
     )
+
+
+DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+
+
+def _imagery_status(conn) -> dict:
+    """Que imagen se puede mostrar, y por que no la que falta (ADR-22).
+
+    Sentinel: hay vistas si el indice existe. Ortofotos: una por fuente, y
+    solo cuenta como disponible si el registro dice que se puede redistribuir
+    Y hay teselas en `data/ortofoto/<fuente>/`. Un toggle que aparece
+    deshabilitado con su razon vale mas que uno que no aparece.
+    """
+    sentinel_index = DATA_DIR / "sentinel" / "previews.json"
+    sentinel = {"available": sentinel_index.exists(), "scenes": 0}
+    if sentinel["available"]:
+        sentinel["scenes"] = len(json.loads(sentinel_index.read_text(encoding="utf-8"))["scenes"])
+
+    rows = fetch_all(
+        conn,
+        """
+        SELECT source_id, display_name, license_class::text AS license_class,
+               redistribution_allowed, attribution_text
+        FROM rebuild_core.source_register
+        WHERE source_id IN ('igac_ortofoto', 'pereira_ortofoto_post')
+        ORDER BY source_id
+        """,
+    )
+    ortofotos = []
+    for row in rows:
+        index_path = DATA_DIR / "ortofoto" / row["source_id"] / "ortofoto.json"
+        redistributable = row["redistribution_allowed"] is True
+        if not redistributable:
+            status, reason = "UNAVAILABLE", "licencia sin verificar (fuentes.md §10)"
+        elif not index_path.exists():
+            status, reason = "UNAVAILABLE", "sin teselas descargadas en este despliegue"
+        else:
+            status, reason = "AVAILABLE", None
+        entry = {
+            "source_id": row["source_id"],
+            "display_name": row["display_name"],
+            "license_class": row["license_class"],
+            "status": status,
+            "reason": reason,
+            "attribution": row["attribution_text"],
+        }
+        if status == "AVAILABLE":
+            entry["index"] = json.loads(index_path.read_text(encoding="utf-8"))
+        ortofotos.append(entry)
+    basemap_index = DATA_DIR / "basemap" / "basemap.json"
+    basemap = {
+        "available": False,
+        "osm_replication_time": None,
+        "maxzoom": None,
+        "attribution": None,
+    }
+    if basemap_index.exists():
+        index = json.loads(basemap_index.read_text(encoding="utf-8"))
+        basemap = {
+            "available": (DATA_DIR / "basemap" / index.get("file", "")).exists(),
+            "osm_replication_time": index.get("osm_replication_time"),
+            "maxzoom": index.get("maxzoom"),
+            "attribution": index.get("attribution"),
+        }
+    return {"sentinel": sentinel, "basemap": basemap, "ortofotos": ortofotos}
+
+
+@app.get(f"{API_PREFIX}/territory")
+def territory(conn: Conn) -> dict:
+    """¿Dónde estamos? Lo que la vista Territorio necesita para situar al
+    usuario antes de mostrarle un solo puntaje (ADR-22).
+
+    Todo sale de la base o de una constante declarada con su fuente: la
+    ciudad y su poblacion del nodo de OSM, el perimetro urbano y las comunas
+    de los limites de OSM, el evento de la ficha USGS, y los conteos de las
+    tablas que ya alimentan el resto del visor. Nada se escribe a mano en un
+    panel.
+    """
+    city = fetch_one(
+        conn,
+        """
+        SELECT display_name, wikidata, population, ST_X(geometry) AS lon, ST_Y(geometry) AS lat
+        FROM rebuild_osm_raw.place_point WHERE place = 'city' ORDER BY population DESC NULLS LAST
+        LIMIT 1
+        """,
+    )
+    perimeter = fetch_one(
+        conn,
+        """
+        SELECT osm_id, display_name,
+               ST_XMin(geometry) AS min_lon, ST_YMin(geometry) AS min_lat,
+               ST_XMax(geometry) AS max_lon, ST_YMax(geometry) AS max_lat,
+               ST_Area(geometry::geography) / 1e6 AS area_km2
+        FROM rebuild_osm_raw.admin_area WHERE admin_level = 7 ORDER BY ST_Area(geometry) DESC
+        LIMIT 1
+        """,
+    )
+    aoi_alert = fetch_one(
+        conn,
+        "SELECT payload FROM rebuild_core.quality_alert WHERE code = 'AOI_COVERAGE' "
+        "ORDER BY raised_at DESC LIMIT 1",
+    )
+    aoi_km2 = float((aoi_alert or {}).get("payload", {}).get("aoi_km2") or 0) or None
+    bbox_km2 = fetch_one(
+        conn,
+        "SELECT ST_Area(ST_MakeEnvelope(%s, %s, %s, %s, 4326)::geography) / 1e6 AS km2",
+        PEREIRA_BBOX,
+    )["km2"]
+
+    counts = fetch_one(
+        conn,
+        """
+        SELECT (SELECT count(*) FROM rebuild_core.damage_evidence) AS evidence,
+               (SELECT count(*) FROM rebuild_core.site) AS sites,
+               (SELECT count(*) FROM rebuild_core.site WHERE state = 'CANDIDATE') AS candidates,
+               (SELECT count(*) FROM rebuild_osm_raw.landmark) AS landmarks,
+               (SELECT count(*) FROM rebuild_core.building_footprint) AS buildings,
+               (SELECT round(sum(population)) FROM rebuild_core.population_cell)
+                   AS population_measured,
+               (SELECT count(DISTINCT commune) FROM rebuild_osm_derived.site_place
+                 WHERE commune IS NOT NULL) AS communes_with_sites,
+               (SELECT count(*) FROM rebuild_osm_raw.admin_area a
+                 WHERE a.admin_level = 9
+                   AND ST_Intersects(a.geometry, ST_MakeEnvelope(%(min_lon)s, %(min_lat)s,
+                                                                %(max_lon)s, %(max_lat)s, 4326)))
+                   AS neighborhoods_in_aoi
+        """,
+        dict(zip(("min_lon", "min_lat", "max_lon", "max_lat"), PEREIRA_BBOX, strict=True)),
+    )
+    latest_scenario = fetch_one(
+        conn,
+        """
+        SELECT s.scenario_id, count(ss.site_id) AS projects,
+               COALESCE(sum(ss.marginal_population), 0) AS population_served
+        FROM rebuild_core.scenario s
+        LEFT JOIN rebuild_core.scenario_site ss USING (scenario_id)
+        GROUP BY s.scenario_id ORDER BY max(s.created_at) DESC LIMIT 1
+        """,
+    )
+
+    comunas = fetch_all(
+        conn,
+        """
+        SELECT a.osm_id, a.display_name,
+               ST_XMin(a.geometry) AS min_lon, ST_YMin(a.geometry) AS min_lat,
+               ST_XMax(a.geometry) AS max_lon, ST_YMax(a.geometry) AS max_lat,
+               (SELECT count(*) FROM rebuild_osm_derived.site_place sp
+                 WHERE sp.commune_osm_id = a.osm_id) AS sites
+        FROM rebuild_osm_raw.admin_area a
+        WHERE a.admin_level = 8
+          AND ST_Intersects(a.geometry, ST_MakeEnvelope(%(min_lon)s, %(min_lat)s,
+                                                        %(max_lon)s, %(max_lat)s, 4326))
+        ORDER BY sites DESC, a.display_name
+        """,
+        dict(zip(("min_lon", "min_lat", "max_lon", "max_lat"), PEREIRA_BBOX, strict=True)),
+    )
+    rivers = fetch_all(
+        conn,
+        """
+        SELECT display_name, waterway, round(sum(ST_Length(geometry::geography))) AS length_m
+        FROM rebuild_osm_raw.waterway
+        WHERE waterway = 'river' OR display_name ILIKE 'r_o %'
+        GROUP BY display_name, waterway ORDER BY length_m DESC
+        """,
+    )
+
+    def _bbox(row: dict) -> list[float]:
+        return [
+            round(float(row["min_lon"]), 6),
+            round(float(row["min_lat"]), 6),
+            round(float(row["max_lon"]), 6),
+            round(float(row["max_lat"]), 6),
+        ]
+
+    distance_km = EVENT.distance_km(float(city["lon"]), float(city["lat"])) if city else None
+    payload = {
+        "city": (
+            {
+                "display_name": city["display_name"],
+                "wikidata": city["wikidata"],
+                "population": city["population"],
+                "population_source": "OpenStreetMap (etiqueta population del nodo de la ciudad)",
+                "lon": float(city["lon"]),
+                "lat": float(city["lat"]),
+                "department": "Risaralda",
+                "country": "Colombia",
+            }
+            if city
+            else None
+        ),
+        "urban_perimeter": (
+            {
+                "osm_id": perimeter["osm_id"],
+                "display_name": perimeter["display_name"],
+                "bbox": _bbox(perimeter),
+                "area_km2": round(float(perimeter["area_km2"]), 1),
+            }
+            if perimeter
+            else None
+        ),
+        "aoi": {
+            "bbox": list(PEREIRA_BBOX),
+            "bbox_km2": round(float(bbox_km2), 2),
+            "evidence_km2": round(aoi_km2, 2) if aoi_km2 else None,
+            "share_of_perimeter": (
+                round(float(bbox_km2) / float(perimeter["area_km2"]), 3) if perimeter else None
+            ),
+            "source": "Copernicus EMS EMSR916/AOI02",
+        },
+        "event": {
+            "event_id": EVENT.event_id,
+            "magnitude": EVENT.magnitude,
+            "magnitude_type": EVENT.magnitude_type,
+            "occurred_at": EVENT.occurred_at,
+            "depth_km": EVENT.depth_km,
+            "epicentre": {
+                "lon": EVENT.epicentre_lon,
+                "lat": EVENT.epicentre_lat,
+                "label": EVENT.epicentre_label,
+            },
+            "distance_km": distance_km,
+            "municipalities_affected": EVENT.municipalities_affected,
+            "activation_id": EVENT.activation_id,
+            "activation_url": EVENT.activation_url,
+            "source": EVENT.source,
+            "source_url": EVENT.source_url,
+        },
+        "counts": {
+            **{k: (int(v) if v is not None else None) for k, v in counts.items()},
+            "projects": int(latest_scenario["projects"]) if latest_scenario else None,
+            "population_served": (
+                float(latest_scenario["population_served"]) if latest_scenario else None
+            ),
+        },
+        "comunas": [
+            {
+                "osm_id": row["osm_id"],
+                "display_name": row["display_name"],
+                "bbox": _bbox(row),
+                "sites": int(row["sites"]),
+            }
+            for row in comunas
+        ],
+        "rivers": [
+            {
+                "display_name": row["display_name"],
+                "waterway": row["waterway"],
+                "length_m": int(row["length_m"]),
+            }
+            for row in rivers
+        ],
+        "imagery": _imagery_status(conn),
+        "provenance": build_provenance(conn).model_dump(mode="json"),
+    }
+    return payload
+
+
+#: Rasters que el visor puede pedir en vivo, y solo esos. Un `StaticFiles`
+#: sobre `data/` entero serviria tambien el GeoTIFF de origen del terreno, los
+#: `.tif` de Sentinel y —lo que importa— las teselas de una ortofoto en
+#: sandbox cuya fuente sigue en UNCLEAR. La puerta de publicacion tiene que
+#: valer igual para el paquete estatico y para el servidor.
+_RASTER_RULES = (
+    ("terrain", ("terrain.json",), ".png"),
+    ("sentinel", ("previews.json",), ".png"),
+    # PMTiles se lee por rangos de bytes; FileResponse responde 206 a `Range`.
+    ("basemap", ("basemap.json",), ".pmtiles"),
+)
+
+
+@app.get("/data/{path:path}", include_in_schema=False)
+def data_asset(conn: Conn, path: str):
+    from fastapi.responses import FileResponse
+
+    parts = [p for p in path.split("/") if p]
+    if not parts or any(p.startswith(".") or p in ("..", "") for p in parts):
+        raise HTTPException(404)
+    kind, rest = parts[0], parts[1:]
+    if kind == "ortofoto":
+        # data/ortofoto/<source_id>/(ortofoto.json | z/x/y.png), y solo si el
+        # registro dice que esa fuente se puede redistribuir.
+        if len(rest) < 2:
+            raise HTTPException(404)
+        source_id = rest[0]
+        row = fetch_one(
+            conn,
+            "SELECT redistribution_allowed FROM rebuild_core.source_register WHERE source_id = %s",
+            (source_id,),
+        )
+        if not row or row["redistribution_allowed"] is not True:
+            raise HTTPException(404)
+        if not (rest[-1] == "ortofoto.json" or rest[-1].endswith((".png", ".jpg"))):
+            raise HTTPException(404)
+    else:
+        rule = next((r for r in _RASTER_RULES if r[0] == kind), None)
+        if rule is None or not rest:
+            raise HTTPException(404)
+        if not (rest[-1] in rule[1] or rest[-1].endswith(rule[2])):
+            raise HTTPException(404)
+    target = (DATA_DIR / kind).joinpath(*rest)
+    if not target.is_file():
+        raise HTTPException(404)
+    return FileResponse(target)
 
 
 # El mount de la raiz va SIEMPRE el ultimo: sirve el visor en '/' y se

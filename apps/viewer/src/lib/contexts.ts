@@ -20,6 +20,10 @@ export interface ContextDef {
   sources: string[];
   /** Si falta la fuente, el contexto lo dice en vez de pintar cero. */
   missingNote?: string;
+  /** `neutral`: los sitios se dibujan sin colorear, el contexto no evalúa nada (ADR-22). */
+  sitesMode?: 'ramp' | 'neutral';
+  /** Leyenda por categorías, para un contexto que no tiene rampa que explicar. */
+  categoricalLegend?: { label: string; color: string; dashed?: boolean }[];
 }
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -32,6 +36,32 @@ const DAMAGE_SEVERITY: Record<string, number> = {
 };
 
 export const CONTEXTS: ContextDef[] = [
+  {
+    /* Orientación (ADR-22): la ciudad con sus nombres, antes de evaluar nada. */
+    key: 'TERRITORIO',
+    label: 'Territorio',
+    question: '¿Dónde estamos?',
+    unit: 'comunas, barrios, vías, ríos e hitos de OSM; equipamientos municipales',
+    legend: ['', ''],
+    value: () => null,
+    readout: (s) => s.place_line ?? 'ubicación sin fuente',
+    layers: [
+      'buildings', 'roads', 'waterways', 'admin_areas', 'places', 'landmarks', 'road_labels',
+      'municipal_facilities',
+    ],
+    sources: ['osm', 'microsoft_buildings', 'pereira_sig'],
+    sitesMode: 'neutral',
+    categoricalLegend: [
+      { label: 'Comuna', color: 'rgb(120 132 150)' },
+      { label: 'Barrio', color: 'rgb(80 90 105)', dashed: true },
+      { label: 'Río / quebrada', color: 'rgb(76 140 190)' },
+      { label: 'Hito', color: 'rgb(240 180 41)' },
+      { label: 'Equipamiento municipal', color: 'rgb(147 197 253)' },
+      { label: 'Sitio (sin colorear)', color: 'rgb(142 154 171)' },
+    ],
+    missingNote:
+      'Los nombres son los de OpenStreetMap tal como están: no se traducen ni se completan. Un sitio sin barrio en OSM dice «sin fuente».',
+  },
   {
     key: 'SITUACION',
     label: 'Situación',
@@ -118,6 +148,19 @@ export const CONTEXTS: ContextDef[] = [
 ];
 
 export const contextByKey = (k: ContextKey) => CONTEXTS.find((c) => c.key === k)!;
+
+/**
+ * Capas que hay que tener cargadas para un contexto: las suyas, la coropleta si
+ * la enciende y, siempre, las huellas — el tejido urbano es el papel sobre el
+ * que se dibuja todo (ADR-22). Una sola definición: el mapa y la precarga del
+ * store leen esta lista, no dos copias.
+ */
+export function layersFor(k: ContextKey): LayerName[] {
+  const def = contextByKey(k);
+  const out = new Set<LayerName>(['buildings', ...def.layers]);
+  if (def.populationChoropleth) out.add('population');
+  return [...out];
+}
 
 export interface Discrimination {
   covered: number;

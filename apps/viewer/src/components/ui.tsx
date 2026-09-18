@@ -1,9 +1,13 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 import { rgbCss, sample, type RGB } from '../lib/palette';
 
-export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
+export function Panel({ children, className = '', ...rest }: {
+  children: ReactNode; className?: string;
+} & HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={`rounded-xl border border-ink-700 bg-ink-900/85 ${className}`}>{children}</div>
+    <div {...rest} className={`rounded-xl border border-ink-700 bg-ink-900/85 ${className}`}>
+      {children}
+    </div>
   );
 }
 

@@ -1,5 +1,6 @@
 import type {
   Alert, Coverage, GeoJSON, Opportunity, Scenario, Site, SiteDetail, Source, Provenance,
+  Territory,
 } from '../types';
 
 declare global {
@@ -29,6 +30,9 @@ export const assetUrl = (p: string) => `${STATIC_BASE ?? 'data'}/${p}`;
 
 export const GEOJSON_LAYERS = [
   'buildings', 'roads', 'sites', 'evidence', 'green', 'facilities', 'population', 'catchments',
+  /* Lugares (ADR-22): lo que hace que el mapa se lea como Pereira. */
+  'admin_areas', 'places', 'waterways', 'landmarks', 'road_labels',
+  'municipal_facilities', 'municipal_public_space', 'reference_regions',
 ] as const;
 export type LayerName = (typeof GEOJSON_LAYERS)[number];
 
@@ -84,7 +88,10 @@ export async function loadCoverage(scenarioId: string): Promise<Coverage> {
   return getJSON<Coverage>('', `/scenarios/${scenarioId}/coverage`);
 }
 
-export interface TerrainIndex { minzoom: number; maxzoom: number; tiles?: string; bounds?: number[] }
+export interface TerrainIndex {
+  minzoom: number; maxzoom: number; encoding?: 'mapbox' | 'terrarium';
+  attribution?: string; liability_notice?: string;
+}
 export async function loadTerrain(): Promise<TerrainIndex | null> {
   try {
     const res = await fetch(assetUrl('terrain/terrain.json'));
@@ -92,15 +99,42 @@ export async function loadTerrain(): Promise<TerrainIndex | null> {
   } catch { return null; }
 }
 
+/** Una escena de `data/sentinel/previews.json`, con las claves que escribe
+ *  `scripts/fetch_sentinel.py`. La fecha, la razón y la limitación viajan con
+ *  la imagen hasta la pantalla (ADR-19): sin ellas es un veredicto disfrazado. */
 export interface SentinelScene {
-  collection: string; window: string; file: string; date?: string;
-  bounds?: [number, number, number, number]; label?: string;
+  collection: 'sentinel-1-grd' | 'sentinel-2-l2a' | string;
+  window: 'PRE' | 'POST';
+  scene_id: string;
+  acquisition: string;
+  cloud_cover: number | null;
+  orbit_direction: string | null;
+  relative_orbit: number | null;
+  file: string;
+  bbox: [number, number, number, number];
+  reason: string;
 }
-export async function loadSentinel(): Promise<SentinelScene[]> {
+export interface SentinelIndex {
+  aoi_bbox: [number, number, number, number];
+  event_date: string;
+  attribution: string;
+  limitation: string;
+  scenes: SentinelScene[];
+}
+export async function loadSentinel(): Promise<SentinelIndex | null> {
   try {
     const res = await fetch(assetUrl('sentinel/previews.json'));
-    if (!res.ok) return [];
-    const idx = (await res.json()) as { scenes: SentinelScene[] };
-    return idx.scenes ?? [];
-  } catch { return []; }
+    if (!res.ok) return null;
+    const idx = (await res.json()) as SentinelIndex;
+    return idx.scenes ? idx : null;
+  } catch { return null; }
 }
+
+/** La imagen de una escena. Estático: junto al índice; en vivo: `data/sentinel/<familia>/<ventana>/`. */
+export function sentinelImageUrl(scene: SentinelScene): string {
+  if (IS_STATIC) return `${STATIC_BASE}/sentinel/${scene.file}`;
+  const family = scene.collection === 'sentinel-1-grd' ? 'sentinel1' : 'sentinel2';
+  return `data/sentinel/${family}/${scene.window.toLowerCase()}/${scene.file}`;
+}
+
+export const loadTerritory = () => getJSON<Territory>('territory.json', '/territory');

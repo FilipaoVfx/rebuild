@@ -376,6 +376,13 @@ def derive_sites(conn: psycopg.Connection, data_version: int) -> int:
     resultante queda marcada como estimada, porque lo es.
     """
     with conn.cursor() as cur:
+        # Un escenario es un resultado calculado sobre los sitios de una
+        # corrida. Si los sitios se rehacen, el escenario que los referencia
+        # describe un estado que ya no existe: se retira con ellos y se
+        # recalcula a demanda. Sin esto, la segunda corrida tras crear un
+        # escenario falla por la clave foranea de `scenario_site`.
+        cur.execute("DELETE FROM rebuild_core.scenario_site")
+        cur.execute("DELETE FROM rebuild_core.scenario")
         cur.execute("DELETE FROM rebuild_core.site_evidence")
         cur.execute("DELETE FROM rebuild_core.site_damage_fusion")
         cur.execute("DELETE FROM rebuild_core.site")
@@ -812,3 +819,309 @@ def load_census_blocks(conn: psycopg.Connection) -> tuple[int, int]:
             )
             escritas += cur.rowcount
     return version, escritas
+
+
+# ── Lugares (ADR-22) ────────────────────────────────────────────────────
+
+PLACES_SEED = SEED / "osm_places_pereira.json.gz"
+REGIONS_SEED = SEED / "natural_earth_colombia_risaralda.geojson.gz"
+
+
+def load_osm_places(conn: psycopg.Connection, path: Path = PLACES_SEED) -> tuple[int, dict]:
+    """Comunas, barrios, rios, hitos y arterias de OSM (`rebuild_osm_raw`).
+
+    Version propia bajo la fuente `osm`, como el uso de suelo: el extracto
+    peatonal alimenta el grafo y la matriz de features, y este solo nombra.
+    Mezclarlos haria que añadir un hito moviera el hash de los candidatos.
+
+    Los multipoligonos administrativos se arman en PostGIS con `ST_BuildArea`
+    sobre los miembros de la relacion. Una relacion que no cierra no se
+    parchea: se cuenta en el manifiesto (`unassembled`) y ese barrio queda sin
+    poligono, que el gazetteer resolvera por el punto mas cercano o dejara en
+    NULL — declarado, no inventado.
+    """
+    import json as _json
+
+    places = osm_adapter.load_places(path)
+    counts = places.counts()
+    content_hash = _hash_rows(
+        [f"admin:{a.osm_id}" for a in places.admin_areas]
+        + [f"place:{p.osm_id}" for p in places.places]
+        + [f"water:{w.osm_id}" for w in places.waterways]
+        + [f"landmark:{lm.osm_id}" for lm in places.landmarks]
+        + [f"arterial:{r.osm_id}" for r in places.arterials]
+    )
+    version = _publish_version(
+        conn,
+        source_id="osm",
+        record_count=sum(counts.values()),
+        content_hash=content_hash,
+        is_synthetic=False,
+        manifest={"places": {**counts, "extract": path.name}},
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) AS n FROM rebuild_osm_raw.place_point WHERE data_version = %s",
+            (version,),
+        )
+        if cur.fetchone()["n"]:
+            return version, counts
+
+        assembled = 0
+        for area in places.admin_areas:
+            cur.execute(
+                """
+                INSERT INTO rebuild_osm_raw.admin_area
+                    (osm_id, admin_level, display_name, wikidata, geometry, data_version)
+                SELECT %s, %s, %s, %s, geom, %s
+                FROM (
+                    SELECT ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_BuildArea(
+                               ST_LineMerge(ST_Collect(ST_GeomFromText(w, 4326))))), 3)) AS geom
+                    FROM unnest(%s::text[]) AS w
+                ) g
+                WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)
+                ON CONFLICT DO NOTHING
+                """,
+                (
+                    area.osm_id,
+                    area.admin_level,
+                    area.name,
+                    area.wikidata,
+                    version,
+                    list(area.member_wkts),
+                ),
+            )
+            assembled += cur.rowcount
+        for place in places.places:
+            cur.execute(
+                """
+                INSERT INTO rebuild_osm_raw.place_point
+                    (osm_id, place, display_name, wikidata, population, geometry, data_version)
+                VALUES (%s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (
+                    place.osm_id,
+                    place.place,
+                    place.name,
+                    place.wikidata,
+                    place.population,
+                    place.wkt,
+                    version,
+                ),
+            )
+        for water in places.waterways:
+            cur.execute(
+                """
+                INSERT INTO rebuild_osm_raw.waterway
+                    (osm_id, waterway, display_name, geometry, data_version)
+                VALUES (%s, %s, %s, ST_GeomFromText(%s, 4326), %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (water.osm_id, water.waterway, water.name, water.wkt, version),
+            )
+        for landmark in places.landmarks:
+            cur.execute(
+                """
+                INSERT INTO rebuild_osm_raw.landmark
+                    (osm_id, kind, subkind, display_name, wikidata, priority, geometry,
+                     data_version)
+                VALUES (%s, %s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326), %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (
+                    landmark.osm_id,
+                    landmark.kind,
+                    landmark.subkind,
+                    landmark.name,
+                    landmark.wikidata,
+                    landmark.priority,
+                    landmark.wkt,
+                    version,
+                ),
+            )
+        for road in places.arterials:
+            cur.execute(
+                """
+                INSERT INTO rebuild_osm_raw.arterial_road
+                    (osm_id, highway, display_name, geometry, data_version)
+                VALUES (%s, %s, %s, ST_GeomFromText(%s, 4326), %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (road.osm_id, road.highway, road.name, road.wkt, version),
+            )
+
+        unassembled = len(places.admin_areas) - assembled
+        if unassembled:
+            cur.execute(
+                "INSERT INTO rebuild_core.quality_alert "
+                "(severity, source_id, code, message, payload) "
+                "VALUES ('info', 'osm', 'ADMIN_AREA_UNASSEMBLED', %s, %s::jsonb)",
+                (
+                    f"{unassembled} de {len(places.admin_areas)} limites administrativos de "
+                    "OSM no cierran como poligono y quedan fuera. Los sitios que caen ahi "
+                    "resuelven su barrio por el punto mas cercano o quedan sin barrio.",
+                    _json.dumps({"unassembled": unassembled, "assembled": assembled}),
+                ),
+            )
+    return version, {**counts, "admin_areas_assembled": assembled}
+
+
+def load_reference_regions(conn: psycopg.Connection, path: Path = REGIONS_SEED) -> tuple[int, int]:
+    """Colombia y Risaralda (Natural Earth, dominio publico) para el localizador."""
+    import gzip
+    import json as _json
+
+    assert_source_usable("natural_earth")
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        collection = _json.load(handle)
+    features = collection["features"]
+    version = _publish_version(
+        conn,
+        source_id="natural_earth",
+        record_count=len(features),
+        content_hash=hashlib.sha256(
+            _json.dumps([f["properties"] for f in features], sort_keys=True).encode()
+        ).hexdigest(),
+        is_synthetic=False,
+        manifest={"regions": [f["properties"]["region_id"] for f in features]},
+    )
+    written = 0
+    with conn.cursor() as cur:
+        for feature in features:
+            props = feature["properties"]
+            cur.execute(
+                """
+                INSERT INTO rebuild_core.reference_region
+                    (region_id, level, display_name, geometry, data_version)
+                VALUES (%s, %s, %s, ST_Multi(ST_MakeValid(ST_GeomFromGeoJSON(%s))), %s)
+                ON CONFLICT (region_id) DO NOTHING
+                """,
+                (
+                    props["region_id"],
+                    props["level"],
+                    props["display_name"],
+                    _json.dumps(feature["geometry"]),
+                    version,
+                ),
+            )
+            written += cur.rowcount
+        cur.execute(
+            "SELECT count(*) AS n FROM rebuild_core.reference_region WHERE data_version = %s",
+            (version,),
+        )
+        present = cur.fetchone()["n"]
+    return version, max(written, present)
+
+
+def load_municipal_layers(conn: psycopg.Connection) -> tuple[int, dict[str, int]]:
+    """Equipamientos y espacio publico de la Alcaldia (`pereira_sig`).
+
+    Una version para las dos capas: son el mismo item de licencia, el mismo
+    productor y el mismo dia de descarga. Van a `rebuild_core`: no derivan de
+    OSM y su regimen es de atribucion, no de share-alike.
+    """
+    import json as _json
+
+    from uri.ingestion.adapters import pereira_sig
+
+    assert_source_usable(pereira_sig.SOURCE_ID)
+    loaded = {
+        layer.key: pereira_sig.load_layer(SEED / layer.seed, layer) for layer in pereira_sig.LAYERS
+    }
+    counts = {key: len(rows) for key, rows in loaded.items()}
+    version = _publish_version(
+        conn,
+        source_id=pereira_sig.SOURCE_ID,
+        record_count=sum(counts.values()),
+        content_hash=_hash_rows(
+            [f"{key}:{row.source_ref}" for key, rows in loaded.items() for row in rows]
+        ),
+        is_synthetic=False,
+        manifest={
+            "layers": {
+                layer.key: {"item_id": layer.item_id, "url": layer.url, "seed": layer.seed}
+                for layer in pereira_sig.LAYERS
+            },
+            "counts": counts,
+            "crs_note": "Servido por el FeatureServer en EPSG:4326 (outSR=4326); origen 9377.",
+        },
+    )
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) AS n FROM rebuild_core.municipal_facility WHERE data_version = %s",
+            (version,),
+        )
+        if cur.fetchone()["n"]:
+            return version, counts
+        for row in loaded["facilities"]:
+            cur.execute(
+                """
+                INSERT INTO rebuild_core.municipal_facility
+                    (source_ref, display_name, facility_type, origin_note, area_m2, geometry,
+                     data_version)
+                VALUES (%s, %s, %s, %s, %s,
+                        ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_GeomFromGeoJSON(%s)), 3)),
+                        %s)
+                """,
+                (
+                    row.source_ref,
+                    row.display_name,
+                    row.kind,
+                    row.origin_note,
+                    row.area_m2,
+                    _json.dumps(row.geometry),
+                    version,
+                ),
+            )
+        for row in loaded["public_space"]:
+            cur.execute(
+                """
+                INSERT INTO rebuild_core.municipal_public_space
+                    (source_ref, display_name, space_type, origin_note, area_m2, geometry,
+                     data_version)
+                VALUES (%s, %s, %s, %s, %s,
+                        ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_GeomFromGeoJSON(%s)), 3)),
+                        %s)
+                """,
+                (
+                    row.source_ref,
+                    row.display_name,
+                    row.kind,
+                    row.origin_note,
+                    row.area_m2,
+                    _json.dumps(row.geometry),
+                    version,
+                ),
+            )
+    return version, counts
+
+
+# ── Cartografia base (ADR-22 §8) ───────────────────────────────────────
+
+BASEMAP_DIR = Path(__file__).resolve().parents[3] / "data" / "basemap"
+
+
+def record_basemap(
+    conn: psycopg.Connection, path: Path = BASEMAP_DIR / "basemap.json"
+) -> int | None:
+    """Sella el extracto vectorial de OSM (PMTiles) como version de la fuente `osm`.
+
+    No alimenta ninguna feature: es el papel sobre el que se dibuja el resto y
+    por eso no entra a `PUBLISHED_LAYER_TABLES`. Pero es dato de OSM servido por
+    nosotros, y la fecha de replica con la que se construyo es procedencia que
+    el visor tiene que poder mostrar. Sin indice, sin version: la capa no existe.
+    """
+    import json as _json
+
+    if not path.exists():
+        return None
+    index = _json.loads(path.read_text(encoding="utf-8"))
+    return _publish_version(
+        conn,
+        source_id=index.get("source_id", "osm"),
+        record_count=1,
+        content_hash=index["sha256"],
+        is_synthetic=False,
+        manifest={"basemap": {k: v for k, v in index.items() if k != "sha256"}},
+    )

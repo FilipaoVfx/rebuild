@@ -56,6 +56,15 @@ LAYERS = (
     "facilities",
     "population",
     "catchments",
+    # Lugares (ADR-22): lo que hace que el mapa se lea como Pereira.
+    "admin_areas",
+    "places",
+    "waterways",
+    "landmarks",
+    "road_labels",
+    "municipal_facilities",
+    "municipal_public_space",
+    "reference_regions",
 )
 
 
@@ -186,6 +195,10 @@ def main(profile: str) -> int:
         coverage[scenario["scenario_id"]] = response.json()
     write(data / "coverage.json", coverage)
 
+    # ¿Dónde estamos? Se vuelca DESPUES de los escenarios para que el conteo
+    # de proyectos del ultimo escenario exista.
+    write(data / "territory.json", client.get("/api/v1/territory").json())
+
     # Las vistas Sentinel van versionadas en el repositorio, no se descargan
     # aqui. Es el mismo criterio que con el extracto de OSM: atar cada
     # despliegue a que CDSE este en pie ese dia ya fallo una vez con Overpass.
@@ -224,6 +237,43 @@ def main(profile: str) -> int:
         print(f"vistas Sentinel: {len(indice['scenes'])} imagenes")
     else:
         print("vistas Sentinel: ninguna versionada — la capa no se publica")
+
+    # Cartografia base (ADR-22 §8): el extracto vectorial de OSM y su indice.
+    # GitHub Pages responde a `Range`, que es lo unico que PMTiles necesita.
+    basemap = ROOT / "data" / "basemap"
+    if (basemap / "basemap.json").exists():
+        destino = data / "basemap"
+        destino.mkdir(parents=True, exist_ok=True)
+        for archivo in ("basemap.json", "pereira_basemap.pmtiles"):
+            if (basemap / archivo).exists():
+                shutil.copy2(basemap / archivo, destino / archivo)
+        print("cartografia base: extracto PMTiles copiado")
+    else:
+        print("cartografia base: sin extracto — el mapa de calles no se publica")
+
+    # Ortofotos (ADR-22 §6): solo las de `data/ortofoto/<fuente>/`, que es
+    # donde `fetch_ortofoto.py` escribe cuando el registro dice que la fuente
+    # se puede redistribuir. El sandbox no se mira. La comprobacion contra el
+    # registro se repite aqui a proposito: una carpeta movida a mano no
+    # convierte una fuente UNCLEAR en publicable.
+    from uri.ingestion.adapters import ortofoto as ortofoto_adapter
+
+    for source in ortofoto_adapter.SOURCES:
+        origen = ortofoto_adapter.DATA / source.source_id
+        if not (origen / "ortofoto.json").exists():
+            continue
+        if not ortofoto_adapter.is_publishable(source.source_id):
+            print(f"ortofoto {source.source_id}: en disco pero NO redistribuible — no se publica")
+            continue
+        destino = data / "ortofoto" / source.source_id
+        n = 0
+        for tesela in sorted(origen.glob("[0-9]*/*/*.*")):
+            salida = destino / tesela.relative_to(origen)
+            salida.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(tesela, salida)
+            n += 1
+        shutil.copy2(origen / "ortofoto.json", destino / "ortofoto.json")
+        print(f"ortofoto {source.source_id}: {n} teselas")
 
     total = sum(f.stat().st_size for f in DIST.rglob("*") if f.is_file())
     print(f"\ndist/ listo — {total / 1024 / 1024:.1f} MB")

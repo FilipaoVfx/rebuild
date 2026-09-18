@@ -12,6 +12,9 @@ export interface UnreachedCluster {
   nearestSiteId: string | null;
   /** Población del cluster dentro del área de influencia de algún candidato. */
   populationInSomeCatchment: number;
+  /** Barrio y comuna (OSM) que contienen el centro del hueco. `null` = sin fuente. */
+  neighborhood: string | null;
+  commune: string | null;
 }
 
 export interface UnreachedSummary {
@@ -71,6 +74,47 @@ function toCatchments(geo: GeoJSON | undefined): Catchment[] {
   return out;
 }
 
+interface AdminArea { level: number; name: string; polygons: number[][][][] }
+
+function toAdminAreas(geo: GeoJSON | undefined): AdminArea[] {
+  if (!geo) return [];
+  const out: AdminArea[] = [];
+  for (const f of geo.features) {
+    const p = f.properties as Record<string, unknown>;
+    const level = Number(p.admin_level);
+    if (level !== 8 && level !== 9) continue;
+    const polygons = f.geometry.type === 'MultiPolygon'
+      ? (f.geometry.coordinates as number[][][][])
+      : f.geometry.type === 'Polygon' ? [f.geometry.coordinates as number[][][]] : [];
+    out.push({ level, name: String(p.display_name ?? ''), polygons });
+  }
+  return out;
+}
+
+/** Contención en un multipolígono: anillo exterior sí, agujeros no. */
+function pointInArea(pt: [number, number], area: AdminArea): boolean {
+  return area.polygons.some((poly) =>
+    poly.length > 0 && pointInRing(pt, poly[0]) && !poly.slice(1).some((hole) => pointInRing(pt, hole)));
+}
+
+/**
+ * Barrio y comuna del punto, leídos de los límites administrativos de OSM ya
+ * cargados. Solo etiqueta de pantalla: no calcula ninguna cifra (ADR-13), y por
+ * eso puede vivir en el cliente. Sin polígono que lo contenga, `null`.
+ */
+export function placeOf(
+  pt: [number, number], areas: AdminArea[],
+): { neighborhood: string | null; commune: string | null } {
+  let neighborhood: string | null = null;
+  let commune: string | null = null;
+  for (const a of areas) {
+    if (a.level === 9 && neighborhood === null && pointInArea(pt, a)) neighborhood = a.name;
+    else if (a.level === 8 && commune === null && pointInArea(pt, a)) commune = a.name;
+    if (neighborhood && commune) break;
+  }
+  return { neighborhood, commune };
+}
+
 /**
  * Agrupa las celdas que ningún proyecto del portafolio alcanza.
  *
@@ -86,9 +130,11 @@ export function clusterUnreached(
   cells: CoverageCell[],
   sites: Site[],
   catchmentsGeo: GeoJSON | undefined,
+  adminGeo?: GeoJSON,
 ): UnreachedSummary {
   const unreached = cells.filter((c) => !c.covered_by);
   const catchments = toCatchments(catchmentsGeo);
+  const areas = toAdminAreas(adminGeo);
 
   if (!unreached.length) {
     return {
@@ -183,6 +229,7 @@ export function clusterUnreached(
       if (covered) populationInSomeCatchment += c.population;
     }
 
+    const place = placeOf(center, areas);
     return {
       id: `hueco_${String(idx + 1).padStart(2, '0')}`,
       cells: group,
@@ -192,6 +239,8 @@ export function clusterUnreached(
       distanceToNearestSite: nearest === Infinity ? 0 : nearest,
       nearestSiteId,
       populationInSomeCatchment,
+      neighborhood: place.neighborhood,
+      commune: place.commune,
     };
   }).sort((a, b) => b.population - a.population);
 

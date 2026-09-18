@@ -42,6 +42,25 @@ export interface Site {
   top_score: number | null;
   lon: number;
   lat: number;
+  /** ADR-22 — identidad de lugar derivada de OSM. `null` es "sin fuente". */
+  neighborhood?: string | null;
+  neighborhood_method?: 'ADMIN_POLYGON' | 'NEAREST_PLACE' | null;
+  commune?: string | null;
+  corner_label?: string | null;
+  nearest_landmark?: string | null;
+  nearest_landmark_m?: number | null;
+  place_line?: string | null;
+}
+
+/** Lo que un sitio hereda del territorio (rebuild_osm_derived.site_place). */
+export interface Place {
+  neighborhood: string | null;
+  neighborhood_method: 'ADMIN_POLYGON' | 'NEAREST_PLACE' | null;
+  commune: string | null;
+  corner_label: string | null;
+  nearest_landmark: string | null;
+  nearest_landmark_m: number | null;
+  place_line: string | null;
 }
 
 export interface FeasibilityCheck {
@@ -81,6 +100,7 @@ export interface Opportunity {
   lat: number;
   unknowns: string[];
   blocked: boolean;
+  place?: Place | null;
 }
 
 export interface Contribution {
@@ -239,4 +259,58 @@ export type GeoJSON = {
   }[];
 };
 
-export type ViewKey = 'situacion' | 'oportunidades' | 'escenarios' | 'portafolio' | 'evidencia';
+export type ViewKey =
+  | 'territorio' | 'situacion' | 'oportunidades' | 'escenarios' | 'portafolio' | 'evidencia';
+
+/** `GET /api/v1/territory` — ¿Dónde estamos? (ADR-22). */
+export interface Territory {
+  city: {
+    display_name: string; wikidata: string | null; population: number | null;
+    population_source: string; lon: number; lat: number; department: string; country: string;
+  } | null;
+  urban_perimeter: {
+    osm_id: number; display_name: string; bbox: [number, number, number, number]; area_km2: number;
+  } | null;
+  aoi: {
+    bbox: [number, number, number, number]; bbox_km2: number; evidence_km2: number | null;
+    share_of_perimeter: number | null; source: string;
+  };
+  event: {
+    event_id: string; magnitude: number; magnitude_type: string; occurred_at: string;
+    depth_km: number; epicentre: { lon: number; lat: number; label: string };
+    distance_km: number | null; municipalities_affected: number;
+    activation_id: string; activation_url: string; source: string; source_url: string;
+  };
+  counts: {
+    evidence: number; sites: number; candidates: number; landmarks: number; buildings: number;
+    population_measured: number | null; communes_with_sites: number; neighborhoods_in_aoi: number;
+    projects: number | null; population_served: number | null;
+  };
+  comunas: { osm_id: number; display_name: string; bbox: [number, number, number, number]; sites: number }[];
+  rivers: { display_name: string; waterway: string; length_m: number }[];
+  imagery: {
+    sentinel: { available: boolean; scenes: number };
+    basemap?: {
+      available: boolean; osm_replication_time: string | null; maxzoom: number | null;
+      attribution: string | null;
+    };
+    ortofotos: {
+      source_id: string; display_name: string; license_class: string;
+      status: 'AVAILABLE' | 'UNAVAILABLE'; reason: string | null; attribution: string | null;
+      index?: OrtofotoIndex;
+    }[];
+  };
+  provenance: Provenance;
+}
+
+export interface OrtofotoIndex {
+  source_id: string;
+  aoi_bbox: [number, number, number, number];
+  minzoom: number;
+  maxzoom: number;
+  tile_size: number;
+  format?: 'png' | 'jpg';
+  attribution: string | null;
+  acquisition?: string | null;
+  tiles: number;
+}

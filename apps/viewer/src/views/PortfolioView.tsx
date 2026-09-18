@@ -267,6 +267,11 @@ function UnreachedPanel({ unreached, selectedClusterId, selectCluster }: {
                 <span className="block text-[12px] font-medium">
                   {n(c.population)} personas sin alcanzar
                 </span>
+                <span className="block text-[10px] text-mute-200">
+                  {c.neighborhood
+                    ? `${c.neighborhood}${c.commune ? ` (Comuna ${c.commune})` : ''}`
+                    : c.commune ? `Comuna ${c.commune}` : 'barrio sin fuente en OSM'}
+                </span>
                 <span className="block text-[10px] text-mute-400">
                   {n(c.cells.length)} celdas · a {formatDistance(c.distanceToNearestSite)} del
                   sitio más cercano

@@ -1,4 +1,6 @@
-import { Breadcrumb, CompareTray, ContextSwitcher, Legend, TopBar } from './components/chrome';
+import {
+  Breadcrumb, CompareTray, ContextSwitcher, Legend, MapTypeSwitcher, TopBar,
+} from './components/chrome';
 import { MapCanvas } from './components/MapCanvas';
 import { OpportunityDetail } from './components/OpportunityDetail';
 import { StoreProvider, useStore } from './state/store';
@@ -7,6 +9,7 @@ import { OpportunitiesView } from './views/OpportunitiesView';
 import { PortfolioView } from './views/PortfolioView';
 import { ScenariosView } from './views/ScenariosView';
 import { SituationView } from './views/SituationView';
+import { TerritoryView } from './views/TerritoryView';
 
 export default function App() {
   return (
@@ -21,6 +24,7 @@ function Layout() {
   const site = selectedSiteId ? siteById.get(selectedSiteId) ?? null : null;
 
   const WorkPanel = {
+    territorio: TerritoryView,
     situacion: SituationView,
     oportunidades: OpportunitiesView,
     escenarios: ScenariosView,
@@ -38,8 +42,9 @@ function Layout() {
         <div className="relative h-[44vh] w-full shrink-0 lg:order-2 lg:h-auto lg:min-h-0 lg:flex-1">
           <MapCanvas />
 
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-2 sm:p-3">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-2 pr-12 sm:p-3 sm:pr-14">
             <Breadcrumb />
+            <MapTypeSwitcher />
           </div>
 
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 p-2 sm:p-3">

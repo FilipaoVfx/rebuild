@@ -16,22 +16,32 @@ es un fallo.
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 
 from playwright.async_api import async_playwright
 
-CHROMIUM = "/opt/pw-browsers/chromium"
+CHROMIUM = os.environ.get("URI_CHROMIUM", "/opt/pw-browsers/chromium")
 
-#: Contextos del mapa (ADR-20, ADR-21). Sin "riesgo": la capa del SGC se retiro
-#: por licencia (ADR-18) y un contexto que no enciende nada es una promesa vacia.
-CONTEXTS = ("SITUACION", "DANO", "NECESIDAD", "DEFICIT", "ACCESO", "OPORTUNIDADES")
+#: Contextos del mapa (ADR-20, ADR-21, ADR-22). Sin "riesgo": la capa del SGC
+#: se retiro por licencia (ADR-18) y un contexto que no enciende nada es una
+#: promesa vacia. TERRITORIO es orientacion: nombres, sin coropleta.
+CONTEXTS = (
+    "TERRITORIO",
+    "SITUACION",
+    "DANO",
+    "NECESIDAD",
+    "DEFICIT",
+    "ACCESO",
+    "OPORTUNIDADES",
+)
 
 #: Fuentes retiradas. No pueden quedar anunciadas en ningun sitio: un credito a
 #: quien no aporto dato y un control que no enciende nada son la misma clase de
 #: mentira pequeña.
 RETIRED = ("SERTIT", "SGC", "Servicio Geologico", "Servicio Geológico")
 
-VIEWS = ("situacion", "oportunidades", "escenarios", "portafolio", "evidencia")
+VIEWS = ("territorio", "situacion", "oportunidades", "escenarios", "portafolio", "evidencia")
 
 
 async def main(base: str, prefix: str) -> int:
@@ -68,11 +78,100 @@ async def main(base: str, prefix: str) -> int:
 
         # La procedencia viaja en el cromo, no en una pestaña (ADR-21).
         prov = await page.locator('[data-uri="provenance"]').inner_text()
-        for needed in ("Copernicus", "data v"):
+        for needed in ("Copernicus", "OpenStreetMap", "data v"):
             if needed.lower() not in prov.lower():
                 errors.append(f"la barra de procedencia no nombra '{needed}'")
         print("procedencia:", " ".join(prov.split())[:160])
 
+        # ── Territorio: donde estamos, antes de que pasa (ADR-22) ────────
+        #
+        # La vista por defecto situa: ciudad, evento, comunas, imagen. Si el
+        # visor vuelve a abrir en un panel de cifras, el lugar se perdio.
+        activa = await page.locator('[data-uri="nav"][data-active="true"]').get_attribute(
+            "data-view"
+        )
+        if activa != "territorio":
+            errors.append(f"la vista por defecto es '{activa}', no 'territorio'")
+        ciudad = await page.locator('[data-uri="city-line"]').inner_text()
+        if "pereira" not in ciudad.lower():
+            errors.append("el cromo no dice en que ciudad estamos")
+        if not await page.locator('[data-uri="locator"] svg').count():
+            errors.append("el localizador (Colombia > Risaralda > Pereira) no se dibujo")
+        etiquetas = await page.evaluate("() => window.__uriLabels && window.__uriLabels()")
+        print("etiquetas:", etiquetas)
+        if not etiquetas or not etiquetas.get("comunas"):
+            errors.append("el mapa no etiqueta ninguna comuna")
+        if not etiquetas or not etiquetas.get("landmarks"):
+            errors.append("el mapa no etiqueta ningun hito")
+        comunas = await page.locator('[data-uri="comuna"]').count()
+        print("comunas listadas:", comunas)
+        if not comunas:
+            errors.append("Territorio no lista comunas")
+        else:
+            antes = await page.evaluate("() => window.__uriCenter && window.__uriCenter()")
+            await page.locator('[data-uri="comuna"]').first.click()
+            await page.wait_for_timeout(2000)
+            despues = await page.evaluate("() => window.__uriCenter && window.__uriCenter()")
+            if antes == despues:
+                errors.append("elegir una comuna no encuadra el mapa")
+            await page.locator('[data-uri="comuna"]').first.click()
+            await page.wait_for_timeout(1200)
+        await page.screenshot(path=f"/tmp/{prefix}_territorio.png")
+
+        # La imagen nunca va sola: fecha, razon y limitacion al lado (ADR-19).
+        sentinel = page.locator('[data-uri="imagery-toggle"]').first
+        if await sentinel.locator("input").is_enabled():
+            await sentinel.click()
+            await page.wait_for_timeout(3500)
+            if not await page.locator('[data-uri="swipe"]').count():
+                errors.append("la cortina Sentinel no aparece al activar la imagen")
+            leyenda_img = (
+                await page.locator('[data-uri="imagery-caption"]').first.inner_text()
+            ).lower()
+            for needed in ("sentinel", "no dano", "2026"):
+                if needed not in leyenda_img.replace("ñ", "n"):
+                    errors.append(f"la leyenda de la imagen no dice '{needed}'")
+            await page.screenshot(path=f"/tmp/{prefix}_sentinel.png")
+            await sentinel.click()
+            await page.wait_for_timeout(800)
+        else:
+            print("sin vistas Sentinel versionadas en este despliegue: se omite la cortina")
+
+        # Las ortofotos sin licencia verificada aparecen, deshabilitadas y con
+        # la razon: un control que desaparece es una fuente que nadie audita.
+        ortos = page.locator('[data-uri="imagery-toggle"]', has_text="Ortofoto")
+        for i in range(await ortos.count()):
+            toggle = ortos.nth(i)
+            if await toggle.locator("input").is_enabled():
+                continue
+            texto = (await toggle.inner_text()).lower()
+            if "no se publica" not in texto:
+                errors.append("una ortofoto deshabilitada no dice por que")
+
+        # Tipo de mapa (ADR-22 §8): la cartografia base de OSM servida por
+        # nosotros es la vista por defecto; el mapa de solo datos sigue ahi.
+        tipos = await page.locator('[data-uri="basemap"]').count()
+        if tipos != 3:
+            errors.append(f"hay {tipos} tipos de mapa y se esperaban 3")
+        base = await page.locator('[data-uri="basemap"][data-active="true"]').get_attribute(
+            "data-basemap"
+        )
+        print("tipo de mapa por defecto:", base)
+        if base not in ("calles", "datos"):
+            errors.append(f"tipo de mapa por defecto inesperado: {base}")
+        await page.locator('[data-uri="basemap"][data-basemap="datos"]').click()
+        await page.wait_for_timeout(2500)
+        await page.screenshot(path=f"/tmp/{prefix}_datos.png")
+        await page.locator('[data-uri="basemap"][data-basemap="calles"]').click()
+        await page.wait_for_timeout(2500)
+
+        await page.locator('[data-uri="territory-cta"]').click()
+        await page.wait_for_timeout(1500)
+        activa = await page.locator('[data-uri="nav"][data-active="true"]').get_attribute(
+            "data-view"
+        )
+        if activa != "situacion":
+            errors.append("el enlace de Territorio no lleva a Situacion")
         await page.screenshot(path=f"/tmp/{prefix}_situacion.png")
 
         # ── Contextos ────────────────────────────────────────────────────
@@ -119,6 +218,13 @@ async def main(base: str, prefix: str) -> int:
         # ── Oportunidad: de la lista al detalle y a la descomposicion ────
         await page.locator('[data-uri="nav"][data-view="oportunidades"]').click()
         await page.wait_for_selector('[data-uri="opportunity-card"]', timeout=30000)
+        # La vista explica el metodo antes de listar resultados (ADR-22 §9), y
+        # lo dice como lo que es: multicriterio explicable, no aprendizaje
+        # automatico ni prediccion.
+        metodo = (await page.locator('[data-uri="method"]').inner_text()).lower()
+        for needed in ("multicriterio", "restricciones", "pesos", "no hay aprendizaje"):
+            if needed not in metodo:
+                errors.append(f"el panel de metodo no dice '{needed}'")
         tarjetas = await page.locator('[data-uri="opportunity-card"]').count()
         print("tarjetas de oportunidad:", tarjetas)
         if not tarjetas:
@@ -138,8 +244,22 @@ async def main(base: str, prefix: str) -> int:
         if barras["n"] and not any(w > 0 for w in barras["widths"]):
             errors.append("las barras inline se renderizan con ancho 0")
 
+        # Cada tarjeta dice donde, antes de que (ADR-22).
+        lugar_tarjeta = (await page.locator('[data-uri="card-place"]').first.inner_text()).lower()
+        if not any(k in lugar_tarjeta for k in ("barrio", "comuna", "sin fuente")):
+            errors.append("la tarjeta de oportunidad no dice en que barrio o comuna esta")
+
         await page.locator('[data-uri="opportunity-card"]').first.click()
         await page.wait_for_selector('[data-uri="detail"]', timeout=30000)
+
+        # La ficha abre con el lugar: barrio, comuna, esquina, hito — o "sin fuente".
+        lugar = (await page.locator('[data-uri="place-line"]').inner_text()).lower()
+        print("lugar de la ficha:", " ".join(lugar.split())[:120])
+        if not any(k in lugar for k in ("barrio", "comuna", "sin fuente")):
+            errors.append("la ficha no abre con el lugar del sitio")
+        migas = (await page.locator('[data-uri="breadcrumb"]').inner_text()).lower()
+        if "pereira" not in migas or "comuna" not in migas:
+            errors.append("las migas no leen Pereira > Comuna > Barrio > sitio")
 
         # El titular explica; el puntaje solo ordena (ADR-20, regla 3).
         # Se compara en minusculas: `innerText` aplica `text-transform`, asi que
@@ -230,7 +350,7 @@ async def main(base: str, prefix: str) -> int:
                 errors.append(f"la vista de evidencia no menciona '{needed}'")
         await page.screenshot(path=f"/tmp/{prefix}_evidencia.png")
 
-        # Las cinco vistas cargan sin error.
+        # Las seis vistas cargan sin error.
         for view in VIEWS:
             await page.locator(f'[data-uri="nav"][data-view="{view}"]').click()
             await page.wait_for_timeout(900)

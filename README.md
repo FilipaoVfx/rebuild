@@ -111,21 +111,53 @@ justo lo que ADR-17 prohíbe.
 El visor es la superficie principal del producto, junto a la API y al paquete de
 evidencia ([ADR-21](docs/adr/ADR-21-el-visor-como-superficie-principal.md), que
 deroga el recorte de pantallas de [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md)).
-Cinco vistas, una pregunta cada una:
+Seis vistas, una pregunta cada una; la primera es la que abre
+([ADR-22](docs/adr/ADR-22-territorio-como-vista-de-entrada.md)):
 
 | Vista | Pregunta |
 |---|---|
+| **Territorio** | **¿Dónde estamos?** — Colombia › Risaralda › Pereira, el sector que cubre el visor y por qué, el sismo, las comunas, los ríos, la imagen satelital antes y después |
 | Situación | ¿Qué está pasando en el territorio? |
 | Oportunidades | ¿Dónde podemos actuar, y por qué ahí? |
 | Escenarios | ¿Qué cambia si cambian las prioridades? |
 | Portafolio | ¿Qué combinación de proyectos tiene sentido? |
 | Evidencia | ¿En qué nos estamos basando, y qué no sabemos? |
 
-El mapa tiene seis contextos —situación, daño, necesidad, déficit, acceso,
-oportunidades— y cada uno enciende **solo** lo que responde a su pregunta,
-partiendo de todo apagado. No hay basemap de terceros: el tejido urbano se
-dibuja con las huellas de Microsoft y la malla de OSM ya versionadas, así que lo
-que se ve es dato con `data_version`, no un tile servido por otro.
+El mapa tiene siete contextos —territorio, situación, daño, necesidad, déficit,
+acceso, oportunidades— y cada uno enciende **solo** lo que responde a su
+pregunta, partiendo de todo apagado. No hay basemap de terceros: la cartografía
+base de calles es un extracto PMTiles de OpenStreetMap (3,9 MB, z0–15) que el
+sitio sirve él mismo, con la fecha de réplica de OSM en su procedencia; el
+estilo (Protomaps), las fuentes (Noto Sans, OFL) y los sprites también viven en
+el repositorio. Tres **tipos de mapa** en un control: *Calles* (OSM, claro),
+*Oscuro* (OSM, oscuro) y *Datos* (fondo negro y solo las capas versionadas del
+pipeline). En ningún caso llega un byte de un servidor de terceros en tiempo de
+ejecución.
+
+### La ciudad se llama por su nombre
+
+Un puntaje sin lugar no dice nada. Desde ADR-22 el mapa lleva **comunas,
+barrios, calles con jerarquía y nombre, ríos y quebradas y unos 160 hitos**
+(Alcaldía, Gobernación, Parque El Lago, Hospital San Jorge, Terminal de
+Transportes, UTP…), todos de OpenStreetMap y tal como OSM los escribe, más
+los equipamientos y el espacio público que la Alcaldía de Pereira publica con
+licencia declarada (`pereira_sig`). Cada sitio se presenta como
+
+> Barrio Corocito · Comuna Villavicencio · Carrera 12 con Calle 7 · a 30 m de Parque Corocito
+
+a nivel de cuadra, nunca de predio (SRS §6). Lo que OSM no tiene se dice —
+"barrio sin fuente"— y se cuenta en la alerta `PLACE_COVERAGE`. Los nombres
+derivados de OSM viven en `rebuild_osm_derived.site_place`, no en `core`: son
+ODbL y el aislamiento por esquema de `fuentes.md` §8 sigue en pie.
+
+Las cuatro vistas Sentinel antes/después se comparan con una cortina, siempre
+con la fecha de cada escena y el texto de limitación al lado (ADR-19). Hay dos
+ortofotos de Pereira —la del IGAC a 1:1.000 y la municipal del **14 de agosto de
+2026**, cuatro días después del sismo— y ninguna se publica todavía: la primera
+tiene licencia CC BY 4.0 (Res. IGAC 616/2020) condicionada a una titularidad
+sin confirmar, la segunda no declara términos. El adaptador existe, descarga al
+sandbox y el visor muestra el control deshabilitado con la razón
+(`db/terms/igac_ortofoto_20260918.txt`, `db/terms/pereira_ortofoto_post_20260918.txt`).
 
 Tres reglas gobiernan lo que la interfaz puede afirmar:
 
@@ -175,6 +207,7 @@ cd apps/viewer && npm ci && npm run build
 | [Estado actual](docs/plan/estado-actual.md) | Qué entrega hoy el sistema, qué es accionable y qué quedó fuera — con el diagnóstico de señal medido |
 | [Fuentes](docs/plan/fuentes.md) | Consumo técnico y régimen de licencia de cada fuente, con los controles que lo hacen cumplible |
 | [Conexiones](docs/plan/conexiones.md) | Endpoints verificados y recetas de conexión por fuente |
+| [Antigüedad de la edificación](docs/plan/antiguedad-de-la-edificacion.md) | Research: el año de construcción es catastral (AMCO) y no está publicado; alternativas abiertas por época |
 
 **Decisiones posteriores al ARD**
 
@@ -187,6 +220,7 @@ cd apps/viewer && npm ci && npm run build
 | [ADR-19](docs/adr/ADR-19-cambio-satelital-no-es-dano.md) | Un cambio satelital no es daño, y el esquema lo impide |
 | [ADR-20](docs/adr/ADR-20-la-oportunidad-es-la-entidad-central.md) | La oportunidad de recuperación sustituye al sitio como entidad central |
 | [ADR-21](docs/adr/ADR-21-el-visor-como-superficie-principal.md) | El visor pasa a ser la superficie principal, y se reescribe |
+| [ADR-22](docs/adr/ADR-22-territorio-como-vista-de-entrada.md) | El territorio es la vista de entrada, y cada dato dice dónde está |
 
 ## Principios que gobiernan el diseño
 
