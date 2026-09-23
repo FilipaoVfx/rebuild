@@ -33,6 +33,8 @@ export const GEOJSON_LAYERS = [
   /* Lugares (ADR-22): lo que hace que el mapa se lea como Pereira. */
   'admin_areas', 'places', 'waterways', 'landmarks', 'road_labels',
   'municipal_facilities', 'municipal_public_space', 'reference_regions',
+  /* Fotos de campo (ADR-24): la evidencia visual de cada lugar. */
+  'field_photos',
 ] as const;
 export type LayerName = (typeof GEOJSON_LAYERS)[number];
 

@@ -6,6 +6,7 @@ import {
 import { INTERVENTION_COLOR, rgbCss } from '../lib/palette';
 import { useStore } from '../state/store';
 import type { Opportunity, Recommendation, Site, SiteDetail } from '../types';
+import { PhotoStrip } from './PhotoStrip';
 import { Bar, Chip, Note, SectionTitle, SignedBar, Stat, StatusBadge, NoSource } from './ui';
 
 export function OpportunityDetail({ site, opp }: { site: Site; opp: Opportunity | undefined }) {
@@ -331,6 +332,8 @@ export function OpportunityDetail({ site, opp }: { site: Site; opp: Opportunity 
               </ul>
             </div>
           )}
+          <PhotoStrip photos={detail?.photos ?? []} loading={!detail} />
+
           <Note>
             La evidencia se guarda cruda y separada del estado consolidado. Un cambio detectado
             desde la vertical no equivale a un edificio destruido.{' '}

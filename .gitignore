@@ -17,3 +17,7 @@ data/sentinel/**/*.tiff
 # Ortofotos (ADR-22): teselas reconstruibles desde el indice, ~20 MB por fuente.
 # El sandbox nunca se versiona: es donde caen las fuentes en UNCLEAR.
 data/ortofoto/
+
+# Fotos de campo (ADR-24): copias de las imagenes de pereiramap, se
+# reconstruyen desde la vista publica en cada corrida del pipeline.
+data/field/

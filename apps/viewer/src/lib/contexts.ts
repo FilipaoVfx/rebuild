@@ -47,9 +47,9 @@ export const CONTEXTS: ContextDef[] = [
     readout: (s) => s.place_line ?? 'ubicación sin fuente',
     layers: [
       'buildings', 'roads', 'waterways', 'admin_areas', 'places', 'landmarks', 'road_labels',
-      'municipal_facilities',
+      'municipal_facilities', 'field_photos',
     ],
-    sources: ['osm', 'microsoft_buildings', 'pereira_sig'],
+    sources: ['osm', 'microsoft_buildings', 'pereira_sig', 'pereiramap'],
     sitesMode: 'neutral',
     categoricalLegend: [
       { label: 'Comuna', color: 'rgb(120 132 150)' },
@@ -57,6 +57,7 @@ export const CONTEXTS: ContextDef[] = [
       { label: 'Río / quebrada', color: 'rgb(76 140 190)' },
       { label: 'Hito', color: 'rgb(240 180 41)' },
       { label: 'Equipamiento municipal', color: 'rgb(147 197 253)' },
+      { label: 'Foto de campo', color: 'rgb(255 255 255)' },
       { label: 'Sitio (sin colorear)', color: 'rgb(142 154 171)' },
     ],
     missingNote:
@@ -70,9 +71,9 @@ export const CONTEXTS: ContextDef[] = [
     legend: ['Menos gente', 'Más gente'],
     value: (s) => clamp01(s.population_10min / 20000),
     readout: (s) => `${Math.round(s.population_10min).toLocaleString('es-CO')} personas a 10 min andando`,
-    layers: ['buildings', 'roads', 'evidence'],
+    layers: ['buildings', 'roads', 'evidence', 'field_photos'],
     populationChoropleth: true,
-    sources: ['copernicus_ems', 'microsoft_buildings', 'osm'],
+    sources: ['copernicus_ems', 'microsoft_buildings', 'osm', 'pereiramap'],
   },
   {
     key: 'DANO',
@@ -85,8 +86,8 @@ export const CONTEXTS: ContextDef[] = [
       s.damage_class
         ? `${s.damage_class} · confianza ${(s.damage_confidence ?? 0).toFixed(2)} · ${s.evidence_count} obs.`
         : 'sin evidencia en este sitio',
-    layers: ['buildings', 'evidence'],
-    sources: ['copernicus_ems'],
+    layers: ['buildings', 'evidence', 'field_photos'],
+    sources: ['copernicus_ems', 'pereiramap'],
     missingNote:
       'Toda la evidencia es foto-interpretación: 182 observaciones sin validación de campo. La clase dice qué se ve desde la vertical, no el estado estructural.',
   },

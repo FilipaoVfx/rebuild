@@ -471,6 +471,37 @@ SOURCES: list[SourceRegistration] = [
         ),
     ),
     SourceRegistration(
+        source_id="pereiramap",
+        display_name="pereiramap — fotos de campo (colaboradores)",
+        tier="B",
+        source_url="https://github.com/FilipaoVfx/pereiramap",
+        access_method="api",
+        spatial_reference="EPSG:4326",
+        # Producto hermano en la misma base Supabase. Los terminos son los que
+        # la app muestra al enviar y el usuario acepta: CC BY 4.0 sobre la foto
+        # y su ubicacion. No hay autor individual: la app no recoge nombres.
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="CC BY 4.0 (consentimiento al enviar)",
+        license_url="https://creativecommons.org/licenses/by/4.0/deed.es",
+        attribution_text="Fotos de campo — pereiramap (colaboradores), CC BY 4.0",
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        share_alike=False,
+        # Foto tomada por cualquiera, sin validacion de un evaluador: es
+        # evidencia visual, no una inspeccion. La revision humana filtra
+        # datos personales, no juzga el dano.
+        quality_score=0.55,
+        terms_verified_at=date(2026, 9, 19),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/pereiramap_20260919.txt",
+        verification_notes=(
+            "Consentimiento literal en db/terms/pereiramap_20260919.txt. Se lee "
+            "la vista publica (sin device_id, sin RECHAZADA); se ingieren "
+            "PENDIENTE y APROBADA con la etiqueta a la vista; el paquete PUBLIC "
+            "copia solo APROBADA (ADR-24). Imagenes sin EXIF por construccion."
+        ),
+    ),
+    SourceRegistration(
         source_id="igac_ortofoto",
         display_name="IGAC — Ortoimagen 1:1.000 de Pereira",
         tier="A",

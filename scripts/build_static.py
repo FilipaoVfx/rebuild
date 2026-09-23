@@ -65,7 +65,16 @@ LAYERS = (
     "municipal_facilities",
     "municipal_public_space",
     "reference_regions",
+    # Fotos de campo (ADR-24). En PUBLIC se filtran a las APROBADA.
+    "field_photos",
 )
+
+
+def photo_publishable(profile: str, review_status: str) -> bool:
+    """La puerta de las fotos de campo: el paquete PUBLIC solo lleva lo que
+    una persona revisó (caras, placas, números de casa); INTERNAL lleva las
+    pendientes con su etiqueta a la vista."""
+    return profile == "INTERNAL" or review_status == "APROBADA"
 
 
 class PublicationBlocked(RuntimeError):
@@ -157,7 +166,11 @@ def main(profile: str) -> int:
 
     details = {}
     for site in sites["sites"]:
-        details[site["site_id"]] = client.get(f"/api/v1/sites/{site['site_id']}").json()
+        detail = client.get(f"/api/v1/sites/{site['site_id']}").json()
+        detail["photos"] = [
+            p for p in detail.get("photos", []) if photo_publishable(profile, p["review_status"])
+        ]
+        details[site["site_id"]] = detail
     write(data / "details.json", details)
 
     # Las oportunidades son la entidad central del producto: la vista las
@@ -168,10 +181,20 @@ def main(profile: str) -> int:
     write(data / "sources.json", client.get("/api/v1/data-sources").json())
     write(data / "alerts.json", client.get("/api/v1/quality/alerts").json())
 
+    published_photos: list[dict] = []
     for layer in LAYERS:
         response = client.get(f"/api/v1/geojson/{layer}")
-        if response.status_code == 200:
-            write(data / "geojson" / f"{layer}.json", response.json())
+        if response.status_code != 200:
+            continue
+        payload = response.json()
+        if layer == "field_photos":
+            payload["features"] = [
+                f
+                for f in payload["features"]
+                if photo_publishable(profile, f["properties"]["review_status"])
+            ]
+            published_photos = payload["features"]
+        write(data / "geojson" / f"{layer}.json", payload)
 
     print("precalculando escenarios")
     scenarios = []
@@ -250,6 +273,22 @@ def main(profile: str) -> int:
         print("cartografia base: extracto PMTiles copiado")
     else:
         print("cartografia base: sin extracto — el mapa de calles no se publica")
+
+    # Fotos de campo (ADR-24): solo las imagenes de las observaciones que
+    # pasaron la puerta de arriba, desde `data/field/<uuid>/`.
+    campo = ROOT / "data" / "field"
+    copiadas = 0
+    for feature in published_photos:
+        origen = campo / feature["id"]
+        if not (origen / "full.jpg").exists():
+            continue
+        destino = data / "field" / feature["id"]
+        destino.mkdir(parents=True, exist_ok=True)
+        for archivo in ("full.jpg", "thumb.jpg"):
+            if (origen / archivo).exists():
+                shutil.copy2(origen / archivo, destino / archivo)
+        copiadas += 1
+    print(f"fotos de campo ({profile}): {copiadas} de {len(published_photos)} publicables copiadas")
 
     # Ortofotos (ADR-22 §6): solo las de `data/ortofoto/<fuente>/`, que es
     # donde `fetch_ortofoto.py` escribe cuando el registro dice que la fuente

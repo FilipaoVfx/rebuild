@@ -1,0 +1,40 @@
+[
+  {
+    "observation_id": "24cd2ffa-f35d-42e6-af8f-35576bb8d98a",
+    "captured_at": "2026-09-18T19:26:48.096+00:00",
+    "received_at": "2026-09-18T19:26:50.120+00:00",
+    "category": "DANO_ESTRUCTURAL",
+    "lon": -75.695,
+    "lat": 4.815,
+    "location_source": "DEVICE",
+    "accuracy_m": 12.0,
+    "heading_deg": null,
+    "exif_gps": true,
+    "exif_device_offset_m": 88.0,
+    "image_path": "24cd2ffa-f35d-42e6-af8f-35576bb8d98a/full.jpg",
+    "thumb_path": "24cd2ffa-f35d-42e6-af8f-35576bb8d98a/thumb.jpg",
+    "image_sha256": "da1cab70d446733bf4983c9a0573633c292d2989e7cb9695c02a6527b0575e3b",
+    "width": 1600,
+    "height": 1200,
+    "review_status": "PENDIENTE"
+  },
+  {
+    "observation_id": "7e5c1d0a-1111-4222-8333-444455556666",
+    "captured_at": "2026-09-18T20:00:00+00:00",
+    "received_at": "2026-09-18T20:00:03+00:00",
+    "category": null,
+    "lon": -75.6946,
+    "lat": 4.8143,
+    "location_source": "EXIF",
+    "accuracy_m": null,
+    "heading_deg": 123.5,
+    "exif_gps": true,
+    "exif_device_offset_m": null,
+    "image_path": "7e5c1d0a-1111-4222-8333-444455556666/full.jpg",
+    "thumb_path": "7e5c1d0a-1111-4222-8333-444455556666/thumb.jpg",
+    "image_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "width": 2048,
+    "height": 1536,
+    "review_status": "APROBADA"
+  }
+]

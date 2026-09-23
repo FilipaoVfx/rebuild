@@ -153,11 +153,33 @@ export interface EvidenceRecord {
   positional_accuracy_m: number | null;
 }
 
+/** Una foto de campo de pereiramap enlazada al sitio (ADR-24). Las URLs son
+ *  relativas al propio origen: el visor nunca pide nada a Supabase. */
+export interface FieldPhoto {
+  observation_id: string;
+  captured_at: string;
+  category: string | null;
+  lon: number;
+  lat: number;
+  location_source: 'DEVICE' | 'EXIF' | 'MANUAL' | string;
+  accuracy_m: number | null;
+  heading_deg: number | null;
+  exif_gps: boolean;
+  review_status: 'PENDIENTE' | 'APROBADA' | string;
+  site_distance_m: number | null;
+  url: string;
+  thumb_url: string;
+  width: number;
+  height: number;
+  attribution: string | null;
+}
+
 export interface SiteDetail {
   site: Site;
   features: Record<string, number | null>;
   confidence_drivers: Record<string, number>;
   evidence: EvidenceRecord[];
+  photos: FieldPhoto[];
   fusion: {
     damage_class: string | null;
     damage_confidence: number | null;
@@ -282,6 +304,7 @@ export interface Territory {
   };
   counts: {
     evidence: number; sites: number; candidates: number; landmarks: number; buildings: number;
+    field_photos?: number; field_photos_linked?: number;
     population_measured: number | null; communes_with_sites: number; neighborhoods_in_aoi: number;
     projects: number | null; population_served: number | null;
   };

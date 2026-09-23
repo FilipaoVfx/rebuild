@@ -22,7 +22,7 @@ from uri.constraints import CONSTRAINT_SET_V1, evaluate_constraints
 from uri.contracts import InterventionType
 from uri.features.engine import compute_features
 from uri.features.network import build_pedestrian_graph, compute_catchments
-from uri.ingestion import loader, places
+from uri.ingestion import field, loader, places
 from uri.optimizer.greedy import Candidate, PortfolioResult, select_portfolio
 from uri.scoring import score_site
 from uri.scoring.model import SCORING_VERSION
@@ -33,7 +33,7 @@ FEATURE_VERSION = "features_v1"
 @dataclass
 class PipelineReport:
     versions: dict[str, int]
-    counts: dict[str, int]
+    counts: dict[str, int | str]
     alerts: list[str]
 
 
@@ -44,6 +44,7 @@ def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport
     retirado y la base rechaza una fila simulada (migracion 006).
     """
     from uri.ingestion.adapters import copernicus
+    from uri.ingestion.adapters import pereiramap as pereiramap_adapter
 
     loader.register_sources(conn)
 
@@ -63,10 +64,19 @@ def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport
     regions_version, regions = loader.load_reference_regions(conn)
     municipal_version, municipal_counts = loader.load_municipal_layers(conn)
     basemap_version = loader.record_basemap(conn)
+    # Fotos de campo (ADR-24): solo si el entorno apunta a la vista publica
+    # de pereiramap. Sin configuracion se omite y el reporte lo dice; con
+    # configuracion y sin red, tambien: nunca es lo que tumba el pipeline.
+    field_version, field_counts = None, {"skipped": "sin URI_FIELD_URL/URI_FIELD_KEY"}
+    if (field_cfg := pereiramap_adapter.configured()) is not None:
+        field_version, field_counts = field.load_field_observations(
+            conn, url=field_cfg[0], key=field_cfg[1]
+        )
 
     sites = loader.derive_sites(conn, damage_version)
     fused = loader.fuse_damage_evidence(conn, as_of=date(2026, 9, 15))
     place_stats = places.enrich_site_places(conn, data_version=places_version)
+    field_links = field.link_field_observations(conn)
     alerts = loader.raise_coverage_alerts(conn)
 
     return PipelineReport(
@@ -79,6 +89,7 @@ def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport
             "regions": regions_version,
             "municipal": municipal_version,
             "basemap": basemap_version,
+            **({"field": field_version} if field_version is not None else {}),
         },
         counts={
             "evidence": len(evidence),
@@ -92,6 +103,8 @@ def run_ingestion(conn: psycopg.Connection, *, osm_path: Path) -> PipelineReport
             **{f"municipal_{k}": v for k, v in municipal_counts.items()},
             "sites_con_barrio": place_stats["total"] - place_stats["sin_barrio"],
             "sites_con_comuna": place_stats["total"] - place_stats["sin_comuna"],
+            **{f"field_{k}": v for k, v in field_counts.items()},
+            "field_linked": field_links["linked"],
         },
         alerts=alerts,
     )

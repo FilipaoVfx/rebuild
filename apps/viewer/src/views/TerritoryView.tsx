@@ -215,6 +215,13 @@ export function TerritoryView() {
           )}
           {n(counts.evidence)} observaciones de foto-interpretación agrupadas en {n(counts.sites)} sitios,
           sobre {n(counts.buildings)} huellas de edificio y {n(counts.landmarks)} lugares con nombre.
+          {' '}
+          {counts.field_photos ? (
+            <>Y <b className="text-paper">{n(counts.field_photos)} fotos de campo</b> tomadas con pereiramap
+              ({n(counts.field_photos_linked ?? 0)} enlazadas a un sitio).</>
+          ) : (
+            <>Todavía sin fotos de campo: se toman con <b>pereiramap</b> y respaldan la ficha de cada sitio.</>
+          )}
         </p>
         <Note>
           Es un sector de Pereira, no la ciudad. La cobertura satelital es donde se apuntó el sensor,

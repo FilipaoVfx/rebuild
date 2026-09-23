@@ -305,6 +305,26 @@ async def main(base: str, prefix: str) -> int:
         # Las incognitas se cuentan, no se esconden.
         if "sin fuente" not in detalle:
             errors.append("la ficha no declara ninguna condicion sin fuente")
+        # Fotos de campo (ADR-24): la ficha siempre dice cuantas hay, aunque
+        # sean cero; si hay, la primera abre la foto completa con su ficha.
+        strip = page.locator('[data-uri="photo-strip"]')
+        if not await strip.count():
+            errors.append("la ficha no tiene el bloque de fotos de campo")
+        else:
+            fotos = int(await strip.get_attribute("data-count") or 0)
+            print("fotos de campo en la ficha:", fotos)
+            if fotos:
+                await page.locator('[data-uri="photo-thumb"]').first.click()
+                await page.wait_for_selector('[data-uri="photo-lightbox"]', timeout=10000)
+                caja = page.locator('[data-uri="photo-lightbox"]')
+                ficha_foto = (await caja.inner_text()).lower()
+                if "gps" not in ficha_foto and "pin" not in ficha_foto:
+                    errors.append("la foto abierta no dice de donde sale su ubicacion")
+                await page.screenshot(path=f"/tmp/{prefix}_foto.png")
+                await page.keyboard.press("Escape")
+                await page.wait_for_timeout(300)
+            elif "sin fotos de campo" not in (await strip.inner_text()).lower():
+                errors.append("sin fotos, la ficha no lo declara")
         await page.screenshot(path=f"/tmp/{prefix}_detalle.png")
 
         await page.locator('[data-uri="technical-toggle"]').click()

@@ -68,6 +68,7 @@ PUBLISHED_LAYER_TABLES = (
     "rebuild_core.municipal_facility",
     "rebuild_core.municipal_public_space",
     "rebuild_core.reference_region",
+    "rebuild_core.field_observation",
     "rebuild_analytics.site_feature",
 )
 

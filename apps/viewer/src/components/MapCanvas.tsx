@@ -15,6 +15,7 @@ import {
   ADMIN_COLOR, BUILDING_FILL, BUILDING_FILL_TERRITORY, INTERVENTION_COLOR, LANDMARK_COLOR,
   RAMPS, ROAD_DEFAULT, ROAD_STYLE, WATER_COLOR, sample, type RGB, type RGBA,
 } from '../lib/palette';
+import { FIELD_CATEGORY } from '../lib/field';
 import { useStore } from '../state/store';
 import type { GeoJSON, Site } from '../types';
 
@@ -466,6 +467,24 @@ export function MapCanvas() {
       }),
     ] : []),
 
+    /* --- fotos de campo (ADR-24): un cuadrado blanco por foto; clic → su sitio --- */
+    ...(on('field_photos') && gj('field_photos') ? [
+      new GeoJsonLayer({
+        id: 'field_photos',
+        data: gj('field_photos') as never,
+        pointType: 'circle',
+        getPointRadius: 14, pointRadiusUnits: 'meters', pointRadiusMinPixels: 4, pointRadiusMaxPixels: 9,
+        getFillColor: (f: { properties: Record<string, string> }) =>
+          f.properties.review_status === 'APROBADA' ? [255, 255, 255, 235] : [255, 255, 255, 150],
+        stroked: true, getLineColor: [7, 9, 12, 230], getLineWidth: 1.2, lineWidthUnits: 'pixels',
+        pickable: true,
+        onClick: (info) => {
+          const p = (info.object as { properties?: { site_id?: string | null } } | null)?.properties;
+          if (p?.site_id) selectSite(p.site_id);
+        },
+      }),
+    ] : []),
+
     /* --- hitos: un punto y su nombre, los importantes primero --- */
     ...(on('landmarks') && visibleLandmarks.length && zoom >= 14 ? [
       new ScatterplotLayer({
@@ -725,6 +744,17 @@ export function MapCanvas() {
     if (layer.id === 'evidence') {
       const p = object.properties as Record<string, string>;
       return { html: `<b>Observación de daño</b><br/>${p.label}`, style };
+    }
+    if (layer.id === 'field_photos') {
+      const p = object.properties as Record<string, string | number | null>;
+      const when = p.captured_at ? new Date(String(p.captured_at)).toLocaleString('es-CO') : '';
+      return {
+        html: `<img src="${p.thumb_url}" alt="" style="display:block;width:220px;max-height:160px;object-fit:cover;border-radius:6px;margin-bottom:6px"/>
+          <b>Foto de campo</b> · ${FIELD_CATEGORY[String(p.label)] ?? p.label}<br/>
+          <span style="color:#8e9aab">${when}${p.review_status === 'PENDIENTE' ? ' · sin revisar' : ''}${
+            p.site_id ? ` · a ${Math.round(Number(p.site_distance_m))} m del sitio ${p.site_id}` : ' · sin sitio a 75 m'}</span>`,
+        style,
+      };
     }
     if (layer.id === 'population') {
       const p = object.properties as Record<string, number>;

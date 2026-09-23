@@ -42,6 +42,19 @@ export function ContextIntro() {
   const withDeficit = sites.filter((s) => s.park_deficit !== null).length;
   const network = sites.filter((s) => s.catchment_method === 'NETWORK').length;
   const noBuild = opportunities.filter((o) => o.intervention === 'NO_BUILD').length;
+  const fieldPhotos = territory?.counts.field_photos ?? 0;
+  const fieldLinked = territory?.counts.field_photos_linked ?? 0;
+  const fotosDeCampo: Variable = {
+    name: 'Fotos de campo',
+    how: <>{fieldPhotos > 0 ? `${n(fieldPhotos)} fotos` : 'Fotos'} tomadas en el terreno con la app
+      <b> pereiramap</b>: la imagen (re-codificada sin metadatos), la posición del teléfono al
+      disparar con su precisión, la hora, y la categoría que eligió quien la tomó. Cada foto se
+      enlaza al sitio más cercano a menos de 75 m{fieldPhotos > 0 ? ` (${n(fieldLinked)} enlazadas)` : ''};
+      las demás se muestran sueltas: son daño donde el satélite no vio nada.</>,
+    source: 'pereiramap (colaboradores), CC BY 4.0 · rebuild_core.field_observation',
+    limit: <>No es una inspección: es lo que alguien vio y fotografió. Pasa por revisión humana
+      (caras, placas, números de casa) antes de publicarse; las pendientes se marcan «sin revisar».</>,
+  };
 
   const intros: Record<ContextKey, Intro> = {
     TERRITORIO: {
@@ -88,6 +101,7 @@ export function ContextIntro() {
           source: 'Copernicus EMS, activación EMSR916 (CC BY 4.0)',
           limit: <>Ninguna está validada en campo. La cobertura es donde apuntó el sensor, no donde hubo daño.</>,
         },
+        fotosDeCampo,
         {
           name: 'Sitios',
           how: <>Observaciones a menos de 40 m entre sí se agrupan (DBSCAN) en un sitio; la huella es la
@@ -140,6 +154,7 @@ export function ContextIntro() {
             pintan por su clase cruda; los sitios, por la fusionada.</>,
           source: 'rebuild_core.site_damage_fusion.damage_class',
         },
+        fotosDeCampo,
       ],
       reading: [
         <>Rojo = destruido, naranja = dañado, amarillo = posiblemente dañado. Un sitio sin observación no existe: los sitios nacen de la evidencia.</>,

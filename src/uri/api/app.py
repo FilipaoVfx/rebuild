@@ -229,6 +229,49 @@ def list_sites(
     )
 
 
+FIELD_PHOTO_SQL = """
+SELECT fo.observation_id::text AS observation_id, fo.captured_at::text AS captured_at,
+       fo.category, ST_X(fo.geometry) AS lon, ST_Y(fo.geometry) AS lat,
+       fo.location_source, fo.accuracy_m, fo.heading_deg, fo.exif_gps, fo.review_status,
+       fo.site_distance_m, fo.site_id, fo.image_path, fo.thumb_path, fo.width, fo.height,
+       sr.attribution_text AS attribution
+FROM rebuild_core.field_observation fo
+JOIN rebuild_core.dataset_version dv USING (data_version)
+JOIN rebuild_core.source_register sr ON sr.source_id = dv.source_id
+"""
+
+
+def _photo_out(row: dict) -> schemas.FieldPhotoOut:
+    return schemas.FieldPhotoOut(
+        observation_id=row["observation_id"],
+        captured_at=row["captured_at"],
+        category=row["category"],
+        lon=float(row["lon"]),
+        lat=float(row["lat"]),
+        location_source=row["location_source"],
+        accuracy_m=float(row["accuracy_m"]) if row["accuracy_m"] is not None else None,
+        heading_deg=float(row["heading_deg"]) if row["heading_deg"] is not None else None,
+        exif_gps=bool(row["exif_gps"]),
+        review_status=row["review_status"],
+        site_distance_m=(
+            float(row["site_distance_m"]) if row["site_distance_m"] is not None else None
+        ),
+        url=f"data/field/{row['image_path']}",
+        thumb_url=f"data/field/{row['thumb_path']}",
+        width=int(row["width"]),
+        height=int(row["height"]),
+        attribution=row["attribution"],
+    )
+
+
+def _field_photos(conn, site_id: str) -> list[schemas.FieldPhotoOut]:
+    """Fotos de campo del sitio (ADR-24), las mas recientes primero."""
+    rows = fetch_all(
+        conn, FIELD_PHOTO_SQL + "WHERE fo.site_id = %s ORDER BY fo.captured_at DESC", (site_id,)
+    )
+    return [_photo_out(row) for row in rows]
+
+
 @app.get(f"{API_PREFIX}/sites/{{site_id}}", response_model=schemas.SiteDetail)
 def site_detail(conn: Conn, site_id: str) -> schemas.SiteDetail:
     row = fetch_one(
@@ -275,6 +318,7 @@ def site_detail(conn: Conn, site_id: str) -> schemas.SiteDetail:
         "WHERE site_id = %s ORDER BY constraint_id",
         (site_id,),
     )
+    photos = _field_photos(conn, site_id)
 
     # FR-CONS-01 — un sitio excluido no llega al scoring. No es que se filtre
     # despues: no entra.
@@ -344,6 +388,7 @@ def site_detail(conn: Conn, site_id: str) -> schemas.SiteDetail:
         features={k: (float(row[k]) if row.get(k) is not None else None) for k in feature_keys},
         confidence_drivers=row["confidence_drivers"],
         evidence=[schemas.EvidenceOut(**e) for e in evidence],
+        photos=photos,
         fusion=fusion,
         exclusions=[schemas.ExclusionOut(**e) for e in exclusions],
         recommendations=recommendations,
@@ -1026,6 +1071,16 @@ def layer_geojson(conn: Conn, layer: str) -> Response:
             "SELECT region_id AS id, level AS label, display_name, "
             "ST_AsGeoJSON(geometry, 4) AS g FROM rebuild_core.reference_region"
         ),
+        # Fotos de campo (ADR-24). `label` = categoria para el color; el
+        # estado de revision viaja para que el paquete PUBLIC filtre.
+        "field_photos": (
+            "SELECT observation_id::text AS id, COALESCE(category, 'OTRO') AS label, "
+            "captured_at::text AS captured_at, review_status, site_id, site_distance_m, "
+            "location_source, accuracy_m, heading_deg, "
+            "'data/field/' || thumb_path AS thumb_url, 'data/field/' || image_path AS url, "
+            "width, height, ST_AsGeoJSON(geometry, 6) AS g "
+            "FROM rebuild_core.field_observation ORDER BY captured_at DESC"
+        ),
         "risk": (
             "SELECT zone_id::text AS id, risk_level AS label, ST_AsGeoJSON(geometry) AS g "
             "FROM rebuild_core.risk_zone WHERE risk_level IN ('high','prohibited')"
@@ -1289,6 +1344,9 @@ def territory(conn: Conn) -> dict:
                (SELECT count(*) FROM rebuild_core.site WHERE state = 'CANDIDATE') AS candidates,
                (SELECT count(*) FROM rebuild_osm_raw.landmark) AS landmarks,
                (SELECT count(*) FROM rebuild_core.building_footprint) AS buildings,
+               (SELECT count(*) FROM rebuild_core.field_observation) AS field_photos,
+               (SELECT count(*) FROM rebuild_core.field_observation WHERE site_id IS NOT NULL)
+                   AS field_photos_linked,
                (SELECT round(sum(population)) FROM rebuild_core.population_cell)
                    AS population_measured,
                (SELECT count(DISTINCT commune) FROM rebuild_osm_derived.site_place
@@ -1439,6 +1497,8 @@ _RASTER_RULES = (
     ("sentinel", ("previews.json",), ".png"),
     # PMTiles se lee por rangos de bytes; FileResponse responde 206 a `Range`.
     ("basemap", ("basemap.json",), ".pmtiles"),
+    # Fotos de campo (ADR-24): data/field/<uuid>/(full|thumb).jpg, ya sin EXIF.
+    ("field", (), ".jpg"),
 )
 
 

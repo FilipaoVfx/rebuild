@@ -118,11 +118,35 @@ class ExclusionOut(BaseModel):
     is_prohibited_risk: bool
 
 
+class FieldPhotoOut(BaseModel):
+    """Una foto de campo de pereiramap enlazada al sitio (ADR-24). Las URLs
+    son relativas al propio servidor (`data/field/...`): el visor no pide nada
+    a Supabase."""
+
+    observation_id: str
+    captured_at: str
+    category: str | None
+    lon: float
+    lat: float
+    location_source: str
+    accuracy_m: float | None
+    heading_deg: float | None
+    exif_gps: bool
+    review_status: str
+    site_distance_m: float | None
+    url: str
+    thumb_url: str
+    width: int
+    height: int
+    attribution: str | None
+
+
 class SiteDetail(BaseModel):
     site: SiteSummary
     features: dict
     confidence_drivers: dict
     evidence: list[EvidenceOut]
+    photos: list[FieldPhotoOut] = []
     fusion: dict | None
     exclusions: list[ExclusionOut]
     recommendations: list[RecommendationOut]
