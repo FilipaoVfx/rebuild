@@ -32,7 +32,6 @@ Las verificaciones hechas para escribirlo están en §6, reproducibles.
 | **E1** | Esquema `rebuild_sandbox` sin `CHECK`, no publicable (enmienda ADR-17) | Maquetar interfaz de fuentes aún no disponibles | 1 día | — |
 | **E2** | El control C1 deja de bloquear la **ingesta** a sandbox (enmienda ADR-18 / `fuentes.md`) | Validar el mapeo EDAM y medir el delta del ranking sin publicar nada | 1 día | E1 |
 | **E3** | ADR-19 §6: degradar y declarar en vez de detener el pipeline | Robustez; coherencia con ADR-18 §6 | 2 h | — |
-| **E4** | ADR-20: exponer intervenciones alternativas dentro de la ficha | Responde "¿y qué más cabría aquí?"; ya está calculado | 1 día | — |
 | **E5** | ADR-16: matizar "el sistema nunca afirma un estado de daño" | Evita que la regla pelee contra EDAM | 2 h | Antes de P1 |
 | **R1** | Cerrar ADR-15 como histórico; el criterio de admisión nombra el **rol** | Cualquier superficie para productor/validador/integrador | 2 h | — |
 | **R2** | Sacar el inventario de vistas de los ADR | Iterar la UI sin enmendar un ADR cada vez | 2 h | — |
@@ -44,10 +43,13 @@ Las cinco acciones `P` no requieren tocar una línea de código ni un ADR.
 
 ## 1. Lo que limita el producto no son los ADR
 
-El techo real es el AOI: **6,91 km²** del recuadro de Copernicus, 182
-observaciones, y más de la mitad de la población fuera del alcance de *todos*
-los candidatos. Ningún ADR impone eso — es la consecuencia de tener una sola
-fuente de daño.
+El techo real es el AOI. Tres cifras distintas circulan y conviene no
+confundirlas: **6,91 km²** es la envolvente convexa de las observaciones,
+**12,64 km²** su caja, y **21,66 km²** el rectángulo que el visor dibuja y
+declara en pantalla (66 % del perímetro urbano de 32,8 km²). Sobre ese recuadro
+hay 182 observaciones de daño, y más de la mitad de la población queda fuera del
+alcance de *todos* los candidatos. Ningún ADR impone eso: es la consecuencia
+de tener una sola fuente de daño.
 
 Los cuatro desbloqueos de mayor valor **no requieren cambiar ninguna decisión
 de arquitectura**. Requieren enviar correos que los propios ADR dejan escritos:
@@ -239,14 +241,16 @@ todo por ella contradice a ADR-18 §6, que estableció lo contrario para el ries
 ("deja de ser dependencia bloqueante"). Inconsistencia interna del corpus.
 → Degradar y declarar, no detener.
 
-**E4 · ADR-20 — "una oportunidad por sitio, no cinco".**
-El argumento es de presentación (575 filas = un visor GIS con otro nombre) y se
-aplica al modelo. El propio ADR admite que *"las alternativas no se pierden — el
-score de cada par se sigue calculando"*, pero se descartan en la superficie. Un
-planificador que pregunta "¿y qué más cabría aquí?" hace la pregunta que el
-sistema ya respondió y esconde.
-→ Una oportunidad por sitio en listas y mapa (se conserva); alternativas dentro
-de la ficha. Cero cambio de modelo.
+**E4 · RETIRADA — ya estaba implementada.**
+La versión anterior de este documento proponía exponer las intervenciones
+alternativas dentro de la ficha, leyendo la decisión de ADR-20 sin verificar la
+pantalla. La ficha **ya** las muestra: la sección `ALTERNATIVAS EVALUADAS` lista
+Plaza pública 53,0 · $330 M, Equipamiento comunitario 47,3 · $984 M, Espacio
+abierto 32,2 · $96 M y No construir 0,0 · $19 M, con su nota *"se emite una
+oportunidad por sitio, la mejor. Las alternativas se calculan pero no compiten
+por la atención"*. La recomendación se retira; no había nada que hacer.
+Lección aplicable al resto del documento: un ADR dice qué se decidió, no qué
+quedó en pantalla.
 
 **E5 · ADR-16 — "el sistema nunca afirma un estado de daño" chocará con EDAM.**
 La regla se escribió cuando toda la evidencia era teledetección. `HABITABILIDAD`
@@ -395,9 +399,8 @@ El permiso de uso no exime de eso.
 ### Semana 2 — coherencia del corpus
 
 - [ ] **E3** ADR-19 §6 degrada en vez de detener.
-- [ ] **E4** Alternativas de intervención en la ficha.
 - [ ] **R1 · R2 · R3**
-- [ ] Escribir **ADR-25** que registre E1–E5 y R1–R3 con sus alternativas
+- [ ] Escribir **ADR-25** que registre E1–E3, E5 y R1–R3 con sus alternativas
       rechazadas, en el formato del corpus.
 
 ### Decisiones que requieren dueño
