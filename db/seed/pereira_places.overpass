@@ -1,0 +1,29 @@
+[out:json][timeout:180];
+// Lugares: lo que hace que el mapa se lea como Pereira y no como puntos sobre
+// negro. Extracto aparte de `pereira.overpass` a proposito: aquel alimenta el
+// grafo peatonal y las features; este solo nombra y delimita.
+//
+// bbox = AOI de EMSR916/AOI02 (-75.7251,4.7878,-75.6748,4.8229) + ~0,01 grados.
+(
+  // Perimetro urbano (7), comunas (8) y barrios (9). Solo el perimetro de
+  // Pereira: el del AMCO tambien es nivel 7 y cubre cuatro municipios.
+  relation["boundary"="administrative"]["admin_level"="7"]["name"~"Pereira"](4.7778,-75.7351,4.8329,-75.6648);
+  relation["boundary"="administrative"]["admin_level"~"^(8|9)$"](4.7778,-75.7351,4.8329,-75.6648);
+  // Nombres de lugar: la ciudad, sectores y barrios sin poligono administrativo.
+  nwr["place"~"^(city|suburb|neighbourhood|quarter)$"](4.7778,-75.7351,4.8329,-75.6648);
+  // Rios y quebradas con nombre.
+  way["waterway"~"^(river|stream)$"]["name"](4.7778,-75.7351,4.8329,-75.6648);
+  // Hitos con nombre.
+  nwr["tourism"~"^(attraction|museum|artwork|viewpoint)$"]["name"](4.7778,-75.7351,4.8329,-75.6648);
+  nwr["historic"]["name"](4.7778,-75.7351,4.8329,-75.6648);
+  nwr["amenity"~"^(place_of_worship|townhall|theatre|library|marketplace|bus_station|university|hospital|courthouse)$"]["name"](4.7778,-75.7351,4.8329,-75.6648);
+  nwr["leisure"~"^(park|stadium)$"]["name"](4.7778,-75.7351,4.8329,-75.6648);
+  nwr["shop"="mall"]["name"](4.7778,-75.7351,4.8329,-75.6648);
+  nwr["public_transport"="station"]["name"](4.7778,-75.7351,4.8329,-75.6648);
+  nwr["man_made"="bridge"]["name"](4.7778,-75.7351,4.8329,-75.6648);
+  way["bridge"="yes"]["name"](4.7778,-75.7351,4.8329,-75.6648);
+  // Arterias que el extracto peatonal excluye a proposito (no se camina por
+  // una autopista) pero que orientan a cualquiera que conozca la ciudad.
+  way["highway"~"^(motorway|trunk|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"](4.7778,-75.7351,4.8329,-75.6648);
+);
+out geom;

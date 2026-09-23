@@ -1,0 +1,49 @@
+Natural Earth — Terms of Use
+Auditoría del 2026-09-18. VEREDICTO: COMMERCIAL_SAFE (dominio público). Redistribuible,
+derivados permitidos, sin share-alike, sin atribución obligatoria.
+
+Fuente de los términos: https://www.naturalearthdata.com/about/terms-of-use/
+(el servidor devuelve 406 a clientes sin navegador; leído vía navegador el 2026-09-18)
+
+=== TEXTO (citas literales) ===
+
+"All versions of Natural Earth raster + vector map data found on this website are
+in the public domain."
+
+"You may use the maps in any manner, including modifying the content and design,
+electronic dissemination, and offset printing."
+
+Los autores "invite[] you to use them for personal, educational, and commercial
+purposes."
+
+"No permission is needed to use Natural Earth."
+
+"Crediting the authors is unnecessary." (Atribución sugerida, opcional: "Made with
+Natural Earth".)
+
+"The authors provide Natural Earth as a public service and are not responsible for
+any problems relating to accuracy, content, design, and how it is used."
+
+Los contribuyentes del dato de origen (Washington Post, European Commission, XNR
+Productions, International Mapping Associates) "make no representation of any kind,
+including, but not limited to, any warranty as to the accuracy or fitness of the
+data for a particular use."
+
+=== QUÉ SE USA ===
+
+Dos polígonos, y nada más: Colombia (ne_50m_admin_0_countries) y el departamento
+de Risaralda (ne_10m_admin_1_states_provinces), tomados de
+github.com/nvkelso/natural-earth-vector (rama master, GeoJSON) el 2026-09-18,
+redondeados a 4 decimales y archivados en
+db/seed/natural_earth_colombia_risaralda.geojson.gz (5,8 KB).
+
+Sirven para el localizador de la vista Territorio ("Colombia › Risaralda › Pereira").
+No alimentan ninguna feature, score ni export. Se registran igual: fuentes.md §0 no
+hace excepciones por tamaño.
+
+=== POR QUÉ NO OSM PARA ESTO ===
+
+La relación de Colombia en OSM (admin_level=2) tiene miles de miembros y la
+costa a resolución completa; simplificarla es trabajo, y el resultado seguiría
+siendo ODbL en un uso puramente decorativo. Natural Earth es dominio público y ya
+está simplificado a escala de mapa de situación.

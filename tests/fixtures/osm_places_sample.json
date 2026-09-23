@@ -1,0 +1,409 @@
+{
+ "version": 0.6,
+ "elements": [
+  {
+   "type": "relation",
+   "id": 1,
+   "tags": {
+    "boundary": "administrative",
+    "admin_level": "9",
+    "name": "Barrio Prueba"
+   },
+   "members": [
+    {
+     "type": "way",
+     "ref": 11,
+     "role": "outer",
+     "geometry": [
+      {
+       "lon": -75.7,
+       "lat": 4.8
+      },
+      {
+       "lon": -75.69,
+       "lat": 4.8
+      }
+     ]
+    },
+    {
+     "type": "way",
+     "ref": 12,
+     "role": "outer",
+     "geometry": [
+      {
+       "lon": -75.69,
+       "lat": 4.8
+      },
+      {
+       "lon": -75.695,
+       "lat": 4.81
+      }
+     ]
+    },
+    {
+     "type": "way",
+     "ref": 13,
+     "role": "outer",
+     "geometry": [
+      {
+       "lon": -75.695,
+       "lat": 4.81
+      },
+      {
+       "lon": -75.7,
+       "lat": 4.8
+      }
+     ]
+    },
+    {
+     "type": "node",
+     "ref": 14,
+     "role": "label",
+     "lat": 4.8,
+     "lon": -75.695
+    }
+   ]
+  },
+  {
+   "type": "relation",
+   "id": 2,
+   "tags": {
+    "boundary": "administrative",
+    "admin_level": "8",
+    "name": "Comuna Prueba"
+   },
+   "members": [
+    {
+     "type": "way",
+     "ref": 21,
+     "role": "outer",
+     "geometry": [
+      {
+       "lon": -75.7,
+       "lat": 4.8
+      },
+      {
+       "lon": -75.69,
+       "lat": 4.8
+      },
+      {
+       "lon": -75.695,
+       "lat": 4.81
+      },
+      {
+       "lon": -75.7,
+       "lat": 4.8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "relation",
+   "id": 3,
+   "tags": {
+    "boundary": "administrative",
+    "admin_level": "7",
+    "name": "AMCO, Area Metropolitana Centro Occidente"
+   },
+   "members": [
+    {
+     "type": "way",
+     "ref": 31,
+     "role": "outer",
+     "geometry": [
+      {
+       "lon": -75.7,
+       "lat": 4.8
+      },
+      {
+       "lon": -75.69,
+       "lat": 4.8
+      },
+      {
+       "lon": -75.695,
+       "lat": 4.81
+      },
+      {
+       "lon": -75.7,
+       "lat": 4.8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "relation",
+   "id": 4,
+   "tags": {
+    "boundary": "administrative",
+    "admin_level": "7",
+    "name": "Perimetro Urbano Pereira"
+   },
+   "members": [
+    {
+     "type": "way",
+     "ref": 41,
+     "role": "outer",
+     "geometry": [
+      {
+       "lon": -75.7,
+       "lat": 4.8
+      },
+      {
+       "lon": -75.69,
+       "lat": 4.8
+      },
+      {
+       "lon": -75.695,
+       "lat": 4.81
+      },
+      {
+       "lon": -75.7,
+       "lat": 4.8
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "type": "node",
+   "id": 5,
+   "lat": 4.8143,
+   "lon": -75.6947,
+   "tags": {
+    "place": "city",
+    "name": "Pereira",
+    "population": "477027",
+    "wikidata": "Q51111"
+   }
+  },
+  {
+   "type": "node",
+   "id": 6,
+   "lat": 4.81,
+   "lon": -75.7,
+   "tags": {
+    "place": "neighbourhood",
+    "name": "Sector Prueba"
+   }
+  },
+  {
+   "type": "way",
+   "id": 7,
+   "tags": {
+    "waterway": "river",
+    "name": "Río Prueba"
+   },
+   "geometry": [
+    {
+     "lon": -75.7,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.695,
+     "lat": 4.81
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 8,
+   "tags": {
+    "waterway": "stream"
+   },
+   "geometry": [
+    {
+     "lon": -75.7,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.695,
+     "lat": 4.81
+    }
+   ]
+  },
+  {
+   "type": "node",
+   "id": 9,
+   "lat": 4.8133,
+   "lon": -75.6961,
+   "tags": {
+    "amenity": "townhall",
+    "name": "Alcaldía de Prueba"
+   }
+  },
+  {
+   "type": "node",
+   "id": 10,
+   "lat": 4.813,
+   "lon": -75.696,
+   "tags": {
+    "historic": "memorial",
+    "name": "Monumento Prueba",
+    "wikidata": "Q1"
+   }
+  },
+  {
+   "type": "way",
+   "id": 15,
+   "tags": {
+    "amenity": "place_of_worship",
+    "name": "Catedral de Prueba"
+   },
+   "geometry": [
+    {
+     "lon": -75.7,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.69,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.695,
+     "lat": 4.81
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 16,
+   "tags": {
+    "amenity": "place_of_worship",
+    "name": "Capilla Prueba"
+   },
+   "geometry": [
+    {
+     "lon": -75.7,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.69,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.695,
+     "lat": 4.81
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 17,
+   "tags": {
+    "highway": "trunk",
+    "name": "Avenida Prueba"
+   },
+   "geometry": [
+    {
+     "lon": -75.7,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.69,
+     "lat": 4.8
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 18,
+   "tags": {
+    "highway": "primary",
+    "bridge": "yes",
+    "name": "Calle 14"
+   },
+   "geometry": [
+    {
+     "lon": -75.7,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.69,
+     "lat": 4.8
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 19,
+   "tags": {
+    "highway": "primary",
+    "bridge": "yes",
+    "name": "Viaducto Prueba"
+   },
+   "geometry": [
+    {
+     "lon": -75.7,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.69,
+     "lat": 4.8
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 20,
+   "tags": {
+    "highway": "trunk",
+    "bridge": "yes",
+    "name": "El Puente Prueba"
+   },
+   "geometry": [
+    {
+     "lon": -75.7,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.69,
+     "lat": 4.8
+    }
+   ]
+  },
+  {
+   "type": "way",
+   "id": 22,
+   "tags": {
+    "leisure": "park",
+    "name": "Parque Chico"
+   },
+   "geometry": [
+    {
+     "lon": -75.7,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.6999,
+     "lat": 4.8
+    },
+    {
+     "lon": -75.6999,
+     "lat": 4.8001
+    }
+   ]
+  },
+  {
+   "type": "node",
+   "id": 23,
+   "lat": 4.81,
+   "lon": -75.7,
+   "tags": {
+    "amenity": "bus_station",
+    "name": "Expreso Prueba"
+   }
+  },
+  {
+   "type": "node",
+   "id": 24,
+   "lat": 4.81,
+   "lon": -75.7,
+   "tags": {
+    "amenity": "bus_station",
+    "name": "Terminal de Prueba"
+   }
+  }
+ ]
+}

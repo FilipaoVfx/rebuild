@@ -406,6 +406,147 @@ SOURCES: list[SourceRegistration] = [
             "al generador sintetico, que queda retirado."
         ),
     ),
+    SourceRegistration(
+        source_id="pereira_sig",
+        display_name="Alcaldía de Pereira — SIG municipal (equipamientos y espacio público)",
+        tier="A",
+        source_url="https://mapas-pereira.opendata.arcgis.com/",
+        access_method="api",
+        spatial_reference="EPSG:9377",
+        # Solo los items que DECLARAN licencia en su ficha. La misma org
+        # publica comunas, barrios, nomenclatura y ortofoto sin una sola
+        # frase de terminos, y esos no entran: la ficha del dataset manda
+        # sobre la portada del portal (fuentes.md §10), y la portada solo
+        # habla de acceso y reserva los derechos de autor.
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="Datos abiertos — Ley 1712 de 2014 (declarado en la ficha del item)",
+        license_url="https://www.arcgis.com/home/item.html?id=3e6a1a40b02b43d8a4dff55791cf2cd6",
+        attribution_text=(
+            "Alcaldía de Pereira — Secretaría de Planeación Municipal (SIGPER); CARDER; "
+            "AMCO (Catastro Multipropósito). Datos abiertos, Ley 1712 de 2014"
+        ),
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        share_alike=False,
+        quality_score=0.80,
+        terms_verified_at=date(2026, 9, 18),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/pereira_sig_20260918.txt",
+        verification_notes=(
+            "licenseInfo literal de 'Equipamientos actual' y 'Espacio Público "
+            "actual': «Datos abiertos de uso libre bajo el marco de la Ley 1712 "
+            "de 2014 [...] uso y reutilización bajo licencia abierta y sin "
+            "restricciones legales para su aprovechamiento. Se deben respetar "
+            "derechos de autor, dando el apropiado crédito al municipio de "
+            "Pereira y entidades que proporcionaron dicha información». Los "
+            "cinco ejes responden si; la obligacion es la atribucion. Copia en "
+            "db/terms/pereira_sig_20260918.txt. Cubre SOLO esos dos items."
+        ),
+    ),
+    SourceRegistration(
+        source_id="natural_earth",
+        display_name="Natural Earth (contornos de Colombia y Risaralda)",
+        tier="A",
+        source_url="https://www.naturalearthdata.com/",
+        access_method="download",
+        spatial_reference="EPSG:4326",
+        license_class=LicenseClass.COMMERCIAL_SAFE,
+        license_name="Dominio público",
+        license_url="https://www.naturalearthdata.com/about/terms-of-use/",
+        # La atribucion es opcional por licencia; se pone igual porque la
+        # puerta exige un texto literal para toda fuente usable, y porque
+        # decir de donde sale un contorno cuesta nada.
+        attribution_text="Made with Natural Earth",
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        share_alike=False,
+        quality_score=0.70,
+        terms_verified_at=date(2026, 9, 18),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/natural_earth_terms_20260918.txt",
+        verification_notes=(
+            "«All versions of Natural Earth raster + vector map data [...] are in "
+            "the public domain». Dos poligonos para el localizador de la vista "
+            "Territorio (Colombia, Risaralda). No alimenta features ni exports."
+        ),
+    ),
+    SourceRegistration(
+        source_id="pereiramap",
+        display_name="pereiramap — fotos de campo (colaboradores)",
+        tier="B",
+        source_url="https://github.com/FilipaoVfx/pereiramap",
+        access_method="api",
+        spatial_reference="EPSG:4326",
+        # Producto hermano en la misma base Supabase. Los terminos son los que
+        # la app muestra al enviar y el usuario acepta: CC BY 4.0 sobre la foto
+        # y su ubicacion. No hay autor individual: la app no recoge nombres.
+        license_class=LicenseClass.ATTRIBUTION,
+        license_name="CC BY 4.0 (consentimiento al enviar)",
+        license_url="https://creativecommons.org/licenses/by/4.0/deed.es",
+        attribution_text="Fotos de campo — pereiramap (colaboradores), CC BY 4.0",
+        redistribution_allowed=True,
+        derivatives_allowed=True,
+        share_alike=False,
+        # Foto tomada por cualquiera, sin validacion de un evaluador: es
+        # evidencia visual, no una inspeccion. La revision humana filtra
+        # datos personales, no juzga el dano.
+        quality_score=0.55,
+        terms_verified_at=date(2026, 9, 19),
+        terms_verified_by="auditoria de fuentes",
+        terms_snapshot_path="storage://terms/pereiramap_20260919.txt",
+        verification_notes=(
+            "Consentimiento literal en db/terms/pereiramap_20260919.txt. Se lee "
+            "la vista publica (sin device_id, sin RECHAZADA); se ingieren "
+            "PENDIENTE y APROBADA con la etiqueta a la vista; el paquete PUBLIC "
+            "copia solo APROBADA (ADR-24). Imagenes sin EXIF por construccion."
+        ),
+    ),
+    SourceRegistration(
+        source_id="igac_ortofoto",
+        display_name="IGAC — Ortoimagen 1:1.000 de Pereira",
+        tier="A",
+        source_url="https://mapas.igac.gov.co/image/services/orto/orto66001000pereira/ImageServer",
+        access_method="wms",
+        spatial_reference="EPSG:3857",
+        # UNCLEAR con via de desbloqueo escrita. La Res. IGAC 616/2020 adopta
+        # CC BY 4.0 para «los datos cuya titularidad y/o autoria es propia del
+        # IGAC»; lo que falta es confirmar que esta ortofoto —que el portal
+        # municipal llama "Ortofoto AMCO"— es del IGAC y no del gestor
+        # catastral. Ver db/terms/igac_ortofoto_20260918.txt.
+        license_class=LicenseClass.UNCLEAR,
+        terms_snapshot_path="storage://terms/igac_ortofoto_20260918.txt",
+        verification_notes=(
+            "Res. IGAC 616/2020: CC BY 4.0 si la titularidad es del IGAC. "
+            "PENDIENTE confirmar titularidad (¿convenio AMCO, Res. 1421/2021?) "
+            "con el copyrightText del servicio (502 durante la auditoria), la "
+            "ficha en Colombia en Mapas o contactenos@igac.gov.co. Con eso pasa "
+            "a ATTRIBUTION: «IGAC — Ortoimagen 1:1.000, Pereira. CC BY 4.0. "
+            "Imagen reproyectada y teselada (modificada)». Mientras: teselas al "
+            "sandbox, nada publicado."
+        ),
+    ),
+    SourceRegistration(
+        source_id="pereira_ortofoto_post",
+        display_name="Alcaldía de Pereira — Ortofoto post-sismo (14-08-2026)",
+        tier="A",
+        source_url="https://tiles.arcgis.com/tiles/Zdpg0E6lri7EggIc/arcgis/rest/services/mapaortofoto/MapServer",
+        access_method="api",
+        spatial_reference="EPSG:3857",
+        # La imagen mas valiosa que existe para este producto: cuatro dias
+        # despues del sismo, cubre todo el AOI y viene en teselas Web Mercator
+        # estandar. Y no tiene ni una frase de terminos: copyrightText,
+        # licenseInfo y accessInformation vacios. Disponible y permitido no
+        # son lo mismo. Ver db/terms/pereira_ortofoto_post_20260918.txt.
+        license_class=LicenseClass.UNCLEAR,
+        terms_snapshot_path="storage://terms/pereira_ortofoto_post_20260918.txt",
+        verification_notes=(
+            "UNCLEAR. documentInfo: «ortofoto terremoto», «Terremoto ortofoto 14 "
+            "de agosto». Sin licencia, sin productor declarado. Lo desbloquea "
+            "que SIGPER copie en la ficha el texto Ley 1712 que ya usa en "
+            "'Equipamientos actual' (plantilla de solicitud en el snapshot). "
+            "Mientras: teselas al sandbox, nada publicado."
+        ),
+    ),
 ]
 
 SOURCES_BY_ID = {source.source_id: source for source in SOURCES}

@@ -159,7 +159,9 @@ def test_las_fuentes_sin_verificar_siguen_en_unclear():
     sin_verificar = {s.source_id for s in SOURCES if s.license_class is LicenseClass.UNCLEAR}
     # igac_catastro entro el 2026-09-16 TRAS auditarla, no por no mirarla: la
     # capa cubre el AOI con 47.443 predios y no declara licencia ninguna.
-    assert sin_verificar == {"unosat", "igac_catastro"}
+    # Las dos ortofotos entraron el 2026-09-18 igual: auditadas, con via de
+    # desbloqueo escrita en db/terms/, y bloqueadas mientras tanto.
+    assert sin_verificar == {"unosat", "igac_catastro", "igac_ortofoto", "pereira_ortofoto_post"}
 
 
 def test_copernicus_es_redistribuible_y_sertit_no():
@@ -221,5 +223,40 @@ def test_el_catastro_de_igac_esta_bloqueado_por_no_declarar_licencia():
 
 def test_las_fuentes_auditadas_de_esta_tanda_si_pasan_el_control():
     """El control tiene que discriminar, no bloquear todo por igual."""
-    for source_id in ("dane_censo_2018", "copernicus_dem", "copernicus_sentinel"):
+    for source_id in (
+        "dane_censo_2018",
+        "copernicus_dem",
+        "copernicus_sentinel",
+        "pereira_sig",
+        "natural_earth",
+    ):
         assert_source_usable(source_id)
+
+
+# ── Ortofotos: la imagen mas valiosa, y sin una frase de terminos ───────
+
+
+@pytest.mark.parametrize("source_id", ["igac_ortofoto", "pereira_ortofoto_post"])
+def test_las_ortofotos_estan_bloqueadas_hasta_verificar_titularidad_o_terminos(source_id):
+    """Dos productos distintos, mismo veredicto por razones distintas.
+
+    La del IGAC tiene licencia (CC BY 4.0, Res. 616/2020) pero condicionada a
+    que la titularidad sea del IGAC, y el portal municipal la llama "Ortofoto
+    AMCO". La municipal del 14 de agosto no declara nada. Ninguna se publica
+    por "estar disponible": asi se publico la capa del SGC (ADR-18).
+    """
+    source = SOURCES_BY_ID[source_id]
+    assert source.license_class is LicenseClass.UNCLEAR
+    assert source.redistribution_allowed is None
+    assert source.terms_snapshot_path, "un UNCLEAR sin auditoria escrita es una corazonada"
+    with pytest.raises(ValueError, match="UNCLEAR"):
+        assert_source_usable(source_id)
+
+
+def test_el_sig_municipal_entra_solo_con_la_licencia_que_declara():
+    """La ficha del dataset manda sobre la portada del portal (fuentes.md §10)."""
+    sig = SOURCES_BY_ID["pereira_sig"]
+    assert sig.license_class is LicenseClass.ATTRIBUTION
+    assert sig.redistribution_allowed is True
+    assert "Ley 1712" in (sig.license_name or "")
+    assert "Alcaldía de Pereira" in (sig.attribution_text or "")

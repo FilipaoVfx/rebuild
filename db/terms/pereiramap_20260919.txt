@@ -1,0 +1,49 @@
+Fuente: pereiramap — fotos de campo (colaboradores)
+Repositorio: https://github.com/FilipaoVfx/pereiramap
+Auditoria: 2026-09-19
+
+Que es
+------
+Fotos tomadas en el terreno por quien usa la app pereiramap, con ubicacion y
+hora. Producto hermano de este proyecto: la misma base Supabase (esquema
+`pereiramap`), el mismo dueno. No es una fuente externa con terminos ajenos:
+los terminos son los que la app muestra y el usuario acepta al enviar.
+
+Texto de consentimiento (app/src/config.ts, CONSENT_TEXT, literal)
+------------------------------------------------------------------
+"Al enviar, autorizas a publicar esta foto y su ubicación bajo licencia
+CC BY 4.0 como evidencia de campo en Urban Recovery Intelligence. La foto se
+sube sin metadatos del dispositivo. No fotografíes personas, placas ni
+números de casa."
+
+Cinco ejes (fuentes.md §10)
+---------------------------
+1. Uso interno: si.
+2. Redistribucion: si (CC BY 4.0 declarada en el consentimiento).
+3. Derivados: si.
+4. Share-alike: no.
+5. Atribucion: "Fotos de campo — pereiramap (colaboradores), CC BY 4.0".
+   No hay autor individual que nombrar: la app no recoge nombres.
+
+Datos personales
+----------------
+- La app no pide identidad; `device_id` es un UUID por instalacion y NO esta
+  en la vista publica que este proyecto lee (`public.pereiramap_observacion_publica`).
+- La imagen se re-codifica en el cliente: sin EXIF (marca, modelo, serie...).
+- Sin texto libre: categoria cerrada.
+- Lo que la foto muestre (caras, placas, numeros de casa) no lo detecta
+  ningun control lexico: lo filtra la revision humana (`review_status`).
+  Este proyecto ingiere PENDIENTE y APROBADA con la etiqueta a la vista, y
+  PUBLICA (paquete PUBLIC) solo APROBADA. RECHAZADA no se lee: la vista las
+  excluye.
+- Unidad espacial: punto de captura. Es la posicion desde donde se tomo la
+  foto (via publica), no la de una vivienda; misma unidad que las
+  observaciones de Copernicus ya publicadas. Se enlaza al sitio (>= 300 m2)
+  y se muestra en su ficha.
+
+Acceso
+------
+PostgREST del proyecto Supabase compartido, vista
+`public.pereiramap_observacion_publica`, clave publicable. Imagenes en el
+bucket publico `field-photos`, copiadas a `data/field/` por el pipeline: el
+visor nunca las pide a Supabase (fuentes.md §11).

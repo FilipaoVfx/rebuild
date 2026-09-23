@@ -5,6 +5,10 @@ GitHub Pages sirve archivos, no procesos: no hay optimizador que correr ni
 consultas que filtrar. El paquete vuelca lo que la API devolveria y el visor
 lo consume en modo estatico.
 
+El visor se construye aparte (`cd apps/viewer && npm run build`) y este script
+empaqueta su `dist/`. Los assets van con hash y sin ninguna referencia a un
+CDN: MapLibre y deck.gl entran al bundle desde npm en tiempo de construccion.
+
 Dos consecuencias que el propio visor declara en pantalla:
 
 - Los escenarios van PRECALCULADOS a presupuestos fijos. Pedir uno distinto
@@ -30,7 +34,8 @@ from uri.api.app import app  # noqa: E402
 from uri.contracts import CONTRIBUTING_SOURCES_SQL  # noqa: E402
 from uri.db import worker_connection  # noqa: E402
 
-VIEWER = ROOT / "apps" / "viewer"
+#: El visor es una aplicacion con build propio; lo que se publica es su `dist`.
+VIEWER_DIST = ROOT / "apps" / "viewer" / "dist"
 DIST = ROOT / "dist"
 
 #: Presupuestos precalculados, en miles de millones de COP.
@@ -51,11 +56,33 @@ LAYERS = (
     "facilities",
     "population",
     "catchments",
+    # Lugares (ADR-22): lo que hace que el mapa se lea como Pereira.
+    "admin_areas",
+    "places",
+    "waterways",
+    "landmarks",
+    "road_labels",
+    "municipal_facilities",
+    "municipal_public_space",
+    "reference_regions",
+    # Fotos de campo (ADR-24). En PUBLIC se filtran a las APROBADA.
+    "field_photos",
 )
+
+
+def photo_publishable(profile: str, review_status: str) -> bool:
+    """La puerta de las fotos de campo: el paquete PUBLIC solo lleva lo que
+    una persona revisó (caras, placas, números de casa); INTERNAL lleva las
+    pendientes con su etiqueta a la vista."""
+    return profile == "INTERNAL" or review_status == "APROBADA"
 
 
 class PublicationBlocked(RuntimeError):
     """Una fuente que contribuye no permite redistribucion."""
+
+
+class ViewerNotBuilt(RuntimeError):
+    """El visor no esta construido: falta `npm run build` en apps/viewer."""
 
 
 def assert_publishable(profile: str) -> None:
@@ -103,20 +130,32 @@ def main(profile: str) -> int:
         shutil.rmtree(DIST)
     DIST.mkdir()
 
-    print("copiando el visor")
-    for name in ("index.html", "styles.css", "app.js"):
-        shutil.copy2(VIEWER / name, DIST / name)
-    shutil.copytree(VIEWER / "vendor", DIST / "vendor")
+    if not (VIEWER_DIST / "index.html").exists():
+        raise ViewerNotBuilt(
+            f"No existe {VIEWER_DIST / 'index.html'}.\n"
+            "El visor se construye antes de empaquetar:\n"
+            "  cd apps/viewer && npm ci && npm run build"
+        )
 
-    # El modo estatico se activa desde el HTML publicado, no con una bandera
-    # en el codigo: el mismo app.js sirve para ambos despliegues.
-    index = (DIST / "index.html").read_text(encoding="utf-8")
+    print("copiando el visor construido")
+    shutil.copytree(VIEWER_DIST, DIST, dirs_exist_ok=True)
+
+    # El modo estatico se activa desde el HTML publicado, no con una bandera en
+    # el codigo: el mismo bundle sirve para ambos despliegues. Se inyecta justo
+    # despues de `<head>` y no junto a una etiqueta concreta porque los assets
+    # llevan hash en el nombre y cambian en cada build.
+    index_path = DIST / "index.html"
+    index = index_path.read_text(encoding="utf-8")
+    if "<head>" not in index:
+        raise ViewerNotBuilt(
+            "El index.html del visor no tiene <head>: no se puede inyectar el modo estatico."
+        )
     index = index.replace(
-        '<script src="vendor/maplibre-gl.js"></script>',
-        '<script>window.URI_STATIC_BASE = "data";</script>\n'
-        '<script src="vendor/maplibre-gl.js"></script>',
+        "<head>",
+        '<head>\n    <script>window.URI_STATIC_BASE = "data";</script>',
+        1,
     )
-    (DIST / "index.html").write_text(index, encoding="utf-8")
+    index_path.write_text(index, encoding="utf-8")
 
     data = DIST / "data"
     client = TestClient(app)
@@ -127,7 +166,11 @@ def main(profile: str) -> int:
 
     details = {}
     for site in sites["sites"]:
-        details[site["site_id"]] = client.get(f"/api/v1/sites/{site['site_id']}").json()
+        detail = client.get(f"/api/v1/sites/{site['site_id']}").json()
+        detail["photos"] = [
+            p for p in detail.get("photos", []) if photo_publishable(profile, p["review_status"])
+        ]
+        details[site["site_id"]] = detail
     write(data / "details.json", details)
 
     # Las oportunidades son la entidad central del producto: la vista las
@@ -138,10 +181,20 @@ def main(profile: str) -> int:
     write(data / "sources.json", client.get("/api/v1/data-sources").json())
     write(data / "alerts.json", client.get("/api/v1/quality/alerts").json())
 
+    published_photos: list[dict] = []
     for layer in LAYERS:
         response = client.get(f"/api/v1/geojson/{layer}")
-        if response.status_code == 200:
-            write(data / "geojson" / f"{layer}.json", response.json())
+        if response.status_code != 200:
+            continue
+        payload = response.json()
+        if layer == "field_photos":
+            payload["features"] = [
+                f
+                for f in payload["features"]
+                if photo_publishable(profile, f["properties"]["review_status"])
+            ]
+            published_photos = payload["features"]
+        write(data / "geojson" / f"{layer}.json", payload)
 
     print("precalculando escenarios")
     scenarios = []
@@ -164,6 +217,10 @@ def main(profile: str) -> int:
         response.raise_for_status()
         coverage[scenario["scenario_id"]] = response.json()
     write(data / "coverage.json", coverage)
+
+    # ¿Dónde estamos? Se vuelca DESPUES de los escenarios para que el conteo
+    # de proyectos del ultimo escenario exista.
+    write(data / "territory.json", client.get("/api/v1/territory").json())
 
     # Las vistas Sentinel van versionadas en el repositorio, no se descargan
     # aqui. Es el mismo criterio que con el extracto de OSM: atar cada
@@ -204,6 +261,59 @@ def main(profile: str) -> int:
     else:
         print("vistas Sentinel: ninguna versionada — la capa no se publica")
 
+    # Cartografia base (ADR-22 §8): el extracto vectorial de OSM y su indice.
+    # GitHub Pages responde a `Range`, que es lo unico que PMTiles necesita.
+    basemap = ROOT / "data" / "basemap"
+    if (basemap / "basemap.json").exists():
+        destino = data / "basemap"
+        destino.mkdir(parents=True, exist_ok=True)
+        for archivo in ("basemap.json", "pereira_basemap.pmtiles"):
+            if (basemap / archivo).exists():
+                shutil.copy2(basemap / archivo, destino / archivo)
+        print("cartografia base: extracto PMTiles copiado")
+    else:
+        print("cartografia base: sin extracto — el mapa de calles no se publica")
+
+    # Fotos de campo (ADR-24): solo las imagenes de las observaciones que
+    # pasaron la puerta de arriba, desde `data/field/<uuid>/`.
+    campo = ROOT / "data" / "field"
+    copiadas = 0
+    for feature in published_photos:
+        origen = campo / feature["id"]
+        if not (origen / "full.jpg").exists():
+            continue
+        destino = data / "field" / feature["id"]
+        destino.mkdir(parents=True, exist_ok=True)
+        for archivo in ("full.jpg", "thumb.jpg"):
+            if (origen / archivo).exists():
+                shutil.copy2(origen / archivo, destino / archivo)
+        copiadas += 1
+    print(f"fotos de campo ({profile}): {copiadas} de {len(published_photos)} publicables copiadas")
+
+    # Ortofotos (ADR-22 §6): solo las de `data/ortofoto/<fuente>/`, que es
+    # donde `fetch_ortofoto.py` escribe cuando el registro dice que la fuente
+    # se puede redistribuir. El sandbox no se mira. La comprobacion contra el
+    # registro se repite aqui a proposito: una carpeta movida a mano no
+    # convierte una fuente UNCLEAR en publicable.
+    from uri.ingestion.adapters import ortofoto as ortofoto_adapter
+
+    for source in ortofoto_adapter.SOURCES:
+        origen = ortofoto_adapter.DATA / source.source_id
+        if not (origen / "ortofoto.json").exists():
+            continue
+        if not ortofoto_adapter.is_publishable(source.source_id):
+            print(f"ortofoto {source.source_id}: en disco pero NO redistribuible — no se publica")
+            continue
+        destino = data / "ortofoto" / source.source_id
+        n = 0
+        for tesela in sorted(origen.glob("[0-9]*/*/*.*")):
+            salida = destino / tesela.relative_to(origen)
+            salida.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(tesela, salida)
+            n += 1
+        shutil.copy2(origen / "ortofoto.json", destino / "ortofoto.json")
+        print(f"ortofoto {source.source_id}: {n} teselas")
+
     total = sum(f.stat().st_size for f in DIST.rglob("*") if f.is_file())
     print(f"\ndist/ listo — {total / 1024 / 1024:.1f} MB")
     return 0
@@ -223,3 +333,6 @@ if __name__ == "__main__":
     except PublicationBlocked as exc:
         print(f"\nBLOQUEADO\n{exc}", file=sys.stderr)
         raise SystemExit(2) from exc
+    except ViewerNotBuilt as exc:
+        print(f"\nVISOR SIN CONSTRUIR\n{exc}", file=sys.stderr)
+        raise SystemExit(3) from exc

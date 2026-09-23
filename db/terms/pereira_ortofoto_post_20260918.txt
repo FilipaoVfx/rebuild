@@ -1,0 +1,60 @@
+Alcaldía de Pereira — Ortofoto post-sismo ("mapaortofoto", 14 de agosto de 2026)
+Auditoría del 2026-09-18. VEREDICTO: UNCLEAR. No puede publicarse.
+
+=== QUÉ HAY ===
+
+Servicio de teselas: https://tiles.arcgis.com/tiles/Zdpg0E6lri7EggIc/arcgis/rest/services/mapaortofoto/MapServer
+Ítem: 9b922623feff413f82f149e70754d45b (Map Service), y 6f84b86e21bd465784c1062d986fe89f
+(Tile Package), org de la Alcaldía de Pereira, dueño "sigper1" (el SIG municipal).
+Modificado 2026-09-01.
+
+documentInfo del servicio (literal): Title "mapaortofoto", Author "sigper1", Subject
+"ortofoto terremoto", Keywords "Terremoto ortofoto 14 de agosto". Capa:
+ORTO_06_PEREIRA-001.ecw.
+
+Es decir: una ortofoto tomada CUATRO DÍAS después del sismo del 10-08-2026. Para este
+producto es la imagen más valiosa que existe.
+
+Técnicamente perfecta para el pipeline: tileInfo Web Mercator (WKID 102100/3857),
+256x256, origen estándar (-20037508.34, 20037508.34), niveles 0-23, capacidades
+"Map, TilesOnly, Tilemap", exportTilesAllowed = false. Extensión: X -8.433.728 a
+-8.422.276, Y 531.611 a 537.836 (≈ lon -75,76 a -75,66; lat 4,78 a 4,83) — cubre todo
+el AOI.
+
+=== POR QUÉ NO SE USA ===
+
+copyrightText del servicio: VACÍO. licenseInfo del ítem: VACÍO. accessInformation:
+VACÍO. Productor de la imagen: no declarado (¿vuelo municipal? ¿AMCO? ¿dron?).
+
+La portada del Hub municipal solo habla de ACCESO ("la administración deberá
+proporcionar el acceso a la misma [...] donde se garantice los derechos de autor") y
+el pie dice "Copyright 2017. Municipio de Pereira". Ver db/terms/pereira_sig_20260918.txt.
+
+fuentes.md §10: "'Es público' no responde ninguno de los cinco ejes". Y §0: publicar el
+sitio es redistribuir. Que las teselas se sirvan abiertas no dice que se puedan
+copiar y volver a servir.
+
+=== QUÉ LO DESBLOQUEA ===
+
+Que SIGPER (sigper@pereira.gov.co) escriba en la ficha del ítem 9b922623… el mismo
+texto que ya usa en "Equipamientos actual": "Datos abiertos de uso libre bajo el marco
+de la Ley 1712 de 2014 [...] dando el apropiado crédito al municipio de Pereira y
+entidades que proporcionaron dicha información". Con eso la fila pasa a ATTRIBUTION
+con la misma atribución que pereira_sig más "Ortofoto del 14-08-2026".
+
+Plantilla de solicitud (para enviar):
+
+  Asunto: Términos de uso del servicio "mapaortofoto" (ortofoto del 14 de agosto)
+  Buenos días. Para un visor de soporte a decisiones de recuperación post-sismo
+  quisiéramos mostrar la ortofoto del 14 de agosto publicada en
+  tiles.arcgis.com/tiles/Zdpg0E6lri7EggIc/.../mapaortofoto. La ficha del ítem no
+  declara licencia. ¿Podrían indicar en licenseInfo los términos de uso —por ejemplo
+  el texto de datos abiertos (Ley 1712 de 2014) que ya figura en "Equipamientos
+  actual"— y la entidad productora de la imagen? Con eso podríamos citarla y
+  redistribuirla correctamente con crédito al municipio.
+
+=== CONSUMO PREVISTO ===
+
+Adaptador con puerta (src/uri/ingestion/adapters/ortofoto.py): descarga
+tile/{z}/{y}/{x} para z14-17 del AOI a data/ortofoto/.sandbox/pereira_ortofoto_post/
+mientras la fuente sea UNCLEAR. Nada de ese directorio se publica ni se sirve.

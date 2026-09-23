@@ -59,6 +59,16 @@ PUBLISHED_LAYER_TABLES = (
     "rebuild_osm_raw.road",
     "rebuild_osm_raw.green_space",
     "rebuild_osm_raw.facility",
+    "rebuild_osm_raw.admin_area",
+    "rebuild_osm_raw.place_point",
+    "rebuild_osm_raw.waterway",
+    "rebuild_osm_raw.landmark",
+    "rebuild_osm_raw.arterial_road",
+    "rebuild_osm_derived.site_place",
+    "rebuild_core.municipal_facility",
+    "rebuild_core.municipal_public_space",
+    "rebuild_core.reference_region",
+    "rebuild_core.field_observation",
     "rebuild_analytics.site_feature",
 )
 
