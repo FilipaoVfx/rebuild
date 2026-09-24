@@ -199,11 +199,14 @@ sirve para maquetar interfaz de fuentes que aún no existen y donde la etiqueta
 `SIMULATED` es exactamente la garantía que hace falta. Fuera del sandbox, la
 prohibición es un `CHECK` en cinco tablas y sigue en pie.
 
-**Nota de numeración.** `ADR-24` se cita diez veces en el código —`.env.example`,
-`.gitignore`, migración 011, `pipeline.py`, `registry.py`, el adaptador de
-`pereiramap`, `build_static.py`, `browser_check.py` y `schemas.py`— y el archivo
-nunca se escribió. La decisión sobre las fotos de campo existe en el código y no
-en el corpus; hay que escribirla o corregir las referencias.
+**Nota de numeración — resuelta.** `ADR-24` se citaba diez veces en el código
+—`.env.example`, `.gitignore`, migración 011, `pipeline.py`, `registry.py`, el
+adaptador de `pereiramap`, `build_static.py`, `browser_check.py` y
+`schemas.py`— y el archivo no existía: la decisión sobre las fotos de campo
+vivía en el código y no en el corpus. Se escribió en
+[ADR-24](ADR-24-las-fotos-de-campo-son-evidencia-visual.md), y su §6 aplica la
+regla 2 de este ADR al emparejamiento espacial, que asignaba el sitio más
+cercano sin declarar estado.
 
 ## Alternativas rechazadas
 
