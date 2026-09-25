@@ -45,5 +45,10 @@ export const Icon = {
   Bulb: (p: P) => <Svg {...p}><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z" /></Svg>,
   Image: (p: P) => <Svg {...p}><rect x="3.5" y="4.5" width="17" height="15" rx="1.5" /><circle cx="9" cy="9.5" r="1.6" /><path d="m4 18 5.5-5.5 4 4 2.5-2.5L20 18" /></Svg>,
   Compass: (p: P) => <Svg {...p}><path d="M12 3 8 13h8z" fill="currentColor" stroke="none" /><path d="M12 21 8 13h8z" /></Svg>,
+  Sliders: (p: P) => <Svg {...p}><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></Svg>,
+  Sun: (p: P) => <Svg {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" /></Svg>,
+  Moon: (p: P) => <Svg {...p}><path d="M19.5 14.5A7.5 7.5 0 0 1 9.5 4.5a7.5 7.5 0 1 0 10 10z" /></Svg>,
+  Monitor: (p: P) => <Svg {...p}><rect x="3" y="4.5" width="18" height="12" rx="1.5" /><path d="M8.5 20h7M12 16.5V20" /></Svg>,
+  Question: (p: P) => <Svg {...p}><circle cx="12" cy="12" r="8.5" /><path d="M9.6 9.4a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.7M12 16.8h.01" /></Svg>,
   Scale: (p: P) => <Svg {...p}><path d="M12 4v16M5 20h14M5 7h14" /><path d="m5 7-2.5 6h5zM19 7l-2.5 6h5z" /></Svg>,
 };

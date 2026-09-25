@@ -171,7 +171,7 @@ function Crop({ scene, site, label }: { scene: SentinelScene; site: Site; label:
             top: `calc(50% - ${py * ZOOM}px)`,
           }}
         />
-        <span className="absolute top-1/2 left-1/2 size-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1.5px_#1b45c4]" aria-hidden="true" />
+        <span className="absolute top-1/2 left-1/2 size-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1.5px_var(--color-cobalt)]" aria-hidden="true" />
       </div>
       <figcaption className="mt-1 flex justify-between text-[13px]">
         <b>{label}</b><span className="text-ink-3">{fecha(scene.acquisition)}</span>

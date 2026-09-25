@@ -1,9 +1,8 @@
 import { useEffect } from 'react';
-import { Header } from './components/Header';
 import { Legend, LayerBar, ProvenanceBar, StudyCard } from './components/MapChrome';
 import { MapWorkspace } from './components/MapWorkspace';
 import { PlaceCard } from './components/PlaceCard';
-import { HelpDialog, SavedDialog, SourcesDialog } from './panels/Dialogs';
+import { Toolbar } from './components/Toolbar';
 import { EntornoPanel } from './panels/EntornoPanel';
 import { EvidencePanel } from './panels/EvidencePanel';
 import { InterventionsPanel } from './panels/InterventionsPanel';
@@ -19,10 +18,9 @@ export default function App() {
 }
 
 /**
- * RECOVERY: el mapa ocupa la pantalla y lo demás flota sobre él
- * (docs/designs/recovery-mapa-analista-20260925). Sin barra lateral fija:
- * la tarjeta del lugar aparece cuando hay un lugar, y los paneles cuando el
- * analista decide seguir por uno de sus caminos.
+ * REBUILD: el mapa ocupa toda la pantalla y lo demás flota sobre él (ADR-27).
+ * Sin cabecera: la barra va abajo y al centro, y arriba solo queda lo que
+ * explica el mapa — qué cubre, cómo se lee y qué capa se está mirando.
  */
 function Workspace() {
   const { selectedSiteId, siteById, panel, overlay, selectSite } = useStore();
@@ -37,43 +35,42 @@ function Workspace() {
   }, [site, panel, overlay, selectSite]);
 
   return (
-    <div className="flex h-full flex-col bg-paper">
-      <Header />
-      <main className="relative min-h-0 flex-1 overflow-hidden">
-        <MapWorkspace />
+    <main className="relative h-full overflow-hidden bg-paper">
+      <MapWorkspace />
 
-        {/* Controles flotantes. En pantallas anchas la barra de capas va al centro. */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-2 md:p-5 xl:block">
-          <div className="order-2 md:order-none xl:absolute xl:top-5 xl:left-6">
-            {(!site || window.matchMedia('(min-width: 768px)').matches) && <StudyCard />}
-          </div>
-          <div className="order-1 flex md:order-none xl:absolute xl:top-5 xl:left-1/2 xl:-translate-x-1/2">
-            <LayerBar />
-          </div>
+      {/* Qué cubre el mapa y cómo se lee. */}
+      <div className="pointer-events-none absolute top-5 left-5 z-10 hidden w-[330px] flex-col gap-2 md:flex">
+        <StudyCard />
+        <Legend />
+      </div>
+
+      {/* La capa que se mira. Al centro cuando cabe junto a la columna izquierda. */}
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex justify-center md:top-5 md:right-3 md:left-[365px] md:justify-start wide:right-0 wide:left-0 wide:justify-center">
+        <LayerBar />
+      </div>
+
+      {/* En móvil, el sector bajo las capas mientras no haya un lugar abierto. */}
+      {!site && (
+        <div className="pointer-events-none absolute inset-x-2 top-[66px] z-10 md:hidden">
+          <StudyCard />
         </div>
+      )}
 
-        {/* Leyenda al centro cuando cabe; si no, encima de las fuentes. */}
-        <div className="pointer-events-none absolute right-3 bottom-[70px] z-10 hidden w-[400px] md:block min-[1440px]:right-auto min-[1440px]:bottom-3 min-[1440px]:left-1/2 min-[1440px]:w-auto min-[1440px]:max-w-[640px] min-[1440px]:-translate-x-1/2">
-          <Legend />
-        </div>
-        <div className="pointer-events-none absolute right-3 bottom-3 z-10 hidden w-[400px] md:block min-[1440px]:w-[380px]">
-          <ProvenanceBar />
-        </div>
-        {/* En móvil la atribución de OSM sigue visible aunque la barra no quepa. */}
-        <p className="pointer-events-none absolute right-2 bottom-1 z-10 text-[10.5px] text-ink-3 md:hidden">
-          © OpenStreetMap contributors · Copernicus EMS
-        </p>
+      {/* De dónde sale lo que se ve: arriba a la derecha si hay sitio; si no, sobre la barra. */}
+      <div className="pointer-events-none absolute top-5 right-5 z-10 hidden max-w-[430px] wide:flex">
+        <ProvenanceBar />
+      </div>
+      <div className="pointer-events-none absolute right-2 bottom-[68px] z-10 flex max-w-[calc(100%-16px)] justify-end md:top-[80px] md:right-3 md:bottom-auto md:max-w-[440px] wide:hidden">
+        <ProvenanceBar />
+      </div>
 
-        {site && !panel && <PlaceCard site={site} />}
-        {site && panel === 'evidencia' && <EvidencePanel site={site} />}
-        {site && panel === 'entorno' && <EntornoPanel site={site} />}
-        {site && panel === 'intervenciones' && <InterventionsPanel site={site} />}
-        {site && panel === 'verificacion' && <VerificationPanel site={site} />}
-      </main>
+      {site && !panel && <PlaceCard site={site} />}
+      {site && panel === 'evidencia' && <EvidencePanel site={site} />}
+      {site && panel === 'entorno' && <EntornoPanel site={site} />}
+      {site && panel === 'intervenciones' && <InterventionsPanel site={site} />}
+      {site && panel === 'verificacion' && <VerificationPanel site={site} />}
 
-      {overlay === 'fuentes' && <SourcesDialog />}
-      {overlay === 'ayuda' && <HelpDialog />}
-      {overlay === 'guardadas' && <SavedDialog />}
-    </div>
+      <Toolbar />
+    </main>
   );
 }

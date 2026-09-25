@@ -102,17 +102,19 @@ function collect(
   return out;
 }
 
-export function nearbyOf(site: Site, layers: Partial<Record<LayerName, GeoJSON>>) {
+export function nearbyOf(
+  site: Site, layers: Partial<Record<LayerName, GeoJSON>>, radius: number = NEARBY_RADIUS_M,
+) {
   const from: LngLat = [site.lon, site.lat];
   const byDistance = (a: Nearby, b: Nearby) => a.distance - b.distance;
   return {
     publicSpace: [
-      ...collect(from, layers.municipal_public_space, 'SIGPER', NEARBY_RADIUS_M),
-      ...collect(from, layers.green, 'OSM', NEARBY_RADIUS_M),
+      ...collect(from, layers.municipal_public_space, 'SIGPER', radius),
+      ...collect(from, layers.green, 'OSM', radius),
     ].sort(byDistance),
     facilities: [
-      ...collect(from, layers.municipal_facilities, 'SIGPER', NEARBY_RADIUS_M),
-      ...collect(from, layers.facilities, 'OSM', NEARBY_RADIUS_M),
+      ...collect(from, layers.municipal_facilities, 'SIGPER', radius),
+      ...collect(from, layers.facilities, 'OSM', radius),
     ].sort(byDistance),
     ready: Boolean(
       layers.municipal_public_space && layers.green && layers.municipal_facilities && layers.facilities,

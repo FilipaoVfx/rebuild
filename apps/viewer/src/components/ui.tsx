@@ -52,7 +52,7 @@ export function Crumbs({ site, tail }: { site: Site; tail?: string }) {
   return (
     <nav aria-label="Ubicación" className="flex flex-wrap items-center gap-1.5 pr-10 text-[14px] text-ink-2">
       <span>Pereira</span>
-      {site.commune && (<><Icon.Next size={14} className="text-ink-3" /><span>{site.commune}</span></>)}
+      {site.commune && site.neighborhood && (<><Icon.Next size={14} className="text-ink-3" /><span>{site.commune}</span></>)}
       <Icon.Next size={14} className="text-ink-3" />
       <button type="button" className="link font-semibold" onClick={() => openPanel(null)}>
         {placeName(site)}
@@ -85,7 +85,7 @@ export function Sheet({
       aria-label={label}
       data-uri="panel"
       data-panel={id}
-      className={`float animate-slide-in pointer-events-auto absolute inset-x-2 top-2 bottom-2 z-30 flex flex-col overflow-hidden outline-none md:inset-x-auto md:top-3 md:right-3 md:bottom-3 ${
+      className={`float animate-slide-in pointer-events-auto absolute inset-x-2 top-2 bottom-[72px] z-20 flex flex-col overflow-hidden outline-none md:inset-x-auto md:top-3 md:right-3 md:bottom-[84px] ${
         wide ? 'md:left-3 xl:left-auto xl:w-[1060px]' : 'md:w-[540px]'
       }`}
     >
@@ -100,43 +100,6 @@ export function Sheet({
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       {footer}
     </section>
-  );
-}
-
-/** Diálogo centrado para Fuentes, Ayuda y Guardadas. */
-export function Dialog({
-  title, onClose, children,
-}: { title: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink/25 p-3 pt-[8vh]" onClick={onClose}>
-      <div
-        ref={ref}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-        className="float animate-rise relative flex max-h-[84vh] w-full max-w-[720px] flex-col outline-none"
-      >
-        <header className="flex items-center justify-between gap-4 border-b border-rule px-6 py-4">
-          <h2 className="font-serif text-[24px] font-semibold tracking-tight">{title}</h2>
-          <button
-            type="button" onClick={onClose} aria-label="Cerrar"
-            className="grid size-9 place-items-center rounded-full text-ink-2 hover:bg-wash"
-          >
-            <Icon.Close size={20} />
-          </button>
-        </header>
-        <div className="min-h-0 overflow-y-auto px-6 py-5">{children}</div>
-      </div>
-    </div>
   );
 }
 

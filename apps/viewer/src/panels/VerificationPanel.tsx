@@ -23,8 +23,8 @@ const ICONS: Record<VerifyItem['icon'], React.ReactNode> = {
 
 const TAG_STYLE: Record<VerifyTag, string> = {
   'Por verificar': 'bg-cobalt-50 text-cobalt-700',
-  'Por observar': 'bg-[#eef3e9] text-[#35602f]',
-  'Por conversar': 'bg-[#f2ecf6] text-[#5f3d8f]',
+  'Por observar': 'bg-tag-obs-bg text-tag-obs',
+  'Por conversar': 'bg-tag-talk-bg text-tag-talk',
   'Pendiente de validación': 'bg-amber-50 text-amber-900',
 };
 
@@ -240,22 +240,22 @@ function MiniMap({ site }: { site: Site }) {
   return (
     <figure className="m-0 rounded-[4px] border border-rule bg-card px-4 py-3.5">
       <figcaption className="flex items-center gap-2 font-semibold"><Icon.Map size={20} /> Ubicación</figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} className="mt-2.5 w-full rounded-[3px] bg-[#f1eee6]" role="img" aria-label={`Esquema de ${placeName(site)} con el sitio marcado`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-2.5 w-full rounded-[3px] bg-map-bg" role="img" aria-label={`Esquema de ${placeName(site)} con el sitio marcado`}>
         <defs><clipPath id="mini"><rect width={W} height={H} /></clipPath></defs>
         <g clipPath="url(#mini)">
           {roads.map((r, i) => (
-            <path key={`r${i}`} d={path(r.geometry.coordinates as [number, number][])} fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
+            <path key={`r${i}`} d={path(r.geometry.coordinates as [number, number][])} fill="none" stroke="var(--color-map-road)" strokeWidth="2.2" strokeLinecap="round" />
           ))}
           {rivers.map((r, i) => (
-            <path key={i} d={path(r.geometry.coordinates as [number, number][])} fill="none" stroke="#9fcbe6"
+            <path key={i} d={path(r.geometry.coordinates as [number, number][])} fill="none" stroke="var(--color-map-water)"
               strokeWidth={String(r.properties.display_name ?? '').startsWith('Río') ? 5 : 2} strokeLinecap="round" />
           ))}
           {barrio && outerRings(barrio).map((ring, i) => (
-            <path key={i} d={`${path(ring)}Z`} fill="rgb(27 69 196 / .08)" stroke="#0f1c3f" strokeWidth="1.3" strokeDasharray="4 3" />
+            <path key={i} d={`${path(ring)}Z`} fill="var(--color-cobalt-50)" fillOpacity=".7" stroke="var(--color-ink)" strokeWidth="1.3" strokeDasharray="4 3" />
           ))}
-          <circle cx={px} cy={py} r="7" fill="#1b45c4" stroke="#fff" strokeWidth="2.5" />
+          <circle cx={px} cy={py} r="7" fill="var(--color-cobalt)" stroke="var(--color-card)" strokeWidth="2.5" />
         </g>
-        <text x={W - 10} y={20} textAnchor="end" fontSize="12" fontWeight="700" fill="#0f1c3f">N ↑</text>
+        <text x={W - 10} y={20} textAnchor="end" fontSize="12" fontWeight="700" fill="var(--color-ink)">N ↑</text>
       </svg>
       <p className="mt-2 text-[13px] leading-snug text-ink-3">
         {barrio ? `Contorno de ${site.neighborhood}` : 'Sin contorno de barrio'}, calles y cauces de OpenStreetMap. Esquema para orientar la visita, no para medir.
@@ -270,7 +270,7 @@ function Ficha({ site, draft, items }: { site: Site; draft: VerificationDraft; i
   const reach = reachOf(site, details[site.site_id]);
   return (
     <div id="ficha" className="font-sans text-[12pt] text-black">
-      <p style={{ fontSize: '10pt', letterSpacing: '.14em', textTransform: 'uppercase' }}>RECOVERY · Ficha de visita · {fecha(new Date().toISOString())}</p>
+      <p style={{ fontSize: '10pt', letterSpacing: '.14em', textTransform: 'uppercase' }}>REBUILD · Ficha de visita · {fecha(new Date().toISOString())}</p>
       <h1 className="font-serif" style={{ fontSize: '26pt', margin: '6pt 0 2pt' }}>{placeName(site)}</h1>
       <p>{[site.commune && `Comuna ${site.commune}`, site.corner_label, site.nearest_landmark && `cerca de ${site.nearest_landmark}`].filter(Boolean).join(' · ')}</p>
       <p style={{ color: '#444' }}>Sitio {site.site_id} · {site.lat.toFixed(5)}, {site.lon.toFixed(5)}</p>
@@ -292,7 +292,7 @@ function Ficha({ site, draft, items }: { site: Site; draft: VerificationDraft; i
       <p>{draft.question || '—'}</p>
       <div style={{ borderBottom: '1px solid #bbb', height: '40pt' }} />
       <p style={{ fontSize: '9pt', color: '#555', marginTop: '14pt' }}>
-        Borrador preparado en RECOVERY con los datos n.º {provenance.data_version}. No es una orden de obra ni una
+        Borrador preparado en REBUILD con los datos n.º {provenance.data_version}. No es una orden de obra ni una
         validación. Fuentes: Copernicus EMS · © OpenStreetMap contributors · Microsoft · SIGPER · DANE.
       </p>
     </div>

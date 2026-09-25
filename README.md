@@ -111,14 +111,17 @@ justo lo que ADR-17 prohíbe.
 El visor es la superficie principal del producto, junto a la API y al paquete de
 evidencia ([ADR-21](docs/adr/ADR-21-el-visor-como-superficie-principal.md)). Desde
 [ADR-27](docs/adr/ADR-27-el-visor-es-un-espacio-de-analisis-sobre-el-mapa.md) es
-**RECOVERY, un espacio de análisis sobre el mapa**: el mapa ocupa la pantalla y
-todo lo demás flota sobre él. La tarjeta del sector de estudio dice desde el
-primer momento que la cobertura es parcial; la barra de capas cambia la manera de
-mirar el mismo lugar (Territorio, Daño, Población, Espacio público,
-Equipamientos); el buscador encuentra barrios, comunas, sitios y lugares de
-referencia.
+**REBUILD, un espacio de análisis sobre el mapa**: el mapa ocupa toda la
+pantalla, sin cabecera, y todo lo demás flota sobre él. Abajo, una sola barra
+con el buscador, Fuentes, Guardadas, Ayuda y Ajustes (tema claro u oscuro,
+radio del entorno, velo fuera del área de estudio). La tarjeta del sector de
+estudio dice desde el primer momento que la cobertura es parcial; el selector de
+capas cambia la manera de mirar el mismo lugar (Territorio, Daño, Población,
+Espacio público, Equipamientos); el buscador encuentra barrios, comunas, sitios
+y lugares de referencia. Los componentes animados son de
+[motion-primitives](https://motion-primitives.com), copiados al proyecto.
 
-Al tocar un sitio aparece su tarjeta, unida al pin por una línea: evidencia,
+Al tocar un sitio aparece su tarjeta, centrada en el lateral y unida al pin por una línea: evidencia,
 entorno, población y normativa, con lo que hay y lo que falta. El analista elige
 por dónde seguir:
 
@@ -137,7 +140,7 @@ el sitio, el panel y la capa, así que un lugar se puede enviar.
 No hay basemap de terceros: la cartografía base es un extracto PMTiles de
 OpenStreetMap (3,9 MB, z0–15) que el sitio sirve él mismo, con la fecha de
 réplica de OSM en su procedencia, dibujado con el estilo de Protomaps
-recoloreado al papel de RECOVERY. Estilo, fuentes, sprites y tipografías viven
+recoloreado al papel de REBUILD, de día y de noche. Estilo, fuentes, sprites y tipografías viven
 en el repositorio o entran al bundle desde npm.
 
 ### La ciudad se llama por su nombre
@@ -221,7 +224,7 @@ cd apps/viewer && npm ci && npm run build
 | [ADR-24](docs/adr/ADR-24-las-fotos-de-campo-son-evidencia-visual.md) | Las fotos de campo son evidencia visual, y su enlace al sitio se declara |
 | [ADR-25](docs/adr/ADR-25-la-ontologia-es-un-artefacto-declarado.md) | La ontología es un artefacto declarado, no una convención |
 | [ADR-26](docs/adr/ADR-26-el-pot-se-lee-de-ide-amco-con-criterio-declarado.md) | El POT se lee de IDE AMCO, con puerta de licencia y criterio declarado |
-| [ADR-27](docs/adr/ADR-27-el-visor-es-un-espacio-de-analisis-sobre-el-mapa.md) | El visor es un espacio de análisis sobre el mapa (RECOVERY) |
+| [ADR-27](docs/adr/ADR-27-el-visor-es-un-espacio-de-analisis-sobre-el-mapa.md) | El visor es un espacio de análisis sobre el mapa (REBUILD) |
 
 ## Principios que gobiernan el diseño
 
@@ -238,7 +241,7 @@ cd apps/viewer && npm ci && npm run build
 ```
 src/uri/          contracts · ingestion · features · constraints · scoring
                   optimizer · reporting · api   (fronteras forzadas por CI)
-apps/viewer/      RECOVERY, el espacio de análisis sobre el mapa (React + MapLibre + deck.gl)
+apps/viewer/      REBUILD, el espacio de análisis sobre el mapa (React + MapLibre + deck.gl + motion-primitives)
 db/migrations/    rebuild_core · rebuild_analytics · rebuild_osm_raw · rebuild_osm_derived
 scripts/          dev_db · migrate · run_pipeline · serve · build_static · checks
 docs/             producto (PRD/SRS/ARD) · planificación · ADR

@@ -1,17 +1,17 @@
 import { Icon } from '../components/icons';
-import { Dialog, Kicker } from '../components/ui';
+import { Kicker } from '../components/ui';
 import { LICENSE_LABEL, fecha } from '../lib/format';
 import { interventionName, placeName } from '../lib/place';
 import { useStore } from '../state/store';
 
 /** Fuentes y licencias: lo que se usa, con su atribución literal, y lo que no se publica y por qué. */
-export function SourcesDialog() {
-  const { sources, provenance, territory, setOverlay } = useStore();
+export function SourcesContent() {
+  const { sources, provenance, territory } = useStore();
   const used = sources.filter((s) => s.usable);
   const blocked = sources.filter((s) => !s.usable);
   const ortofotos = territory?.imagery.ortofotos ?? [];
   return (
-    <Dialog title="Fuentes y licencias" onClose={() => setOverlay(null)}>
+    <>
       <p className="font-serif text-[16.5px] leading-snug text-ink-2">
         Todo lo que se ve sale de fuentes registradas con su licencia leída. Lo que no tiene licencia clara no se
         publica, aunque esté disponible. Datos n.º {provenance.data_version} · rasgos {provenance.feature_version}.
@@ -53,12 +53,11 @@ export function SourcesDialog() {
         Sin tiles, tipografías ni scripts de terceros: la cartografía base es un extracto de OpenStreetMap servido por
         el propio sitio.
       </p>
-    </Dialog>
+    </>
   );
 }
 
-export function HelpDialog() {
-  const { setOverlay } = useStore();
+export function HelpContent() {
   const steps = [
     ['Ubica un lugar', 'Busca un barrio, una comuna o un sitio, o toca un punto del mapa. Cada punto es un sitio con evidencia de daño.'],
     ['Examina la evidencia', 'Qué se observó, cuándo y con qué método; y lo que esa observación no dice.'],
@@ -67,7 +66,7 @@ export function HelpDialog() {
     ['Prepara la verificación', 'Las dudas convertidas en preguntas para la visita, en una ficha que se puede imprimir.'],
   ];
   return (
-    <Dialog title="Cómo leer RECOVERY" onClose={() => setOverlay(null)}>
+    <>
       <ol className="space-y-3">
         {steps.map(([t, d], i) => (
           <li key={t} className="grid grid-cols-[32px_1fr] gap-3">
@@ -86,11 +85,11 @@ export function HelpDialog() {
       <p className="mt-5 flex items-center gap-2 text-[13.5px] text-ink-3">
         <Icon.Info size={16} /> Las comparaciones y borradores de verificación se guardan solo en este navegador.
       </p>
-    </Dialog>
+    </>
   );
 }
 
-export function SavedDialog() {
+export function SavedContent() {
   const { saved, verificationDrafts, siteById, selectSite, openPanel, setOverlay, removeSaved } = useStore();
   const go = (id: string, panel: 'intervenciones' | 'verificacion') => {
     setOverlay(null);
@@ -99,7 +98,7 @@ export function SavedDialog() {
   };
   const drafts = Object.entries(verificationDrafts);
   return (
-    <Dialog title="Guardadas" onClose={() => setOverlay(null)}>
+    <>
       <p className="text-[14px] text-ink-3">Solo en este navegador. Nada de esto se envía ni se publica.</p>
       <Kicker className="mt-5">Comparaciones · {saved.length}</Kicker>
       {saved.length === 0 && <p className="mt-2 text-[14.5px] text-ink-2">Todavía no hay comparaciones guardadas.</p>}
@@ -138,6 +137,6 @@ export function SavedDialog() {
           );
         })}
       </ul>
-    </Dialog>
+    </>
   );
 }

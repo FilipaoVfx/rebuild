@@ -3,7 +3,8 @@ import { dec, fecha, n } from '../lib/format';
 import { sourceLine } from '../lib/place';
 import { useStore, type LayerKey } from '../state/store';
 import { Icon } from './icons';
-import { DAMAGE_RGB, POP_RAMP } from './MapWorkspace';
+import { AnimatedBackground } from './motion-primitives/animated-background';
+import { DAMAGE_RGB, POP_RAMP, POP_RAMP_DARK } from './MapWorkspace';
 
 const rgb = (c: number[]) => `rgb(${c[0]} ${c[1]} ${c[2]})`;
 
@@ -68,32 +69,29 @@ const LAYER_BUTTONS: { key: LayerKey; label: string; icon: ReactNode }[] = [
 export function LayerBar() {
   const { layer, setLayer } = useStore();
   return (
-    <div
-      role="radiogroup"
-      aria-label="Capa del mapa"
-      className="float pointer-events-auto flex max-w-full gap-1 overflow-x-auto p-1.5"
-    >
-      {LAYER_BUTTONS.map((b) => {
-        const on = b.key === layer;
-        return (
+    <div role="radiogroup" aria-label="Capa del mapa" className="float pointer-events-auto flex max-w-full overflow-x-auto rounded-[10px] p-1.5">
+      <AnimatedBackground
+        defaultValue={layer}
+        onValueChange={(id) => { if (id) setLayer(id as LayerKey); }}
+        className="rounded-[6px] bg-cobalt"
+        transition={{ type: 'spring', bounce: 0.12, duration: 0.32 }}
+      >
+        {LAYER_BUTTONS.map((b) => (
           <button
             key={b.key}
+            data-id={b.key}
             type="button"
             data-uri="layer"
             data-layer={b.key}
-            data-active={on}
+            data-active={b.key === layer}
             role="radio"
-            aria-checked={on}
-            onClick={() => setLayer(b.key)}
-            className={`flex h-10 shrink-0 items-center gap-2 rounded-[4px] px-3 text-[14.5px] whitespace-nowrap transition-colors ${
-              on ? 'bg-cobalt font-semibold text-white' : 'text-ink hover:bg-wash'
-            }`}
+            aria-checked={b.key === layer}
+            className="h-10 shrink-0 items-center px-3 text-[14.5px] whitespace-nowrap text-ink transition-colors data-[checked=true]:font-semibold data-[checked=true]:text-on-cobalt"
           >
-            {b.icon}
-            {b.label}
+            <span className="flex items-center gap-2">{b.icon}{b.label}</span>
           </button>
-        );
-      })}
+        ))}
+      </AnimatedBackground>
     </div>
   );
 }
@@ -118,10 +116,11 @@ function Item({ swatch, children }: { swatch: ReactNode; children: ReactNode }) 
 }
 
 export function Legend() {
-  const { layer, selectedSiteId } = useStore();
+  const { layer, selectedSiteId, settings, theme } = useStore();
+  const ramp = theme === 'dark' ? POP_RAMP_DARK : POP_RAMP;
   const items: ReactNode[] = [];
   if (layer === 'territorio') {
-    items.push(<Item key="s" swatch={<Swatch color="#0f1c3f" round />}>Sitio con evidencia</Item>);
+    items.push(<Item key="s" swatch={<Swatch color="var(--color-ink)" round />}>Sitio con evidencia</Item>);
   }
   if (layer === 'dano') {
     items.push(
@@ -134,11 +133,11 @@ export function Legend() {
     items.push(
       <span key="r" className="flex shrink-0 items-center gap-2 whitespace-nowrap">
         Menos
-        <span className="flex">{POP_RAMP.map((c, i) => <span key={i} className="h-3.5 w-4" style={{ background: rgb(c) }} />)}</span>
+        <span className="flex">{ramp.map((c, i) => <span key={i} className="h-3.5 w-4" style={{ background: rgb(c) }} />)}</span>
         más personas por celda (estimación)
       </span>,
     );
-    if (selectedSiteId) items.push(<Item key="c" swatch={<Swatch color="#1b45c4" line />}>Área a 10 min a pie</Item>);
+    if (selectedSiteId) items.push(<Item key="c" swatch={<Swatch color="var(--color-cobalt)" line />}>Área a 10 min a pie</Item>);
   }
   if (layer === 'espacio') {
     items.push(
@@ -153,16 +152,18 @@ export function Legend() {
     );
   }
   if ((layer === 'espacio' || layer === 'equipamientos') && selectedSiteId) {
-    items.push(<Item key="r5" swatch={<Swatch color="#1b45c4" line />}>500 m del sitio</Item>);
+    items.push(<Item key="r5" swatch={<Swatch color="var(--color-cobalt)" line />}>{settings.radius} m del sitio</Item>);
   }
   return (
-    <div data-uri="legend" className="float pointer-events-auto flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 px-4 py-2.5 text-[13px] text-ink-2">
-      <Item swatch={<Swatch color="#bcdcf0" />}>Río / cuerpo de agua</Item>
-      <Item swatch={<Swatch color="#d2e4c8" />}>Zona verde</Item>
-      <Item swatch={<Swatch color="#e4e0d6" />}>Área urbana</Item>
-      <Item swatch={<Swatch color="#69718a" dashed />}>Límite de comuna</Item>
-      {items.length > 0 && <span className="h-5 w-px shrink-0 bg-rule" aria-hidden="true" />}
-      {items}
+    <div data-uri="legend" className="float pointer-events-auto grid grid-cols-2 gap-x-4 gap-y-1.5 px-4 py-3 text-[13px] text-ink-2">
+      <Item swatch={<Swatch color="var(--color-map-water)" />}>Río / cuerpo de agua</Item>
+      <Item swatch={<Swatch color="var(--color-map-green)" />}>Zona verde</Item>
+      <Item swatch={<Swatch color="var(--color-map-urban)" />}>Área urbana</Item>
+      <Item swatch={<Swatch color="var(--color-ink-3)" dashed />}>Límite de comuna</Item>
+      {items.length > 0 && <span className="col-span-2 my-0.5 h-px bg-rule" aria-hidden="true" />}
+      {items.map((it, i) => (
+        <span key={i} className={items.length === 1 || layer === 'poblacion' ? 'col-span-2' : ''}>{it}</span>
+      ))}
     </div>
   );
 }
@@ -176,14 +177,11 @@ export function ProvenanceBar() {
       type="button"
       onClick={() => setOverlay('fuentes')}
       data-uri="provenance"
-      className="float pointer-events-auto flex w-full items-start gap-3 px-3.5 py-2 text-left text-[12.5px] leading-snug text-ink-2 hover:border-rule-2"
       title="Ver fuentes y licencias"
+      className="pointer-events-auto flex max-w-full items-center gap-2 rounded-[6px] bg-card/85 px-2.5 py-1 text-left text-[11.5px] leading-snug text-ink-2 backdrop-blur-sm hover:text-ink"
     >
-      <span className="min-w-0 flex-1">
-        <span className="block">{line.join(' · ')}</span>
-        <span className="block text-ink-3">Área de estudio EMSR916 · datos n.º {provenance.data_version}</span>
-      </span>
-      <Icon.Info size={16} className="mt-0.5 shrink-0" />
+      <span className="min-w-0 truncate">{line.join(' · ')} · Área de estudio EMSR916 · datos n.º {provenance.data_version}</span>
+      <Icon.Info size={14} className="shrink-0" />
     </button>
   );
 }

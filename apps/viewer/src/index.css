@@ -3,13 +3,16 @@
 @import "@fontsource-variable/source-serif-4";
 
 /*
- * RECOVERY · mapa como espacio de análisis (docs/designs/recovery-mapa-analista-20260925).
+ * REBUILD · el mapa como espacio de análisis (ADR-27).
  *
  * Papel marfil, tinta azul marino, cobalto contenido para lo que se puede
  * accionar o lo seleccionado. Titulares serif editoriales, interfaz sans,
  * reglas finas. Las tipografías se empaquetan desde npm: ningún byte de un
- * CDN en tiempo de ejecución.
+ * CDN en tiempo de ejecución. El modo oscuro redefine los mismos tokens:
+ * ningún componente elige colores por su cuenta.
  */
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 @theme {
   --color-paper: #f6f4ee;
   --color-card: #ffffff;
@@ -33,9 +36,59 @@
   /* Lo que falta tiene tono propio: no es bueno ni malo, no está. */
   --color-unknown: #737b92;
 
+  /* Colores de la cartografía, para que leyenda y esquemas digan lo mismo que el mapa. */
+  --color-on-cobalt: #ffffff;
+  --color-map-bg: #f1eee6;
+  --color-map-water: #bcdcf0;
+  --color-map-green: #d2e4c8;
+  --color-map-urban: #e4e0d6;
+  --color-map-road: #ffffff;
+
+  --color-tag-obs: #35602f;
+  --color-tag-obs-bg: #eef3e9;
+  --color-tag-talk: #5f3d8f;
+  --color-tag-talk-bg: #f2ecf6;
+
+  /* Punto de corte con nombre: los arbitrarios (min-[…]) se ordenan antes que md. */
+  --breakpoint-wide: 85rem;
+
   --font-sans: "Source Sans 3 Variable", "Source Sans 3", system-ui, -apple-system, "Segoe UI",
     Roboto, Arial, sans-serif;
   --font-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, "Times New Roman", serif;
+}
+
+/* Noche: la misma jerarquía sobre azul marino profundo. El cobalto se aclara
+   para conservar el contraste sobre fondo oscuro. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: #0d121d;
+  --color-card: #151c2b;
+  --color-ink: #e9edf6;
+  --color-ink-2: #b7c0d4;
+  --color-ink-3: #8a94ab;
+  --color-rule: #252e42;
+  --color-rule-2: #354058;
+  --color-wash: #1b2335;
+  --color-cobalt: #6f93ff;
+  --color-on-cobalt: #0d121d;
+  --color-cobalt-700: #93afff;
+  --color-cobalt-50: #1a2548;
+  --color-cobalt-100: #24335f;
+  --color-amber: #e3b341;
+  --color-amber-50: #3a2f12;
+  --color-amber-900: #f3d58a;
+  --color-ok: #4cc38a;
+  --color-bad: #f07167;
+  --color-unknown: #8b94ab;
+  --color-map-bg: #10151f;
+  --color-map-water: #1d3a58;
+  --color-map-green: #1a2c22;
+  --color-map-urban: #1b2231;
+  --color-map-road: #2b3447;
+  --color-tag-obs: #9fd49a;
+  --color-tag-obs-bg: #1c2c1f;
+  --color-tag-talk: #cdb6f0;
+  --color-tag-talk-bg: #281f3a;
 }
 
 * { -webkit-tap-highlight-color: transparent; }
@@ -85,9 +138,9 @@ input:focus-visible, textarea:focus-visible { outline: none; }
     transition: background-color .15s, border-color .15s, color .15s;
     cursor: pointer;
   }
-  .btn-primary { background: var(--color-cobalt); color: #fff; border: 1px solid var(--color-cobalt); }
+  .btn-primary { background: var(--color-cobalt); color: var(--color-on-cobalt); border: 1px solid var(--color-cobalt); }
   .btn-primary:hover { background: var(--color-cobalt-700); border-color: var(--color-cobalt-700); }
-  .btn-secondary { background: #fff; color: var(--color-cobalt); border: 1px solid var(--color-cobalt); }
+  .btn-secondary { background: var(--color-card); color: var(--color-cobalt); border: 1px solid var(--color-cobalt); }
   .btn-secondary:hover { background: var(--color-cobalt-50); }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
 
@@ -127,5 +180,5 @@ input:focus-visible, textarea:focus-visible { outline: none; }
   @page { margin: 16mm; }
   body { background: #fff; }
   body > *:not(#ficha) { display: none !important; }
-  #ficha { display: block; }
+  #ficha { display: block; color: #000; background: #fff; }
 }

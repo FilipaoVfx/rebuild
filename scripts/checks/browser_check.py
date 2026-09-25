@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Verificacion del visor en un navegador real.
 
-Recorre el flujo del analista de la interfaz RECOVERY (ADR-27): ubicar un
+Recorre el flujo del analista de la interfaz REBUILD (ADR-27): ubicar un
 lugar, examinar su evidencia, explorar su entorno, comparar dos hipotesis y
 preparar la verificacion. En cada paso comprueba lo que la interfaz no puede
 perder aunque cambie el diseño: que diga que la cobertura es parcial, que la
@@ -70,6 +70,24 @@ async def main(base: str, prefix: str) -> int:
         ):
             errors.append("el lienzo del mapa no tiene ancho")
 
+        # Sin cabecera: el mapa ocupa toda la altura y la barra va abajo (ADR-27).
+        if await page.locator("header").count():
+            errors.append("volvio a aparecer una cabecera: la barra va abajo")
+        alto = await page.evaluate(
+            "() => [document.querySelector('[data-uri=\"map\"]').getBoundingClientRect().height,"
+            " innerHeight]"
+        )
+        if alto[0] < alto[1] - 1:
+            errors.append(f"el mapa no ocupa toda la altura: {alto[0]} de {alto[1]} px")
+        barra = await text(page, '[data-uri="toolbar"]')
+        print("barra:", barra[:120])
+        for needed in ("REBUILD", "Fuentes", "Guardadas", "Ayuda", "Ajustes"):
+            if needed not in barra:
+                errors.append(f"la barra inferior no ofrece '{needed}'")
+        caja = await page.locator('[data-uri="toolbar"]').bounding_box()
+        if caja and caja["y"] < alto[1] / 2:
+            errors.append("la barra no esta en la parte inferior")
+
         # La cobertura parcial se dice antes de mirar nada.
         estudio = (await text(page, '[data-uri="study-card"]')).lower()
         print("sector de estudio:", estudio[:120])
@@ -115,6 +133,8 @@ async def main(base: str, prefix: str) -> int:
         await page.locator('[data-uri="layer"][data-layer="territorio"]').click()
 
         # ── Ubicar: buscar un barrio abre su tarjeta ─────────────────────
+        # La barra se ensancha y se vuelve buscador (Toolbar Dynamic).
+        await page.locator('[data-uri="search-open"]').click()
         await page.get_by_placeholder("Buscar lugar o sitio").fill("corocito")
         await page.wait_for_selector('#search-results [role="option"]', timeout=15000)
         await page.keyboard.press("Enter")
@@ -202,8 +222,9 @@ async def main(base: str, prefix: str) -> int:
         await page.screenshot(path=f"/tmp/{prefix}_comparacion.png")
         await page.get_by_role("button", name="Guardar comparación").click()
         await page.wait_for_timeout(400)
-        if "Guardadas" not in await page.locator("header").inner_text():
-            errors.append("la cabecera no ofrece 'Guardadas'")
+        barra = await text(page, '[data-uri="toolbar"]')
+        if "Guardadas 1" not in barra and "Guardadas1" not in barra.replace(" ", ""):
+            errors.append("guardar la comparacion no se refleja en 'Guardadas'")
 
         # ── Preparar la verificacion ─────────────────────────────────────
         await page.get_by_role("button", name="Preparar verificación").click()
@@ -241,6 +262,35 @@ async def main(base: str, prefix: str) -> int:
         excl = (await text(page, '[data-uri="panel"][data-panel="intervenciones"]')).lower()
         if "no propone" not in excl or "área" not in excl:
             errors.append(f"{EXCLUDED} esta excluido y la comparacion no lo explica")
+
+        # ── Ajustes: popover que nace de su boton; el tema cambia todo ────
+        await page.locator('[data-uri="settings-open"]').click()
+        await page.wait_for_selector('[data-uri="settings"]', timeout=10000)
+        await page.locator('[data-uri="settings"] [role="radio"]', has_text="Oscuro").click()
+        await page.wait_for_timeout(1800)
+        tema = await page.evaluate("() => document.documentElement.dataset.theme")
+        fondo = await page.evaluate(
+            "() => getComputedStyle(document.querySelector('main')).backgroundColor"
+        )
+        print("tema oscuro:", tema, fondo)
+        if tema != "dark":
+            errors.append("elegir 'Oscuro' en Ajustes no activa el modo oscuro")
+        await page.screenshot(path=f"/tmp/{prefix}_oscuro.png")
+        await page.locator('[data-uri="settings"] [role="radio"]', has_text="Claro").click()
+        await page.wait_for_timeout(600)
+        await page.keyboard.press("Escape")
+        await page.wait_for_timeout(400)
+
+        # Fuentes: dialogo que nace de su boton y nombra lo que no se publica.
+        await page.get_by_role("button", name="Fuentes y licencias").click()
+        await page.wait_for_selector('[role="dialog"]', timeout=10000)
+        await page.wait_for_timeout(700)
+        fuentes = (await text(page, '[role="dialog"]')).lower()
+        for needed in ("en uso", "sin publicar", "ide amco"):
+            if needed not in fuentes:
+                errors.append(f"el dialogo de fuentes no dice '{needed}'")
+        await page.keyboard.press("Escape")
+        await page.wait_for_timeout(600)
 
         # ── Movil: tarjeta abajo, sin desborde lateral ───────────────────
         movil = await browser.new_page(viewport={"width": 390, "height": 844})

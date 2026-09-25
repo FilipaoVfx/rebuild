@@ -2,16 +2,16 @@ import { useState } from 'react';
 import { Icon } from '../components/icons';
 import { AmberBadge, Crumbs, Kicker, Missing, Sheet } from '../components/ui';
 import { dec, metros, m2, n } from '../lib/format';
-import { NEARBY_RADIUS_M, nearbyOf, placeName, reachOf, type Nearby } from '../lib/place';
+import { nearbyOf, placeName, reachOf, type Nearby } from '../lib/place';
 import { useStore, type LayerKey } from '../state/store';
 import type { Site } from '../types';
 
 export function EntornoPanel({ site }: { site: Site }) {
-  const { details, layers, openPanel, layer, setLayer } = useStore();
+  const { details, layers, openPanel, layer, setLayer, settings } = useStore();
   const detail = details[site.site_id];
   const f = detail?.features ?? {};
   const reach = reachOf(site, detail);
-  const near = nearbyOf(site, layers);
+  const near = nearbyOf(site, layers, settings.radius);
   const perCapita = f.park_area_per_capita as number | null | undefined;
 
   const views: { key: LayerKey; label: string }[] = [
@@ -100,8 +100,8 @@ export function EntornoPanel({ site }: { site: Site }) {
           </dd>
         </dl>
 
-        <NearbyList title={`Espacio público a ${NEARBY_RADIUS_M} m`} items={near.publicSpace} ready={near.ready} empty="Ningún espacio público registrado a esa distancia en SIGPER ni en OSM." />
-        <NearbyList title={`Equipamientos a ${NEARBY_RADIUS_M} m`} items={near.facilities} ready={near.ready} empty="Ningún equipamiento registrado a esa distancia en SIGPER ni en OSM." />
+        <NearbyList title={`Espacio público a ${settings.radius} m`} items={near.publicSpace} ready={near.ready} empty="Ningún espacio público registrado a esa distancia en SIGPER ni en OSM." />
+        <NearbyList title={`Equipamientos a ${settings.radius} m`} items={near.facilities} ready={near.ready} empty="Ningún equipamiento registrado a esa distancia en SIGPER ni en OSM." />
         <p className="mt-3 text-[13px] leading-snug text-ink-3">
           SIGPER: inventario municipal de Pereira, datos abiertos (Ley 1712). OSM: OpenStreetMap, con su propia cobertura.
           Una ausencia en la lista es una ausencia en esas fuentes, no necesariamente en el terreno.

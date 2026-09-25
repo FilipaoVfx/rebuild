@@ -3,11 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>RECOVERY — Recuperación urbana · Pereira</title>
+    <title>REBUILD — Recuperación urbana · Pereira</title>
     <meta name="description" content="Espacio de análisis para la recuperación urbana de Pereira tras el sismo del 10-08-2026: evidencia, entorno e hipótesis de intervención con su procedencia." />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#f6f4ee" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230f1c3f'/%3E%3Cpath d='M8 3.2a3.4 3.4 0 0 0-3.4 3.4c0 2.5 3.4 6.2 3.4 6.2s3.4-3.7 3.4-6.2A3.4 3.4 0 0 0 8 3.2z' fill='%231b45c4' stroke='%23fff' stroke-width='.9'/%3E%3Ccircle cx='8' cy='6.6' r='1.2' fill='%23fff'/%3E%3C/svg%3E" />
+    <script>
+      /* El tema se aplica antes del primer pintado: sin destello claro de noche. */
+      try {
+        var a = JSON.parse(localStorage.getItem('rebuild.ajustes.v1') || '{}').theme || 'system';
+        var dark = a === 'dark' || (a === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      } catch (e) { document.documentElement.dataset.theme = 'light'; }
+    </script>
   </head>
   <body>
     <div id="root"></div>

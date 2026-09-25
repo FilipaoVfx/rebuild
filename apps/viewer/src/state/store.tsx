@@ -6,6 +6,7 @@ import {
   IS_STATIC, loadCore, loadDetail, loadDetails, loadLayer, loadSentinel, loadSources,
   loadTerritory, type LayerName, type SentinelIndex,
 } from '../data';
+import type { Theme } from '../lib/mapstyle';
 import type { BBox } from '../lib/place';
 import type {
   GeoJSON, Opportunity, Provenance, Site, SiteDetail, Source, Territory,
@@ -42,12 +43,13 @@ interface Local {
   saved: SavedComparison[];
   verification: Record<string, VerificationDraft>;
 }
-const LOCAL_KEY = 'recovery.analista.v1';
+const LOCAL_KEY = 'rebuild.analista.v1';
+const LEGACY_KEY = 'recovery.analista.v1';
 const EMPTY_LOCAL: Local = { comparisons: {}, saved: [], verification: {} };
 
 function readLocal(): Local {
   try {
-    const raw = window.localStorage.getItem(LOCAL_KEY);
+    const raw = window.localStorage.getItem(LOCAL_KEY) ?? window.localStorage.getItem(LEGACY_KEY);
     return raw ? { ...EMPTY_LOCAL, ...(JSON.parse(raw) as Partial<Local>) } : EMPTY_LOCAL;
   } catch {
     return EMPTY_LOCAL;
@@ -56,6 +58,27 @@ function readLocal(): Local {
 function writeLocal(l: Local) {
   try { window.localStorage.setItem(LOCAL_KEY, JSON.stringify(l)); } catch { /* sin almacenamiento: se trabaja igual */ }
 }
+
+/* ── Ajustes del analista (popover de la barra inferior) ─────────────── */
+
+export type ThemePref = 'system' | 'light' | 'dark';
+export interface Settings { theme: ThemePref; radius: number; veil: boolean }
+const SETTINGS_KEY = 'rebuild.ajustes.v1';
+/** El radio del entorno se elige entre tres caminatas, no con un número libre. */
+export const RADII = [300, 500, 800] as const;
+const DEFAULT_SETTINGS: Settings = { theme: 'system', radius: 500, veil: true };
+
+function readSettings(): Settings {
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    const s = raw ? { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) } : DEFAULT_SETTINGS;
+    return { ...s, radius: (RADII as readonly number[]).includes(s.radius) ? s.radius : 500 };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+const prefersDark = () => window.matchMedia('(prefers-color-scheme: dark)').matches;
 
 /* ── Enlace profundo: #sitio=site_0028&panel=intervenciones&capa=dano ── */
 
@@ -101,6 +124,11 @@ interface Store {
   draftFor: (siteId: string) => VerificationDraft | null;
   setDraft: (siteId: string, d: VerificationDraft) => void;
   verificationDrafts: Record<string, VerificationDraft>;
+
+  settings: Settings;
+  setSettings: (s: Partial<Settings>) => void;
+  /** El tema efectivo, ya resuelto contra el del sistema. */
+  theme: Theme;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -134,6 +162,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     initial.current.site ? { kind: 'site', siteId: initial.current.site, nonce: 1 } : null,
   );
   const [local, setLocal] = useState<Local>(readLocal);
+  const [settings, setSettingsState] = useState<Settings>(readSettings);
+  const [systemDark, setSystemDark] = useState(prefersDark);
+  const theme: Theme = settings.theme === 'system' ? (systemDark ? 'dark' : 'light') : settings.theme;
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const on = () => setSystemDark(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0d121d' : '#f6f4ee');
+  }, [theme]);
 
   useEffect(() => {
     loadCore().then(setCore).catch((e: Error) => setError(e.message));
@@ -257,6 +299,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     draftFor: (id) => local.verification[id] ?? null,
     setDraft: (id, d) => updateLocal((l) => ({ ...l, verification: { ...l.verification, [id]: d } })),
     verificationDrafts: local.verification,
+    settings,
+    setSettings: (s) => setSettingsState((prev) => {
+      const next = { ...prev, ...s };
+      try { window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next)); } catch { /* sin almacenamiento */ }
+      return next;
+    }),
+    theme,
   };
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
@@ -265,7 +314,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 function Booting() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 bg-paper px-6 text-center">
-      <p className="font-serif text-[34px] font-semibold tracking-tight text-ink">RECOVERY</p>
+      <p className="font-serif text-[34px] font-semibold tracking-tight text-ink">REBUILD</p>
       <p className="text-[15px] text-ink-2">Recuperación urbana para ciudades más vivas</p>
       <div className="mt-2 h-px w-40 overflow-hidden bg-rule">
         <div className="h-full w-1/3 animate-[load_1.1s_ease-in-out_infinite] bg-cobalt" />

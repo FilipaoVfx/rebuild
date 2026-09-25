@@ -8,9 +8,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import Map, { Marker, ScaleControl, useControl, type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { DAMAGE_LABEL } from '../lib/format';
-import { ivoryStyle, PLAIN_STYLE } from '../lib/mapstyle';
+import { baseStyle, plainStyle } from '../lib/mapstyle';
 import {
-  NEARBY_RADIUS_M, evidenceLine, outerRings, placeName, type BBox, type Feature,
+  evidenceLine, outerRings, placeName, type BBox, type Feature,
 } from '../lib/place';
 import { useStore } from '../state/store';
 import type { Site } from '../types';
@@ -19,8 +19,11 @@ import { Icon } from './icons';
 type RGBA = [number, number, number, number];
 type Props = { properties: Record<string, unknown> };
 
-const NAVY: RGBA = [15, 28, 63, 255];
-const WHITE: RGBA = [255, 255, 255, 255];
+/* Tinta del mapa por tema: lo que es azul marino de día es claro de noche. */
+const INK = { light: [15, 28, 63, 255] as RGBA, dark: [226, 232, 248, 255] as RGBA };
+const HALO = { light: [255, 255, 255, 255] as RGBA, dark: [16, 21, 31, 255] as RGBA };
+const VEIL = { light: [246, 244, 238, 205] as RGBA, dark: [13, 18, 29, 200] as RGBA };
+const COBALT = { light: [27, 69, 196] as const, dark: [111, 147, 255] as const };
 export const DAMAGE_RGB: Record<string, RGBA> = {
   POSSIBLY_DAMAGED: [231, 178, 74, 255],
   DAMAGED: [217, 116, 43, 255],
@@ -29,6 +32,10 @@ export const DAMAGE_RGB: Record<string, RGBA> = {
 /** Más tinta = más gente. Violeta: el cobalto queda para lo seleccionado. */
 export const POP_RAMP: RGBA[] = [
   [241, 236, 246, 150], [217, 203, 232, 155], [183, 154, 212, 160], [142, 103, 184, 165], [95, 61, 143, 170],
+];
+/** De noche, más luz = más gente. */
+export const POP_RAMP_DARK: RGBA[] = [
+  [52, 38, 82, 150], [80, 56, 124, 160], [114, 82, 170, 170], [152, 114, 212, 180], [198, 164, 242, 190],
 ];
 export const PUBLIC_SPACE: RGBA = [96, 158, 99, 120];
 export const OSM_GREEN: RGBA = [150, 196, 140, 95];
@@ -49,11 +56,11 @@ const isDesktop = () => window.matchMedia('(min-width: 768px)').matches;
 function uiPadding(hasCard: boolean, panel: string | null) {
   if (!isDesktop()) {
     const h = window.innerHeight;
-    return { top: 110, left: 24, right: 24, bottom: hasCard || panel ? Math.round(h * 0.52) : 60 };
+    return { top: 90, left: 24, right: 24, bottom: hasCard || panel ? Math.round(h * 0.55) : 90 };
   }
   const wide = panel === 'intervenciones' || panel === 'verificacion';
   const right = panel ? (wide ? Math.min(1090, window.innerWidth - 260) : 570) : hasCard ? 470 : 60;
-  return { top: 130, left: 60, right, bottom: 70 };
+  return { top: 90, left: 60, right, bottom: 100 };
 }
 
 interface Hover { x: number; y: number; title: string; sub: string }
@@ -61,7 +68,11 @@ interface Hover { x: number; y: number; title: string; sub: string }
 export function MapWorkspace() {
   const {
     sites, siteById, layers, layer, selectedSiteId, selectSite, panel, camera, territory, fly,
+    theme, settings,
   } = useStore();
+  const ink = INK[theme];
+  const halo = HALO[theme];
+  const cobalt = COBALT[theme];
   const mapRef = useRef<MapRef>(null);
   const [bearing, setBearing] = useState(0);
   const [hover, setHover] = useState<Hover | null>(null);
@@ -69,7 +80,7 @@ export function MapWorkspace() {
 
   const aoi: BBox = territory?.aoi.bbox ?? AOI_FALLBACK;
   const selected = selectedSiteId ? siteById.get(selectedSiteId) ?? null : null;
-  const mapStyle = useMemo(() => (styleFailed ? PLAIN_STYLE : ivoryStyle()), [styleFailed]);
+  const mapStyle = useMemo(() => (styleFailed ? plainStyle(theme) : baseStyle(theme)), [styleFailed, theme]);
 
   /* ── Cámara ─────────────────────────────────────────────────────── */
   /* La orden puede llegar antes que el mapa (un enlace directo a un sitio):
@@ -142,7 +153,7 @@ export function MapWorkspace() {
   }, []);
 
   const siteColor = (s: Site): RGBA =>
-    layer === 'dano' ? DAMAGE_RGB[s.damage_class ?? ''] ?? [115, 123, 146, 255] : NAVY;
+    layer === 'dano' ? DAMAGE_RGB[s.damage_class ?? ''] ?? [115, 123, 146, 255] : ink;
 
   const dash = { extensions: [new PathStyleExtension({ dash: true })] };
 
@@ -155,21 +166,22 @@ export function MapWorkspace() {
         getFillColor: (f: Props): RGBA => {
           const v = Number(f.properties.population);
           const i = popBreaks.findIndex((b) => v < b);
-          return POP_RAMP[i < 0 ? 4 : i];
+          return (theme === 'dark' ? POP_RAMP_DARK : POP_RAMP)[i < 0 ? 4 : i];
         },
-        updateTriggers: { getFillColor: popBreaks },
+        updateTriggers: { getFillColor: [popBreaks, theme] },
       }),
     ] : []),
 
     /* Fuera del área de estudio el papel se vela: el mapa no finge cubrir toda
        la ciudad. Va encima de la población, cuya malla se sale del recuadro. */
-    new SolidPolygonLayer({
+    ...(settings.veil ? [new SolidPolygonLayer({
       id: 'outside-veil',
       data: [{ polygon: [ring([aoi[0] - 0.6, aoi[1] - 0.6, aoi[2] + 0.6, aoi[3] + 0.6]), ring(aoi)] }],
       getPolygon: (d: { polygon: [number, number][][] }) => d.polygon,
-      getFillColor: [246, 244, 238, 205],
+      getFillColor: VEIL[theme],
       pickable: false,
-    }),
+      updateTriggers: { getFillColor: theme },
+    })] : []),
 
     ...(layer === 'espacio' ? [
       ...(layers.green ? [new GeoJsonLayer({
@@ -209,7 +221,7 @@ export function MapWorkspace() {
         pointType: 'circle',
         getPointRadius: 5, pointRadiusUnits: 'pixels',
         getFillColor: FACILITY,
-        getLineColor: WHITE, getLineWidth: 1.5, lineWidthUnits: 'pixels',
+        getLineColor: halo, getLineWidth: 1.5, lineWidthUnits: 'pixels',
         stroked: true, filled: true,
         pickable: true,
         onHover: (i: PickingInfo) => onHoverFeature(i, 'facility'),
@@ -221,7 +233,8 @@ export function MapWorkspace() {
       id: 'comunas',
       data: comunaRings,
       getPath: (d: { path: [number, number][] }) => d.path,
-      getColor: [105, 113, 138, 170],
+      getColor: theme === 'dark' ? [140, 150, 176, 160] : [105, 113, 138, 170],
+      updateTriggers: { getColor: theme },
       getWidth: 1.2, widthUnits: 'pixels',
       getDashArray: [5, 4],
       ...dash,
@@ -230,7 +243,8 @@ export function MapWorkspace() {
       id: 'aoi',
       data: [{ path: ring(aoi) }],
       getPath: (d: { path: [number, number][] }) => d.path,
-      getColor: [15, 28, 63, 150],
+      getColor: [ink[0], ink[1], ink[2], 150],
+      updateTriggers: { getColor: theme },
       getWidth: 1.6, widthUnits: 'pixels',
       getDashArray: [9, 5],
       ...dash,
@@ -240,18 +254,20 @@ export function MapWorkspace() {
       id: 'catchment',
       data: { type: 'FeatureCollection', features: catchment } as never,
       filled: true, stroked: true,
-      getFillColor: [27, 69, 196, 22],
-      getLineColor: [27, 69, 196, 220],
+      getFillColor: [...cobalt, 26],
+      getLineColor: [...cobalt, 230],
+      updateTriggers: { getFillColor: theme, getLineColor: theme },
       getLineWidth: 1.8, lineWidthUnits: 'pixels',
     })] : []),
     ...(showRadius && selected ? [new ScatterplotLayer({
       id: 'radius',
       data: [selected],
       getPosition: (s: Site) => [s.lon, s.lat],
-      getRadius: NEARBY_RADIUS_M, radiusUnits: 'meters',
+      getRadius: settings.radius, radiusUnits: 'meters',
       filled: true, stroked: true,
-      getFillColor: [27, 69, 196, 14],
-      getLineColor: [27, 69, 196, 200],
+      getFillColor: [...cobalt, 16],
+      getLineColor: [...cobalt, 210],
+      updateTriggers: { getRadius: settings.radius, getFillColor: theme, getLineColor: theme },
       getLineWidth: 1.5, lineWidthUnits: 'pixels',
     })] : []),
 
@@ -273,7 +289,7 @@ export function MapWorkspace() {
       getRadius: layer === 'dano' ? 6.5 : 5,
       radiusUnits: 'pixels',
       getFillColor: siteColor,
-      stroked: true, getLineColor: WHITE, getLineWidth: 1.6, lineWidthUnits: 'pixels',
+      stroked: true, getLineColor: halo, getLineWidth: 1.6, lineWidthUnits: 'pixels',
       pickable: true,
       autoHighlight: true,
       highlightColor: [27, 69, 196, 255],
@@ -289,7 +305,7 @@ export function MapWorkspace() {
         const s = info.object as Site | undefined;
         if (s) selectSite(s.site_id);
       },
-      updateTriggers: { getFillColor: [layer], getRadius: [layer] },
+      updateTriggers: { getFillColor: [layer, theme], getLineColor: theme },
     }),
 
   ];
@@ -338,7 +354,7 @@ export function MapWorkspace() {
         </div>
       )}
 
-      <div className="absolute bottom-12 left-3 z-10 flex flex-col overflow-hidden md:bottom-14 float">
+      <div className="float absolute bottom-4 left-3 z-10 hidden flex-col overflow-hidden md:flex">
         {[
           { label: 'Acercar', icon: <Icon.Plus size={18} />, on: () => mapRef.current?.getMap().zoomIn() },
           { label: 'Alejar', icon: <Icon.Minus size={18} />, on: () => mapRef.current?.getMap().zoomOut() },
@@ -358,7 +374,7 @@ export function MapWorkspace() {
         onClick={() => mapRef.current?.getMap().easeTo({ bearing: 0, pitch: 0 })}
         aria-label="Norte arriba"
         title="Norte arriba"
-        className="float absolute bottom-[190px] left-3 z-10 hidden size-10 place-items-center rounded-full md:grid"
+        className="float absolute bottom-[140px] left-3 z-10 hidden size-10 place-items-center rounded-full md:grid"
       >
         <span className="flex flex-col items-center leading-none" style={{ transform: `rotate(${-bearing}deg)` }}>
           <Icon.Compass size={18} className="text-ink" />
@@ -373,10 +389,10 @@ function SitePin({ name }: { name: string }) {
   return (
     <div className="relative flex flex-col items-center" aria-label={`Sitio seleccionado: ${name}`}>
       <svg width="30" height="38" viewBox="0 0 30 38" aria-hidden="true" className="drop-shadow-[0_2px_3px_rgba(15,28,63,.35)]">
-        <path d="M15 37S3 24.6 3 14.5a12 12 0 0 1 24 0C27 24.6 15 37 15 37z" fill="#1b45c4" stroke="#fff" strokeWidth="2" />
-        <circle cx="15" cy="14.5" r="4.6" fill="#fff" />
+        <path d="M15 37S3 24.6 3 14.5a12 12 0 0 1 24 0C27 24.6 15 37 15 37z" fill="var(--color-cobalt)" stroke="var(--color-card)" strokeWidth="2" />
+        <circle cx="15" cy="14.5" r="4.6" fill="var(--color-card)" />
       </svg>
-      <span className="absolute top-[22px] left-[30px] font-serif text-[16px] font-semibold whitespace-nowrap text-ink [text-shadow:0_0_3px_#f6f4ee,0_0_6px_#f6f4ee]">
+      <span className="absolute top-[22px] left-[30px] font-serif text-[16px] font-semibold whitespace-nowrap text-ink [text-shadow:0_0_3px_var(--color-paper),0_0_6px_var(--color-paper)]">
         {name}
       </span>
     </div>
@@ -429,7 +445,7 @@ function LeaderLine({ mapRef, site }: { mapRef: React.RefObject<MapRef | null>; 
   if (!d) return null;
   return (
     <svg className="pointer-events-none absolute inset-0 z-10 size-full" aria-hidden="true" data-uri="leader">
-      <path d={d} fill="none" stroke="#1b45c4" strokeWidth="1.4" />
+      <path d={d} fill="none" stroke="var(--color-cobalt)" strokeWidth="1.4" />
     </svg>
   );
 }

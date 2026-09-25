@@ -31,15 +31,33 @@ adopta como interfaz.
 
 ## Decisión
 
-### 1. El mapa ocupa la pantalla; todo lo demás flota
+### 1. El mapa ocupa toda la pantalla; todo lo demás flota
 
-No hay barra lateral fija. Cabecera con la marca, el buscador de lugares y
-Fuentes, Guardadas y Ayuda. Sobre el mapa: la tarjeta del sector de estudio
-(«Cobertura parcial: este mapa no representa toda la ciudad»), la barra de
-cinco capas (Territorio, Daño, Población, Espacio público, Equipamientos), la
-leyenda, los controles y la procedencia. Papel marfil, tinta azul marino,
-cobalto para lo seleccionado y lo accionable; Source Serif 4 y Source Sans 3
-empaquetadas desde npm, sin CDN.
+El producto se llama **REBUILD**. No hay cabecera ni barra lateral fija: el
+mapa ocupa todo el alto de la ventana. Abajo y al centro, una sola barra con la
+marca, el buscador, Fuentes, Guardadas, Ayuda y Ajustes. Arriba, lo que explica
+el mapa: la tarjeta del sector de estudio («Cobertura parcial: este mapa no
+representa toda la ciudad») con la leyenda debajo, el selector de cinco capas
+(Territorio, Daño, Población, Espacio público, Equipamientos) y la franja de
+procedencia. La tarjeta del lugar va centrada en el lateral derecho.
+
+Papel marfil, tinta azul marino, cobalto para lo seleccionado y lo accionable;
+Source Serif 4 y Source Sans 3 empaquetadas desde npm, sin CDN. Hay **modo
+oscuro**: los mismos tokens redefinidos sobre azul marino profundo y la misma
+cartografía de OpenStreetMap recoloreada de noche. El tema sigue al sistema
+salvo que el analista elija otro.
+
+**Componentes de [motion-primitives](https://motion-primitives.com).** La
+interfaz usa esta librería desde ahora, copiada al proyecto como ella indica
+(`apps/viewer/src/components/motion-primitives/`, con `motion`, `clsx` y
+`tailwind-merge`): la barra inferior sigue el patrón *Toolbar Dynamic* (se
+ensancha con un muelle y se vuelve buscador), los ajustes son un *Morphing
+Popover*, Fuentes, Guardadas y Ayuda son *Morphing Dialog* que nacen de su
+botón, y los selectores de capa, tema y radio usan *Animated Background*.
+
+**Ajustes.** Tema (sistema, claro u oscuro), radio del entorno (300, 500 u
+800 m, el que cuentan la tarjeta y el panel de entorno) y el velo fuera del
+área de estudio. Se guardan en el navegador del analista.
 
 ### 2. El recorrido lo elige el analista, y la obra va al final
 
@@ -122,4 +140,6 @@ hay dato detrás de ninguna de las dos.
   propósito, y la API la conserva.
 - `scripts/checks/browser_check.py` se reescribe para este recorrido. Ya no
   mide vistas: comprueba que cada paso siga diciendo lo que la interfaz no
-  puede perder.
+  puede perder, que no vuelva una cabecera, que la barra esté abajo y que el
+  modo oscuro cambie toda la interfaz.
+- El demo del recorrido, sin voz ni audio, vive en `docs/demo/`.

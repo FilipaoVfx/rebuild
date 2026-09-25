@@ -1,6 +1,6 @@
 import { dec, razon } from '../lib/format';
 import {
-  NEARBY_RADIUS_M, evidenceLine, nearbyOf, peopleLine, placeName, reachOf, sitesInPlace,
+  evidenceLine, nearbyOf, peopleLine, placeName, reachOf, sitesInPlace,
 } from '../lib/place';
 import { useStore } from '../state/store';
 import type { Site } from '../types';
@@ -14,11 +14,11 @@ import { AmberBadge, InfoRow } from './ui';
  * no es una instrucción para construir.
  */
 export function PlaceCard({ site }: { site: Site }) {
-  const { details, layers, sites, selectSite, openPanel } = useStore();
+  const { details, layers, sites, selectSite, openPanel, settings } = useStore();
   const detail = details[site.site_id];
   const same = sitesInPlace(sites, site);
   const idx = same.findIndex((s) => s.site_id === site.site_id);
-  const near = nearbyOf(site, layers);
+  const near = nearbyOf(site, layers, settings.radius);
   const reach = reachOf(site, detail);
   const validated = detail?.fusion.any_field_validated ?? false;
   const exclusions = detail?.exclusions ?? [];
@@ -33,7 +33,7 @@ export function PlaceCard({ site }: { site: Site }) {
       id="place-card"
       data-uri="place-card"
       aria-label={`Lugar seleccionado: ${placeName(site)}`}
-      className="float animate-rise pointer-events-auto fixed inset-x-2 bottom-2 z-20 max-h-[56vh] overflow-y-auto px-5 pt-5 pb-4 md:absolute md:inset-x-auto md:top-[150px] md:right-6 md:bottom-auto md:max-h-[calc(100%-180px)] md:w-[410px] md:px-6"
+      className="float animate-rise pointer-events-auto fixed inset-x-2 bottom-[72px] z-20 max-h-[52vh] overflow-y-auto px-5 pt-5 pb-4 md:absolute md:inset-x-auto md:top-1/2 md:right-6 md:bottom-auto md:max-h-[calc(100%-240px)] md:w-[410px] md:-translate-y-1/2 md:px-6"
     >
       <button
         type="button"
@@ -74,7 +74,7 @@ export function PlaceCard({ site }: { site: Site }) {
           title="Entorno cercano"
           lines={[
             near.ready
-              ? `${near.publicSpace.length} espacios públicos y ${near.facilities.length} equipamientos a ${NEARBY_RADIUS_M} m`
+              ? `${near.publicSpace.length} espacios públicos y ${near.facilities.length} equipamientos a ${settings.radius} m`
               : 'Calles, espacios públicos y equipamientos',
             'OSM · SIGPER',
           ]}
@@ -104,18 +104,21 @@ export function PlaceCard({ site }: { site: Site }) {
         </p>
       )}
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <button type="button" className="btn btn-primary" onClick={() => openPanel('evidencia')}>
-          <Icon.Arrow size={20} /> Examinar evidencia
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={() => openPanel('entorno')}>
-          <Icon.External size={19} /> Explorar el entorno
+      {/* Las salidas quedan siempre a la vista, aunque la tarjeta tenga que desplazarse. */}
+      <div className="sticky -bottom-4 -mx-5 mt-3 border-t border-rule bg-card px-5 pt-3.5 pb-1 md:-mx-6 md:px-6">
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" className="btn btn-primary" onClick={() => openPanel('evidencia')}>
+            <Icon.Arrow size={20} /> Examinar evidencia
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => openPanel('entorno')}>
+            <Icon.External size={19} /> Explorar el entorno
+          </button>
+        </div>
+        <button type="button" className="mt-3.5 flex items-center gap-3 text-[15.5px]" onClick={() => openPanel('intervenciones')}>
+          <Icon.Arrow size={20} className="text-cobalt" />
+          <span className="link">Ver posibles intervenciones</span>
         </button>
       </div>
-      <button type="button" className="mt-4 flex items-center gap-3 text-[15.5px]" onClick={() => openPanel('intervenciones')}>
-        <Icon.Arrow size={20} className="text-cobalt" />
-        <span className="link">Ver posibles intervenciones</span>
-      </button>
     </aside>
   );
 }
