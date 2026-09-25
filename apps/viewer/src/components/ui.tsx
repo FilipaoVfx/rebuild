@@ -1,142 +1,157 @@
-import type { HTMLAttributes, ReactNode } from 'react';
-import { rgbCss, sample, type RGB } from '../lib/palette';
+import { useEffect, useRef, type ReactNode } from 'react';
+import type { Site } from '../types';
+import { useStore } from '../state/store';
+import { placeName } from '../lib/place';
+import { Icon } from './icons';
 
-export function Panel({ children, className = '', ...rest }: {
-  children: ReactNode; className?: string;
-} & HTMLAttributes<HTMLDivElement>) {
+/** Aviso ámbar del mockup: «Sin validar en campo». */
+export function AmberBadge({ children }: { children: ReactNode }) {
   return (
-    <div {...rest} className={`rounded-xl border border-ink-700 bg-ink-900/85 ${className}`}>
+    <span className="inline-flex items-center gap-1.5 rounded-[3px] bg-amber-50 px-2 py-1 text-[12.5px] font-semibold text-amber-900">
+      <span className="size-2 rounded-full bg-amber" aria-hidden="true" />
       {children}
-    </div>
+    </span>
   );
 }
 
-export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
+/** Un dato que no existe se dice, con el rayado de "sin dato", nunca con un cero. */
+export function Missing({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
-      <h3 className="text-[10px] font-semibold tracking-[0.16em] text-mute-400 uppercase">{children}</h3>
-      {right}
-    </div>
-  );
-}
-
-export function Stat({ label, value, sub, tone = 'default', size = 'md' }: {
-  label: string; value: ReactNode; sub?: ReactNode;
-  tone?: 'default' | 'accent' | 'ok' | 'warn' | 'bad' | 'unknown'; size?: 'sm' | 'md' | 'lg';
-}) {
-  const toneCls = {
-    default: 'text-paper', accent: 'text-accent', ok: 'text-ok',
-    warn: 'text-warn', bad: 'text-bad', unknown: 'text-mute-300',
-  }[tone];
-  const sizeCls = { sm: 'text-lg', md: 'text-2xl', lg: 'text-[34px] leading-none' }[size];
-  return (
-    <div>
-      <div className="text-[10px] tracking-[0.13em] text-mute-400 uppercase">{label}</div>
-      <div className={`num mt-1 font-semibold ${sizeCls} ${toneCls}`}>{value}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-mute-400">{sub}</div>}
-    </div>
-  );
-}
-
-export function Bar({ value, ramp, color, height = 6 }: {
-  value: number | null; ramp?: RGB[]; color?: string; height?: number;
-}) {
-  if (value === null) {
-    return (
-      <div data-uri="bar-empty"
-         className="w-full rounded-full border border-dashed border-ink-500" style={{ height }} />
-    );
-  }
-  const v = Math.max(0, Math.min(1, value));
-  const bg = color ?? (ramp ? rgbCss(sample(ramp, v)) : 'var(--color-accent)');
-  return (
-    <div className="w-full overflow-hidden rounded-full bg-ink-700" style={{ height }}>
-      <div data-uri="bar-fill" className="h-full rounded-full transition-[width] duration-300"
-           style={{ width: `${v * 100}%`, background: bg }} />
-    </div>
-  );
-}
-
-/** Barra divergente: un aporte negativo al puntaje se ve como negativo. */
-export function SignedBar({ value, max }: { value: number; max: number }) {
-  const w = Math.min(50, (Math.abs(value) / max) * 50);
-  const positive = value >= 0;
-  return (
-    <div className="relative h-2 w-full rounded-full bg-ink-800">
-      <div className="absolute inset-y-0 left-1/2 w-px bg-ink-600" />
-      <div className="absolute inset-y-0 rounded-full"
-           style={{
-             width: `${w}%`,
-             left: positive ? '50%' : `${50 - w}%`,
-             background: positive ? 'var(--color-ok)' : 'var(--color-bad)',
-           }} />
-    </div>
-  );
-}
-
-export function Chip({ children, active, onClick, title }: {
-  children: ReactNode; active?: boolean; onClick?: () => void; title?: string;
-}) {
-  const Tag = onClick ? 'button' : 'span';
-  return (
-    <Tag
-      onClick={onClick}
-      title={title}
-      className={[
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors',
-        active ? 'border-mute-400/50 bg-ink-700 text-paper' : 'border-ink-700 bg-ink-850 text-mute-300',
-        onClick ? 'cursor-pointer hover:border-mute-400/60 hover:text-paper' : '',
-      ].join(' ')}
-    >
+    <span className="inline-flex items-center gap-2 text-ink-3">
+      <span className="hatch inline-block h-3 w-5 rounded-[2px] border border-unknown/40" aria-hidden="true" />
       {children}
-    </Tag>
+    </span>
+  );
+}
+
+export function Kicker({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <p className={`kicker ${className}`}>{children}</p>;
+}
+
+/** Fila de la tarjeta: icono, título, dos líneas, y a la derecha un aviso opcional. */
+export function InfoRow({
+  icon, title, lines, aside,
+}: { icon: ReactNode; title: string; lines: ReactNode[]; aside?: ReactNode }) {
+  return (
+    <div data-uri="place-row" className="grid grid-cols-[28px_1fr_auto] gap-x-3 border-t border-rule py-3.5 first:border-t-0">
+      <span className="pt-0.5 text-ink-2">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[15px] font-semibold leading-snug text-ink">{title}</p>
+        {lines.filter(Boolean).map((l, i) => (
+          <p key={i} className={`text-[13.5px] leading-snug ${i === 0 ? 'text-ink-2' : 'text-ink-3'}`}>{l}</p>
+        ))}
+      </div>
+      {aside && <div className="self-start">{aside}</div>}
+    </div>
+  );
+}
+
+/** Pereira › Comuna › Barrio. El camino de vuelta al lugar. */
+export function Crumbs({ site, tail }: { site: Site; tail?: string }) {
+  const { openPanel } = useStore();
+  return (
+    <nav aria-label="Ubicación" className="flex flex-wrap items-center gap-1.5 pr-10 text-[14px] text-ink-2">
+      <span>Pereira</span>
+      {site.commune && (<><Icon.Next size={14} className="text-ink-3" /><span>{site.commune}</span></>)}
+      <Icon.Next size={14} className="text-ink-3" />
+      <button type="button" className="link font-semibold" onClick={() => openPanel(null)}>
+        {placeName(site)}
+      </button>
+      {tail && (<><Icon.Next size={14} className="text-ink-3" /><span className="text-ink">{tail}</span></>)}
+    </nav>
   );
 }
 
 /**
- * Estado de una condición. `UNKNOWN` tiene tratamiento propio a propósito:
- * ni verde ni rojo. Colapsarlo a uno de los dos afirmaría algo que nadie
- * comprobó, y es el error que este visor existe para no cometer.
+ * Hoja flotante sobre el mapa. `wide` es la mesa de comparación y el cuaderno
+ * de verificación: el mapa sigue detrás, pero la lectura manda.
  */
-export function StatusBadge({ status, children }: { status: string; children?: ReactNode }) {
-  const map: Record<string, string> = {
-    OK: 'border-ok/35 bg-ok/10 text-ok',
-    WARNING: 'border-warn/35 bg-warn/10 text-warn',
-    BLOCKED: 'border-bad/35 bg-bad/10 text-bad',
-    UNKNOWN: 'border-ink-500 border-dashed bg-ink-850 text-mute-300',
-  };
-  const glyph: Record<string, string> = { OK: '✓', WARNING: '!', BLOCKED: '✕', UNKNOWN: '?' };
+export function Sheet({
+  label, wide = false, onClose, children, footer, id,
+}: {
+  label: string; wide?: boolean; onClose: () => void; children: ReactNode; footer?: ReactNode; id: string;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${map[status] ?? map.UNKNOWN}`}>
-      {children ?? glyph[status] ?? '?'}
-    </span>
+    <section
+      ref={ref}
+      tabIndex={-1}
+      aria-label={label}
+      data-uri="panel"
+      data-panel={id}
+      className={`float animate-slide-in pointer-events-auto absolute inset-x-2 top-2 bottom-2 z-30 flex flex-col overflow-hidden outline-none md:inset-x-auto md:top-3 md:right-3 md:bottom-3 ${
+        wide ? 'md:left-3 xl:left-auto xl:w-[1060px]' : 'md:w-[540px]'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Cerrar y volver al mapa"
+        className="absolute top-3 right-3 z-10 grid size-9 place-items-center rounded-full text-ink-2 hover:bg-wash hover:text-ink"
+      >
+        <Icon.Close size={20} />
+      </button>
+      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      {footer}
+    </section>
   );
 }
 
-/** Nota al pie de una cifra que no es una medición directa. */
-export function Note({ children }: { children: ReactNode }) {
+/** Diálogo centrado para Fuentes, Ayuda y Guardadas. */
+export function Dialog({
+  title, onClose, children,
+}: { title: string; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
-    <p className="mt-2 flex items-start gap-1.5 text-[10px] leading-relaxed text-mute-400">
-      <span className="mt-[3px] inline-block h-1 w-1 shrink-0 rounded-full bg-mute-400" />
-      <span>{children}</span>
-    </p>
-  );
-}
-
-export function Empty({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-lg border border-dashed border-ink-700 px-4 py-6 text-center text-xs text-mute-400">
-      {children}
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink/25 p-3 pt-[8vh]" onClick={onClose}>
+      <div
+        ref={ref}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+        className="float animate-rise relative flex max-h-[84vh] w-full max-w-[720px] flex-col outline-none"
+      >
+        <header className="flex items-center justify-between gap-4 border-b border-rule px-6 py-4">
+          <h2 className="font-serif text-[24px] font-semibold tracking-tight">{title}</h2>
+          <button
+            type="button" onClick={onClose} aria-label="Cerrar"
+            className="grid size-9 place-items-center rounded-full text-ink-2 hover:bg-wash"
+          >
+            <Icon.Close size={20} />
+          </button>
+        </header>
+        <div className="min-h-0 overflow-y-auto px-6 py-5">{children}</div>
+      </div>
     </div>
   );
 }
 
-/** Ausencia de dato, dicha en vez de dibujada como un cero. */
-export function NoSource({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded border border-dashed border-ink-500 px-1.5 py-0.5 text-[10px] text-mute-300">
-      sin fuente
-      {children ? <span className="text-mute-400">· {children}</span> : null}
-    </span>
-  );
+/** Estado de una condición: lo que se sabe, lo que falta, lo que bloquea. */
+export function StatusDot({ status }: { status: 'OK' | 'WARNING' | 'BLOCKED' | 'UNKNOWN' }) {
+  if (status === 'UNKNOWN') {
+    return <span className="hatch inline-block size-3 shrink-0 rounded-full border border-unknown/60" aria-hidden="true" />;
+  }
+  const color = status === 'OK' ? 'bg-ok' : status === 'WARNING' ? 'bg-amber' : 'bg-bad';
+  return <span className={`inline-block size-3 shrink-0 rounded-full ${color}`} aria-hidden="true" />;
 }
+
+export const STATUS_WORD: Record<string, string> = {
+  OK: 'Se cumple',
+  WARNING: 'Con reservas',
+  BLOCKED: 'No se cumple',
+  UNKNOWN: 'Sin dato',
+};

@@ -3,74 +3,104 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  IS_STATIC, loadAlerts, loadCore, loadCoverage, loadDetails, loadLayer, loadSentinel,
-  loadSources, loadTerrain, loadTerritory, type LayerName, type SentinelIndex,
-  type TerrainIndex,
+  IS_STATIC, loadCore, loadDetail, loadDetails, loadLayer, loadSentinel, loadSources,
+  loadTerritory, type LayerName, type SentinelIndex,
 } from '../data';
-import type { BaseMapKey } from '../lib/basemap';
-import { contextByKey, discriminationOf, layersFor, type Discrimination } from '../lib/contexts';
-import type { ContextKey } from '../lib/palette';
+import type { BBox } from '../lib/place';
 import type {
-  Alert, Coverage, GeoJSON, Opportunity, Provenance, Scenario, Site, SiteDetail, Source,
-  Territory, ViewKey,
+  GeoJSON, Opportunity, Provenance, Site, SiteDetail, Source, Territory,
 } from '../types';
 
-export type ImageryMode = 'none' | 'sentinel' | string;
+/** La barra de capas del mockup: cinco maneras de mirar el mismo lugar. */
+export type LayerKey = 'territorio' | 'dano' | 'poblacion' | 'espacio' | 'equipamientos';
+/** Lo que se abre desde la tarjeta del lugar. */
+export type PanelKey = 'evidencia' | 'entorno' | 'intervenciones' | 'verificacion';
+export type OverlayKey = 'fuentes' | 'ayuda' | 'guardadas';
 
-/** Umbral de idoneidad por defecto (ADR-23). */
-export const DEFAULT_MIN_SUITABILITY = 64;
+export type CameraTarget =
+  | { kind: 'site'; siteId: string; zoom?: number }
+  | { kind: 'bbox'; bbox: BBox }
+  | { kind: 'point'; lngLat: [number, number]; zoom: number }
+  | { kind: 'home' };
+
+const LAYER_NEEDS: Record<LayerKey, LayerName[]> = {
+  territorio: [],
+  dano: ['evidence'],
+  poblacion: ['population', 'catchments'],
+  espacio: ['municipal_public_space', 'green'],
+  equipamientos: ['municipal_facilities', 'facilities'],
+};
+/** Lo que la tarjeta del lugar necesita para contar el entorno. */
+const NEARBY_LAYERS: LayerName[] = ['municipal_public_space', 'green', 'municipal_facilities', 'facilities'];
+
+/* ── Borradores del analista: solo en este navegador ─────────────────── */
+
+export interface VerificationDraft { checked: string[]; question: string; hypotheses: string[] }
+export interface SavedComparison { siteId: string; pair: string[]; at: string }
+interface Local {
+  comparisons: Record<string, string[]>;
+  saved: SavedComparison[];
+  verification: Record<string, VerificationDraft>;
+}
+const LOCAL_KEY = 'recovery.analista.v1';
+const EMPTY_LOCAL: Local = { comparisons: {}, saved: [], verification: {} };
+
+function readLocal(): Local {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_KEY);
+    return raw ? { ...EMPTY_LOCAL, ...(JSON.parse(raw) as Partial<Local>) } : EMPTY_LOCAL;
+  } catch {
+    return EMPTY_LOCAL;
+  }
+}
+function writeLocal(l: Local) {
+  try { window.localStorage.setItem(LOCAL_KEY, JSON.stringify(l)); } catch { /* sin almacenamiento: se trabaja igual */ }
+}
+
+/* ── Enlace profundo: #sitio=site_0028&panel=intervenciones&capa=dano ── */
+
+const PANELS: PanelKey[] = ['evidencia', 'entorno', 'intervenciones', 'verificacion'];
+const LAYERS: LayerKey[] = ['territorio', 'dano', 'poblacion', 'espacio', 'equipamientos'];
+function readHash() {
+  const p = new URLSearchParams(window.location.hash.slice(1));
+  const panel = p.get('panel') as PanelKey | null;
+  const capa = p.get('capa') as LayerKey | null;
+  return {
+    site: p.get('sitio'),
+    panel: panel && PANELS.includes(panel) ? panel : null,
+    layer: capa && LAYERS.includes(capa) ? capa : null,
+  };
+}
 
 interface Store {
   provenance: Provenance;
   sites: Site[];
   siteById: Map<string, Site>;
-  opportunities: Opportunity[];
   oppBySite: Map<string, Opportunity>;
-  scenarios: Scenario[];
   details: Record<string, SiteDetail>;
   sources: Source[];
-  alerts: Alert[];
-  layers: Partial<Record<LayerName, GeoJSON>>;
-  terrain: TerrainIndex | null;
-  sentinel: SentinelIndex | null;
   territory: Territory | null;
+  sentinel: SentinelIndex | null;
+  layers: Partial<Record<LayerName, GeoJSON>>;
+  requestLayers: (names: LayerName[]) => void;
 
-  view: ViewKey; setView: (v: ViewKey) => void;
-  context: ContextKey; setContext: (c: ContextKey) => void;
-
+  layer: LayerKey; setLayer: (l: LayerKey) => void;
   selectedSiteId: string | null;
-  selectSite: (id: string | null) => void;
-  hoverSiteId: string | null; setHoverSiteId: (id: string | null) => void;
+  selectSite: (id: string | null, opts?: { fly?: boolean }) => void;
+  panel: PanelKey | null; openPanel: (p: PanelKey | null) => void;
+  overlay: OverlayKey | null; setOverlay: (o: OverlayKey | null) => void;
 
-  scenarioId: string; setScenarioId: (id: string) => void;
-  scenario: Scenario | null;
-  coverage: Coverage | null;
-  showTerrain: boolean; setShowTerrain: (v: boolean) => void;
+  camera: (CameraTarget & { nonce: number }) | null;
+  fly: (t: CameraTarget) => void;
 
-  /** Tipo de mapa: cartografía base de OSM (clara u oscura) o solo datos (ADR-22 §8). */
-  baseMap: BaseMapKey; setBaseMap: (b: BaseMapKey) => void;
-  /** Imagen de fondo: ninguna, la cortina Sentinel o una ortofoto por `source_id`. */
-  imagery: ImageryMode; setImagery: (m: ImageryMode) => void;
-  imageryCollection: 's1' | 's2'; setImageryCollection: (c: 's1' | 's2') => void;
-  /** Posición de la cortina antes/después, 0..1 del ancho del mapa. */
-  swipe: number; setSwipe: (v: number) => void;
-
-  /** Comuna resaltada en el mapa (osm_id), desde la lista de Territorio. */
-  highlightedAdminId: number | null; setHighlightedAdminId: (id: number | null) => void;
-  /** Filtro por comuna en Oportunidades (FR-UI-04). */
-  communeFilter: string | null; setCommuneFilter: (c: string | null) => void;
-
-  compare: string[]; toggleCompare: (id: string) => void; clearCompare: () => void;
-  technical: boolean; setTechnical: (v: boolean) => void;
-  query: string; setQuery: (q: string) => void;
-  onlyBuildable: boolean; setOnlyBuildable: (v: boolean) => void;
-  /** Idoneidad mínima visible (0–100). Por defecto 64: lo que se ve es lo que
-   *  el modelo distingue con claridad; bajarlo muestra todo (ADR-23). */
-  minSuitability: number; setMinSuitability: (v: number) => void;
-
-  visibleOpportunities: Opportunity[];
-  discrimination: Discrimination;
-  isStatic: boolean;
+  pairFor: (siteId: string) => string[] | null;
+  setPair: (siteId: string, pair: string[]) => void;
+  saved: SavedComparison[];
+  saveComparison: (siteId: string, pair: string[]) => void;
+  removeSaved: (siteId: string) => void;
+  draftFor: (siteId: string) => VerificationDraft | null;
+  setDraft: (siteId: string, d: VerificationDraft) => void;
+  verificationDrafts: Record<string, VerificationDraft>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -81,71 +111,44 @@ export function useStore(): Store {
   return s;
 }
 
-interface Core {
-  sites: Site[]; provenance: Provenance; opportunities: Opportunity[]; scenarios: Scenario[];
-}
+interface Core { sites: Site[]; provenance: Provenance; opportunities: Opportunity[] }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
+  const initial = useRef(readHash());
   const [core, setCore] = useState<Core | null>(null);
   const [error, setError] = useState<string | null>(null);
-
   const [details, setDetails] = useState<Record<string, SiteDetail>>({});
   const [sources, setSources] = useState<Source[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [layers, setLayers] = useState<Partial<Record<LayerName, GeoJSON>>>({});
-  const [terrain, setTerrain] = useState<TerrainIndex | null>(null);
-  const [sentinel, setSentinel] = useState<SentinelIndex | null>(null);
   const [territory, setTerritory] = useState<Territory | null>(null);
-  const [coverage, setCoverage] = useState<Coverage | null>(null);
+  const [sentinel, setSentinel] = useState<SentinelIndex | null>(null);
+  const [layers, setLayers] = useState<Partial<Record<LayerName, GeoJSON>>>({});
 
-  /* Territorio abre por defecto: primero dónde estamos, después qué pasa (ADR-22). */
-  const [view, setView] = useState<ViewKey>('territorio');
-  const [context, setContext] = useState<ContextKey>('TERRITORIO');
-  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
-  const [hoverSiteId, setHoverSiteId] = useState<string | null>(null);
-  const [scenarioId, setScenarioId] = useState('');
-  const [showTerrain, setShowTerrain] = useState(false);
-  const [baseMap, setBaseMap] = useState<BaseMapKey>('calles');
-  const [imagery, setImagery] = useState<ImageryMode>('none');
-  const [imageryCollection, setImageryCollection] = useState<'s1' | 's2'>('s2');
-  const [swipe, setSwipe] = useState(0.5);
-  const [highlightedAdminId, setHighlightedAdminId] = useState<number | null>(null);
-  const [communeFilter, setCommuneFilter] = useState<string | null>(null);
-  const [compare, setCompare] = useState<string[]>([]);
-  const [technical, setTechnical] = useState(false);
-  const [query, setQuery] = useState('');
-  const [onlyBuildable, setOnlyBuildable] = useState(false);
-  const [minSuitability, setMinSuitability] = useState(DEFAULT_MIN_SUITABILITY);
+  const [layer, setLayer] = useState<LayerKey>(
+    initial.current.layer
+      ?? (initial.current.panel === 'evidencia' ? 'dano' : initial.current.panel === 'entorno' ? 'espacio' : 'territorio'),
+  );
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(initial.current.site);
+  const [panel, setPanel] = useState<PanelKey | null>(initial.current.panel);
+  const [overlay, setOverlay] = useState<OverlayKey | null>(null);
+  const [camera, setCamera] = useState<(CameraTarget & { nonce: number }) | null>(
+    initial.current.site ? { kind: 'site', siteId: initial.current.site, nonce: 1 } : null,
+  );
+  const [local, setLocal] = useState<Local>(readLocal);
 
   useEffect(() => {
-    loadCore()
-      .then((c) => {
-        setCore(c);
-        if (c.scenarios.length) setScenarioId(c.scenarios[0].scenario_id);
-      })
-      .catch((e: Error) => setError(e.message));
+    loadCore().then(setCore).catch((e: Error) => setError(e.message));
   }, []);
 
-  /* Lo secundario llega después de que el mapa ya pinta algo. */
   useEffect(() => {
     if (!core) return;
-    loadTerritory()
-      .then((t) => {
-        setTerritory(t);
-        if (!t.imagery.basemap?.available) setBaseMap('datos');
-      })
-      .catch(() => setTerritory(null));
+    loadTerritory().then(setTerritory).catch(() => setTerritory(null));
     loadSources().then(setSources).catch(() => {});
-    loadAlerts().then(setAlerts).catch(() => {});
-    loadTerrain().then(setTerrain).catch(() => {});
     loadSentinel().then(setSentinel).catch(() => {});
     if (IS_STATIC) loadDetails().then(setDetails).catch(() => {});
   }, [core]);
 
-  /** Las capas se piden una vez y solo cuando un contexto las enciende.
-   *  El `ref` es lo que garantiza "una vez": bajo StrictMode el actualizador
-   *  de estado se invoca dos veces y un guard dentro de él dispararía dos
-   *  descargas de 4,5 MB. */
+  /* Cada capa se pide una vez. El `ref` y no el estado es lo que lo garantiza
+     bajo StrictMode, que invoca dos veces los actualizadores. */
   const requested = useRef(new Set<LayerName>());
   const requestLayers = useCallback((names: LayerName[]) => {
     for (const name of names) {
@@ -153,152 +156,137 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       requested.current.add(name);
       loadLayer(name)
         .then((gj) => setLayers((p) => ({ ...p, [name]: gj })))
-        .catch(() => setLayers((p) => ({
-          ...p, [name]: { type: 'FeatureCollection', features: [] } as GeoJSON,
-        })));
+        .catch(() => setLayers((p) => ({ ...p, [name]: { type: 'FeatureCollection', features: [] } })));
     }
   }, []);
 
-  /* El contexto activo decide qué capas hacen falta, incluido el inicial. */
   useEffect(() => {
     if (!core) return;
-    requestLayers(['sites', ...layersFor(context)]);
-  }, [core, context, requestLayers]);
-
-  /* Territorio necesita los contornos del localizador aunque el mapa no los dibuje. */
-  useEffect(() => {
-    if (!core) return;
-    if (view === 'territorio') requestLayers(['admin_areas', 'reference_regions']);
-  }, [core, view, requestLayers]);
-
-  const scenario = useMemo(
-    () => core?.scenarios.find((s) => s.scenario_id === scenarioId) ?? null,
-    [core, scenarioId],
-  );
+    requestLayers(['admin_areas', ...LAYER_NEEDS[layer]]);
+  }, [core, layer, requestLayers]);
 
   useEffect(() => {
-    if (!scenarioId) return;
-    let alive = true;
-    loadCoverage(scenarioId)
-      .then((c) => { if (alive) setCoverage(c ?? null); })
-      .catch(() => { if (alive) setCoverage(null); });
-    return () => { alive = false; };
-  }, [scenarioId]);
-
-  /* Se mide con los mismos valores que pinta el mapa, no con otros. Un
-     contexto neutro no evalúa nada, así que no hay eje que medir. */
-  const discrimination = useMemo(() => {
-    const def = contextByKey(context);
-    const sites = core?.sites ?? [];
-    if (def.sitesMode === 'neutral') {
-      return { covered: sites.length, total: sites.length, distinct: 0, spread: 0, flat: false };
+    if (!core || !selectedSiteId) return;
+    requestLayers([...NEARBY_LAYERS, 'catchments']);
+    /* En vivo no hay details.json: el detalle se pide por sitio. */
+    if (!IS_STATIC && !details[selectedSiteId]) {
+      loadDetail(selectedSiteId)
+        .then((d) => setDetails((p) => ({ ...p, [selectedSiteId]: d })))
+        .catch(() => {});
     }
-    const byId = new Map((core?.opportunities ?? []).map((o) => [o.site_id, o]));
-    return discriminationOf(sites.map((s) => def.value(s, byId.get(s.site_id))));
-  }, [core, context]);
+  }, [core, selectedSiteId, details, requestLayers]);
+
+  /* La URL dice qué se está mirando: se puede enviar el enlace de un lugar. */
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (selectedSiteId) p.set('sitio', selectedSiteId);
+    if (selectedSiteId && panel) p.set('panel', panel);
+    if (layer !== 'territorio') p.set('capa', layer);
+    const hash = p.toString();
+    const next = hash ? `#${hash}` : window.location.pathname + window.location.search;
+    if (window.location.hash.slice(1) !== hash) window.history.replaceState(null, '', next);
+  }, [selectedSiteId, panel, layer]);
+
+  const nonce = useRef(1);
+  const fly = useCallback((t: CameraTarget) => {
+    nonce.current += 1;
+    setCamera({ ...t, nonce: nonce.current });
+  }, []);
+
+  /* Un enlace pegado o el botón «atrás» cambian el hash sin recargar. Las
+     escrituras propias usan replaceState, que no dispara este evento. */
+  useEffect(() => {
+    const onHash = () => {
+      const h = readHash();
+      setSelectedSiteId(h.site);
+      setPanel(h.site ? h.panel : null);
+      setLayer(h.layer ?? (h.panel === 'evidencia' ? 'dano' : h.panel === 'entorno' ? 'espacio' : 'territorio'));
+      if (h.site) fly({ kind: 'site', siteId: h.site });
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, [fly]);
+
+  const updateLocal = useCallback((fn: (l: Local) => Local) => {
+    setLocal((prev) => {
+      const next = fn(prev);
+      writeLocal(next);
+      return next;
+    });
+  }, []);
 
   const oppBySite = useMemo(
-    () => new Map((core?.opportunities ?? []).map((o) => [o.site_id, o])),
-    [core],
+    () => new Map((core?.opportunities ?? []).map((o) => [o.site_id, o])), [core],
   );
-  const siteById = useMemo(
-    () => new Map((core?.sites ?? []).map((s) => [s.site_id, s])),
-    [core],
-  );
+  const siteById = useMemo(() => new Map((core?.sites ?? []).map((s) => [s.site_id, s])), [core]);
 
-  const visibleOpportunities = useMemo(() => {
-    let list = [...(core?.opportunities ?? [])];
-    const q = query.trim().toLowerCase();
-    if (q) {
-      list = list.filter((o) =>
-        [
-          o.opportunity_id, o.site_id, o.intervention_label, o.problem.headline,
-          o.place?.place_line ?? '', ...o.problem.drivers,
-        ].join(' ').toLowerCase().includes(q));
-    }
-    if (communeFilter) list = list.filter((o) => o.place?.commune === communeFilter);
-    if (onlyBuildable) list = list.filter((o) => !o.blocked && o.intervention !== 'NO_BUILD');
-    if (minSuitability > 0) list = list.filter((o) => o.suitability >= minSuitability);
-    return list.sort((a, b) => b.suitability - a.suitability);
-  }, [core, query, onlyBuildable, communeFilter, minSuitability]);
-
-  if (error) {
-    return (
-      <div className="flex h-full items-center justify-center p-8 text-center">
-        <div className="max-w-md">
-          <p className="font-semibold text-bad">No se pudieron cargar los datos</p>
-          <p className="mt-2 text-sm text-mute-300">{error}</p>
-          <p className="mt-3 text-xs text-mute-400">
-            En el despliegue estático los datos viven en <code>data/</code>; montado sobre la API,
-            en <code>/api/v1</code>.
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (error) return <Failure message={error} />;
   if (!core) return <Booting />;
 
   const store: Store = {
     provenance: core.provenance,
     sites: core.sites,
     siteById,
-    opportunities: core.opportunities,
     oppBySite,
-    scenarios: core.scenarios,
-    details, sources, alerts, layers, terrain, sentinel, territory,
-    view,
-    /* Cambiar de vista desde la orientación lleva al contexto que la responde:
-       abrir Oportunidades con el mapa aún en Territorio dejaría los sitios
-       grises justo cuando la vista habla de su color. */
-    setView: (v) => {
-      setView(v);
-      if (v === 'territorio') setContext('TERRITORIO');
-      else if (context === 'TERRITORIO') {
-        setContext(v === 'oportunidades' ? 'OPORTUNIDADES' : 'SITUACION');
-      }
-    },
-    context, setContext,
+    details, sources, territory, sentinel, layers, requestLayers,
+    layer, setLayer,
     selectedSiteId,
-    selectSite: setSelectedSiteId,
-    hoverSiteId, setHoverSiteId,
-    scenarioId, setScenarioId, scenario, coverage,
-    showTerrain, setShowTerrain,
-    baseMap, setBaseMap,
-    imagery, setImagery,
-    imageryCollection, setImageryCollection,
-    swipe, setSwipe,
-    highlightedAdminId, setHighlightedAdminId,
-    communeFilter, setCommuneFilter,
-    compare,
-    toggleCompare: (id) => setCompare((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= 4 ? prev : [...prev, id]),
-    clearCompare: () => setCompare([]),
-    technical, setTechnical,
-    query, setQuery,
-    onlyBuildable, setOnlyBuildable,
-    minSuitability, setMinSuitability,
-    visibleOpportunities,
-    discrimination,
-    isStatic: IS_STATIC,
+    selectSite: (id, opts) => {
+      setSelectedSiteId(id && siteById.has(id) ? id : null);
+      if (!id) setPanel(null);
+      if (id && opts?.fly !== false) fly({ kind: 'site', siteId: id });
+    },
+    panel,
+    openPanel: (p) => {
+      setPanel(p);
+      /* Cada panel mira el lugar con la capa que lo explica. */
+      if (p === 'evidencia') setLayer('dano');
+      if (p === 'entorno') setLayer('espacio');
+      if (p && selectedSiteId) fly({ kind: 'site', siteId: selectedSiteId, zoom: p === 'entorno' ? 15.4 : 16 });
+    },
+    overlay, setOverlay,
+    camera, fly,
+    pairFor: (id) => local.comparisons[id] ?? null,
+    setPair: (id, pair) => updateLocal((l) => ({ ...l, comparisons: { ...l.comparisons, [id]: pair } })),
+    saved: local.saved,
+    saveComparison: (id, pair) => updateLocal((l) => ({
+      ...l,
+      saved: [{ siteId: id, pair, at: new Date().toISOString() }, ...l.saved.filter((s) => s.siteId !== id)],
+    })),
+    removeSaved: (id) => updateLocal((l) => ({ ...l, saved: l.saved.filter((s) => s.siteId !== id) })),
+    draftFor: (id) => local.verification[id] ?? null,
+    setDraft: (id, d) => updateLocal((l) => ({ ...l, verification: { ...l.verification, [id]: d } })),
+    verificationDrafts: local.verification,
   };
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }
 
-/** Lo que el visor es y dónde está, dicho antes de que cargue un solo dato. */
-export const CITY_LINE = 'Pereira, Risaralda · Colombia';
-export const PURPOSE_LINE = 'Soporte a decisiones de recuperación urbana tras el sismo del 10-08-2026';
-
 function Booting() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-      <p className="text-[13px] font-semibold tracking-tight text-paper">{CITY_LINE}</p>
-      <div className="h-px w-40 overflow-hidden bg-ink-700">
-        <div className="h-full w-1/3 animate-[slide_1.1s_ease-in-out_infinite] bg-accent" />
+    <div className="flex h-full flex-col items-center justify-center gap-3 bg-paper px-6 text-center">
+      <p className="font-serif text-[34px] font-semibold tracking-tight text-ink">RECOVERY</p>
+      <p className="text-[15px] text-ink-2">Recuperación urbana para ciudades más vivas</p>
+      <div className="mt-2 h-px w-40 overflow-hidden bg-rule">
+        <div className="h-full w-1/3 animate-[load_1.1s_ease-in-out_infinite] bg-cobalt" />
       </div>
-      <p className="max-w-xs text-[11px] leading-relaxed text-mute-400">{PURPOSE_LINE}</p>
-      <p className="text-[10px] tracking-[0.18em] text-mute-500 uppercase">Cargando territorio</p>
-      <style>{`@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}`}</style>
+      <p className="kicker mt-1">Cargando el sector de estudio · Pereira</p>
+      <style>{'@keyframes load{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}'}</style>
+    </div>
+  );
+}
+
+function Failure({ message }: { message: string }) {
+  return (
+    <div className="flex h-full items-center justify-center bg-paper p-8 text-center">
+      <div className="float max-w-md p-6">
+        <p className="font-serif text-xl font-semibold">No se pudieron cargar los datos</p>
+        <p className="mt-2 text-sm text-ink-2">{message}</p>
+        <p className="mt-3 text-[13px] text-ink-3">
+          En el despliegue estático los datos viven en <code>data/</code>; montado sobre la API, en{' '}
+          <code>/api/v1</code>.
+        </p>
+      </div>
     </div>
   );
 }

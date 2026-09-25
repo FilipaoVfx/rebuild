@@ -1,71 +1,79 @@
-import {
-  Breadcrumb, CompareTray, ContextSwitcher, Legend, MapTypeSwitcher, TopBar,
-} from './components/chrome';
-import { MapCanvas } from './components/MapCanvas';
-import { OpportunityDetail } from './components/OpportunityDetail';
+import { useEffect } from 'react';
+import { Header } from './components/Header';
+import { Legend, LayerBar, ProvenanceBar, StudyCard } from './components/MapChrome';
+import { MapWorkspace } from './components/MapWorkspace';
+import { PlaceCard } from './components/PlaceCard';
+import { HelpDialog, SavedDialog, SourcesDialog } from './panels/Dialogs';
+import { EntornoPanel } from './panels/EntornoPanel';
+import { EvidencePanel } from './panels/EvidencePanel';
+import { InterventionsPanel } from './panels/InterventionsPanel';
+import { VerificationPanel } from './panels/VerificationPanel';
 import { StoreProvider, useStore } from './state/store';
-import { EvidenceView } from './views/EvidenceView';
-import { OpportunitiesView } from './views/OpportunitiesView';
-import { ScenariosView } from './views/ScenariosView';
-import { SituationView } from './views/SituationView';
-import { TerritoryView } from './views/TerritoryView';
 
 export default function App() {
   return (
     <StoreProvider>
-      <Layout />
+      <Workspace />
     </StoreProvider>
   );
 }
 
-function Layout() {
-  const { view, selectedSiteId, siteById, oppBySite } = useStore();
+/**
+ * RECOVERY: el mapa ocupa la pantalla y lo demás flota sobre él
+ * (docs/designs/recovery-mapa-analista-20260925). Sin barra lateral fija:
+ * la tarjeta del lugar aparece cuando hay un lugar, y los paneles cuando el
+ * analista decide seguir por uno de sus caminos.
+ */
+function Workspace() {
+  const { selectedSiteId, siteById, panel, overlay, selectSite } = useStore();
   const site = selectedSiteId ? siteById.get(selectedSiteId) ?? null : null;
 
-  const WorkPanel = {
-    territorio: TerritoryView,
-    situacion: SituationView,
-    oportunidades: OpportunitiesView,
-    escenarios: ScenariosView,
-    evidencia: EvidenceView,
-  }[view];
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && site && !panel && !overlay) selectSite(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [site, panel, overlay, selectSite]);
 
   return (
-    <div className="flex h-full flex-col bg-ink-950">
-      <TopBar />
+    <div className="flex h-full flex-col bg-paper">
+      <Header />
+      <main className="relative min-h-0 flex-1 overflow-hidden">
+        <MapWorkspace />
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        {/* Mapa: interfaz espacial, no contenedor de capas. En móvil encabeza
-            la pantalla; en escritorio ocupa el espacio libre. */}
-        <div className="relative h-[44vh] w-full shrink-0 lg:order-2 lg:h-auto lg:min-h-0 lg:flex-1">
-          <MapCanvas />
-
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-2 pr-12 sm:p-3 sm:pr-14">
-            <Breadcrumb />
-            <MapTypeSwitcher />
+        {/* Controles flotantes. En pantallas anchas la barra de capas va al centro. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-2 md:p-5 xl:block">
+          <div className="order-2 md:order-none xl:absolute xl:top-5 xl:left-6">
+            {(!site || window.matchMedia('(min-width: 768px)').matches) && <StudyCard />}
           </div>
-
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 p-2 sm:p-3">
-            <div className="flex justify-end"><Legend /></div>
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <ContextSwitcher />
-              <CompareTray />
-            </div>
+          <div className="order-1 flex md:order-none xl:absolute xl:top-5 xl:left-1/2 xl:-translate-x-1/2">
+            <LayerBar />
           </div>
         </div>
 
-        {/* Panel de trabajo: el "qué" en texto y números. */}
-        <div className="min-h-0 flex-1 overflow-y-auto border-ink-700 bg-ink-950 lg:order-1 lg:w-[400px] lg:flex-none lg:border-r">
-          <WorkPanel />
+        {/* Leyenda al centro cuando cabe; si no, encima de las fuentes. */}
+        <div className="pointer-events-none absolute right-3 bottom-[70px] z-10 hidden w-[400px] md:block min-[1440px]:right-auto min-[1440px]:bottom-3 min-[1440px]:left-1/2 min-[1440px]:w-auto min-[1440px]:max-w-[640px] min-[1440px]:-translate-x-1/2">
+          <Legend />
         </div>
+        <div className="pointer-events-none absolute right-3 bottom-3 z-10 hidden w-[400px] md:block min-[1440px]:w-[380px]">
+          <ProvenanceBar />
+        </div>
+        {/* En móvil la atribución de OSM sigue visible aunque la barra no quepa. */}
+        <p className="pointer-events-none absolute right-2 bottom-1 z-10 text-[10.5px] text-ink-3 md:hidden">
+          © OpenStreetMap contributors · Copernicus EMS
+        </p>
 
-        {/* Detalle: aparece solo cuando hay una decisión sobre la mesa. */}
-        {site && (
-          <div className="fixed inset-0 z-40 lg:static lg:z-auto lg:order-3 lg:w-[420px] lg:shrink-0">
-            <OpportunityDetail site={site} opp={oppBySite.get(site.site_id)} />
-          </div>
-        )}
-      </div>
+        {site && !panel && <PlaceCard site={site} />}
+        {site && panel === 'evidencia' && <EvidencePanel site={site} />}
+        {site && panel === 'entorno' && <EntornoPanel site={site} />}
+        {site && panel === 'intervenciones' && <InterventionsPanel site={site} />}
+        {site && panel === 'verificacion' && <VerificationPanel site={site} />}
+      </main>
+
+      {overlay === 'fuentes' && <SourcesDialog />}
+      {overlay === 'ayuda' && <HelpDialog />}
+      {overlay === 'guardadas' && <SavedDialog />}
     </div>
   );
 }

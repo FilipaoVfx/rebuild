@@ -109,75 +109,69 @@ justo lo que ADR-17 prohíbe.
 ## El visor
 
 El visor es la superficie principal del producto, junto a la API y al paquete de
-evidencia ([ADR-21](docs/adr/ADR-21-el-visor-como-superficie-principal.md), que
-deroga el recorte de pantallas de [ADR-15](docs/adr/ADR-15-sin-frontend-generico.md)).
-Cinco vistas, una pregunta cada una; la primera es la que abre
-([ADR-22](docs/adr/ADR-22-territorio-como-vista-de-entrada.md)). La vista
-Portafolio se retiró ([ADR-23](docs/adr/ADR-23-menos-portafolio-mas-explicacion.md));
-el optimizador sigue en la API y en Escenarios:
+evidencia ([ADR-21](docs/adr/ADR-21-el-visor-como-superficie-principal.md)). Desde
+[ADR-27](docs/adr/ADR-27-el-visor-es-un-espacio-de-analisis-sobre-el-mapa.md) es
+**RECOVERY, un espacio de análisis sobre el mapa**: el mapa ocupa la pantalla y
+todo lo demás flota sobre él. La tarjeta del sector de estudio dice desde el
+primer momento que la cobertura es parcial; la barra de capas cambia la manera de
+mirar el mismo lugar (Territorio, Daño, Población, Espacio público,
+Equipamientos); el buscador encuentra barrios, comunas, sitios y lugares de
+referencia.
 
-| Vista | Pregunta |
+Al tocar un sitio aparece su tarjeta, unida al pin por una línea: evidencia,
+entorno, población y normativa, con lo que hay y lo que falta. El analista elige
+por dónde seguir:
+
+| Camino | Pregunta |
 |---|---|
-| **Territorio** | **¿Dónde estamos?** — Colombia › Risaralda › Pereira, el sector que cubre el visor y por qué, el sismo, las comunas, los ríos, la imagen satelital antes y después |
-| Situación | ¿Qué está pasando en el territorio? |
-| Oportunidades | ¿Dónde podemos actuar, y por qué ahí? |
-| Escenarios | ¿Qué cambia si cambian las prioridades? |
-| Evidencia | ¿En qué nos estamos basando, y qué no sabemos? |
+| Examinar evidencia | ¿Qué se ve aquí, cómo se observó y qué no dice esa observación? |
+| Explorar el entorno | ¿Qué hay a una caminata: espacio público, equipamientos, población? |
+| Ver posibles intervenciones | ¿Qué aportaría más a este lugar? Dos hipótesis lado a lado |
+| Preparar verificación | ¿Qué debemos comprobar en la visita? Lista, pregunta y ficha imprimible |
 
-El mapa tiene siete contextos —territorio, situación, daño, necesidad, déficit,
-acceso, oportunidades— y cada uno enciende **solo** lo que responde a su
-pregunta, partiendo de todo apagado. No hay basemap de terceros: la cartografía
-base de calles es un extracto PMTiles de OpenStreetMap (3,9 MB, z0–15) que el
-sitio sirve él mismo, con la fecha de réplica de OSM en su procedencia; el
-estilo (Protomaps), las fuentes (Noto Sans, OFL) y los sprites también viven en
-el repositorio. Tres **tipos de mapa** en un control: *Calles* (OSM, claro),
-*Oscuro* (OSM, oscuro) y *Datos* (fondo negro y solo las capas versionadas del
-pipeline). En ningún caso llega un byte de un servidor de terceros en tiempo de
-ejecución.
+Las intervenciones van al final y como enlace discreto: una hipótesis del modelo
+no es una instrucción para construir. Las comparaciones guardadas y los
+borradores de verificación viven solo en el navegador del analista. La URL lleva
+el sitio, el panel y la capa, así que un lugar se puede enviar.
+
+No hay basemap de terceros: la cartografía base es un extracto PMTiles de
+OpenStreetMap (3,9 MB, z0–15) que el sitio sirve él mismo, con la fecha de
+réplica de OSM en su procedencia, dibujado con el estilo de Protomaps
+recoloreado al papel de RECOVERY. Estilo, fuentes, sprites y tipografías viven
+en el repositorio o entran al bundle desde npm.
 
 ### La ciudad se llama por su nombre
 
-Un puntaje sin lugar no dice nada. Desde ADR-22 el mapa lleva **comunas,
-barrios, calles con jerarquía y nombre, ríos y quebradas y unos 160 hitos**
-(Alcaldía, Gobernación, Parque El Lago, Hospital San Jorge, Terminal de
-Transportes, UTP…), todos de OpenStreetMap y tal como OSM los escribe, más
-los equipamientos y el espacio público que la Alcaldía de Pereira publica con
-licencia declarada (`pereira_sig`). Cada sitio se presenta como
+Un puntaje sin lugar no dice nada. El mapa lleva **comunas, barrios, calles con
+nombre, ríos y quebradas**, y el buscador unos 160 lugares de referencia
+(Alcaldía, Parque El Lago, Hospital San Jorge, UTP…), todos de OpenStreetMap y
+tal como OSM los escribe, más los equipamientos y el espacio público que la
+Alcaldía de Pereira publica con licencia declarada (`pereira_sig`). Cada sitio
+se presenta por su barrio, su comuna y su esquina, a nivel de cuadra y nunca de
+predio (SRS §6). Lo que OSM no tiene se dice: "sin barrio en OSM".
 
-> Barrio Corocito · Comuna Villavicencio · Carrera 12 con Calle 7 · a 30 m de Parque Corocito
+Las vistas Sentinel antes/después se muestran recortadas alrededor del sitio,
+siempre con la fecha de cada escena y el texto de limitación al lado (ADR-19).
+Las dos ortofotos de Pereira y el POT de IDE AMCO no se publican mientras su
+licencia no esté declarada (`db/terms/`, ADR-26): la tarjeta dice «POT sin dato
+publicable».
 
-a nivel de cuadra, nunca de predio (SRS §6). Lo que OSM no tiene se dice —
-"barrio sin fuente"— y se cuenta en la alerta `PLACE_COVERAGE`. Los nombres
-derivados de OSM viven en `rebuild_osm_derived.site_place`, no en `core`: son
-ODbL y el aislamiento por esquema de `fuentes.md` §8 sigue en pie.
+Reglas que gobiernan lo que la interfaz puede afirmar:
 
-Las cuatro vistas Sentinel antes/después se comparan con una cortina, siempre
-con la fecha de cada escena y el texto de limitación al lado (ADR-19). Hay dos
-ortofotos de Pereira —la del IGAC a 1:1.000 y la municipal del **14 de agosto de
-2026**, cuatro días después del sismo— y ninguna se publica todavía: la primera
-tiene licencia CC BY 4.0 (Res. IGAC 616/2020) condicionada a una titularidad
-sin confirmar, la segunda no declara términos. El adaptador existe, descarga al
-sandbox y el visor muestra el control deshabilitado con la razón
-(`db/terms/igac_ortofoto_20260918.txt`, `db/terms/pereira_ortofoto_post_20260918.txt`).
+- **Lo que falta se dice.** Un dato ausente se raya y se nombra, nunca se pinta
+  como cero. En la comparación, las fotos y notas de campo aparecen como no
+  disponibles.
+- **Fuera del área de estudio el mapa se vela.** Allí no hay evidencia, que no
+  es lo mismo que no haya daño.
+- **Un alcance degenerado no se presenta como alcance.** Si la captación a 10
+  minutos mide menos de 5 ha (10 de 115 sitios), la tarjeta dice «alcance no
+  confiable».
+- **El modelo ordena hipótesis; no decide obras.** La idoneidad y su
+  descomposición exacta viven en «Por qué el sistema la propone», donde se
+  piden.
 
-Tres reglas gobiernan lo que la interfaz puede afirmar:
-
-- **`UNKNOWN` tiene color propio**, ni verde ni rojo, y las condiciones sin
-  fuente se cuentan en cada ficha. Un sitio sin dato para un eje se pinta gris
-  neutro, nunca en un extremo de la rampa.
-- **Un eje cubierto puede no ordenar nada, y el visor lo dice.**
-  `pedestrian_accessibility` vale 1,0 en 112 de 115 sitios: cobertura del 100 %
-  y cero capacidad de separar. El visor mide la discriminación del eje activo y
-  cuando no ordena lo declara, además de no estirar la rampa para no fabricar
-  contraste a partir de ruido.
-- **El puntaje ordena, pero no titula.** Cada tarjeta lleva el titular del
-  problema; la idoneidad y la descomposición exacta viven donde se piden.
-- **Lo que se ve por defecto es lo que el modelo distingue con claridad.**
-  Oportunidades abre con idoneidad ≥ 64 (34 de 105) y un control para bajar el
-  umbral hasta ver todas; las demás siguen en el mapa, atenuadas.
-- **El lateral explica el contexto activo.** Cada opción de la barra inferior
-  tiene su panel: qué variables usa, cómo se calculan, con qué fuente y hasta
-  dónde llegan (ADR-23).
+El optimizador por presupuesto y la lista ordenada de oportunidades salieron de
+la interfaz con ADR-27; la API y el paquete estático los siguen sirviendo.
 
 Construido con React, TypeScript, Tailwind, MapLibre GL y deck.gl. Las
 dependencias entran al bundle en tiempo de construcción, así que el sitio
@@ -224,6 +218,10 @@ cd apps/viewer && npm ci && npm run build
 | [ADR-21](docs/adr/ADR-21-el-visor-como-superficie-principal.md) | El visor pasa a ser la superficie principal, y se reescribe |
 | [ADR-22](docs/adr/ADR-22-territorio-como-vista-de-entrada.md) | El territorio es la vista de entrada, y cada dato dice dónde está |
 | [ADR-23](docs/adr/ADR-23-menos-portafolio-mas-explicacion.md) | Se retira la vista Portafolio; idoneidad mínima 64 por defecto; el lateral explica el contexto activo |
+| [ADR-24](docs/adr/ADR-24-las-fotos-de-campo-son-evidencia-visual.md) | Las fotos de campo son evidencia visual, y su enlace al sitio se declara |
+| [ADR-25](docs/adr/ADR-25-la-ontologia-es-un-artefacto-declarado.md) | La ontología es un artefacto declarado, no una convención |
+| [ADR-26](docs/adr/ADR-26-el-pot-se-lee-de-ide-amco-con-criterio-declarado.md) | El POT se lee de IDE AMCO, con puerta de licencia y criterio declarado |
+| [ADR-27](docs/adr/ADR-27-el-visor-es-un-espacio-de-analisis-sobre-el-mapa.md) | El visor es un espacio de análisis sobre el mapa (RECOVERY) |
 
 ## Principios que gobiernan el diseño
 
@@ -240,7 +238,7 @@ cd apps/viewer && npm ci && npm run build
 ```
 src/uri/          contracts · ingestion · features · constraints · scoring
                   optimizer · reporting · api   (fronteras forzadas por CI)
-apps/viewer/      visor de decisión (React + MapLibre + deck.gl): cinco vistas
+apps/viewer/      RECOVERY, el espacio de análisis sobre el mapa (React + MapLibre + deck.gl)
 db/migrations/    rebuild_core · rebuild_analytics · rebuild_osm_raw · rebuild_osm_derived
 scripts/          dev_db · migrate · run_pipeline · serve · build_static · checks
 docs/             producto (PRD/SRS/ARD) · planificación · ADR

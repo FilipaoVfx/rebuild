@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """Verificacion del visor en un navegador real.
 
-El validador de paleta comprueba color, no geometria, y las pruebas de Python
-no abren una pagina. Esto ejerce el flujo completo y captura pantallas para
-poder mirarlas.
+Recorre el flujo del analista de la interfaz RECOVERY (ADR-27): ubicar un
+lugar, examinar su evidencia, explorar su entorno, comparar dos hipotesis y
+preparar la verificacion. En cada paso comprueba lo que la interfaz no puede
+perder aunque cambie el diseño: que diga que la cobertura es parcial, que la
+evidencia no esta validada en campo, que el POT no tiene dato publicable, que
+lo que falta se diga en vez de pintarse como cero, y que la procedencia siga
+en pantalla.
 
-Acepta una URL para poder verificar tanto el visor servido por la API como el
-paquete estatico publicado.
-
-Los selectores usan `data-uri`, no clases de Tailwind: una clase cambia cuando
-alguien ajusta el diseño y la comprobacion empezaria a fallar por algo que no
-es un fallo.
+Acepta una URL para verificar tanto el visor servido por la API como el
+paquete estatico publicado. Los selectores usan `data-uri`, no clases: una
+clase cambia cuando alguien ajusta el diseño y la comprobacion fallaria por
+algo que no es un fallo.
 """
 
 from __future__ import annotations
@@ -23,41 +25,33 @@ from playwright.async_api import async_playwright
 
 CHROMIUM = os.environ.get("URI_CHROMIUM", "/opt/pw-browsers/chromium")
 
-#: Contextos del mapa (ADR-20, ADR-21, ADR-22). Sin "riesgo": la capa del SGC
-#: se retiro por licencia (ADR-18) y un contexto que no enciende nada es una
-#: promesa vacia. TERRITORIO es orientacion: nombres, sin coropleta.
-CONTEXTS = (
-    "TERRITORIO",
-    "SITUACION",
-    "DANO",
-    "NECESIDAD",
-    "DEFICIT",
-    "ACCESO",
-    "OPORTUNIDADES",
-)
+#: La barra de capas del diseño: cinco maneras de mirar el mismo lugar.
+LAYERS = ("territorio", "dano", "poblacion", "espacio", "equipamientos")
 
-#: Fuentes retiradas. No pueden quedar anunciadas en ningun sitio: un credito a
-#: quien no aporto dato y un control que no enciende nada son la misma clase de
-#: mentira pequeña.
+#: Fuentes retiradas. No pueden quedar anunciadas: un credito a quien no aporto
+#: dato es una mentira pequeña (ADR-18).
 RETIRED = ("SERTIT", "SGC", "Servicio Geologico", "Servicio Geológico")
 
-#: Sin "portafolio": la vista se retiro (ADR-23); el optimizador sigue en la API.
-VIEWS = ("territorio", "situacion", "oportunidades", "escenarios", "evidencia")
+#: Sitios de prueba con propiedades conocidas en los datos publicados.
+COROCITO = "site_0028"  # barrio con 3 sitios; captacion degenerada (1.680 m²)
+EXCLUDED = "site_0009"  # excluido por area minima: sin hipotesis que comparar
+
+ARGS = [
+    "--disable-features=Translate,OptimizationHints,AutofillServerCommunication",
+    "--disable-background-networking",
+    "--no-first-run",
+]
+
+
+async def text(page, selector: str) -> str:
+    return " ".join((await page.locator(selector).first.inner_text()).split())
 
 
 async def main(base: str, prefix: str) -> int:
+    base = base.split("#")[0]
     async with async_playwright() as playwright:
-        # Chromium contacta servicios de Google en segundo plano; tras un proxy
-        # esas conexiones cuelgan y "networkidle" nunca llega.
-        browser = await playwright.chromium.launch(
-            executable_path=CHROMIUM,
-            args=[
-                "--disable-features=Translate,OptimizationHints,AutofillServerCommunication",
-                "--disable-background-networking",
-                "--no-first-run",
-            ],
-        )
-        page = await browser.new_page(viewport={"width": 1680, "height": 1000})
+        browser = await playwright.chromium.launch(executable_path=CHROMIUM, args=ARGS)
+        page = await browser.new_page(viewport={"width": 1536, "height": 1000})
         errors: list[str] = []
         page.on(
             "console",
@@ -67,307 +61,199 @@ async def main(base: str, prefix: str) -> int:
 
         await page.goto(base, wait_until="domcontentloaded")
 
-        # El mapa es la superficie primaria y arranca visible.
+        # ── El mapa es la superficie ─────────────────────────────────────
         await page.wait_for_selector('[data-uri="map"] canvas', timeout=45000)
-        await page.wait_for_timeout(6000)
-        drew = await page.evaluate(
-            "() => { const c = document.querySelector('[data-uri=\"map\"] canvas');"
-            " return !!c && c.width > 0; }"
-        )
-        if not drew:
+        await page.wait_for_timeout(4000)
+        if not await page.evaluate(
+            "() => [...document.querySelectorAll('[data-uri=\"map\"] canvas')]"
+            ".some(c => c.width > 0)"
+        ):
             errors.append("el lienzo del mapa no tiene ancho")
 
-        # La procedencia viaja en el cromo, no en una pestaña (ADR-21).
-        prov = await page.locator('[data-uri="provenance"]').inner_text()
-        for needed in ("Copernicus", "OpenStreetMap", "data v"):
+        # La cobertura parcial se dice antes de mirar nada.
+        estudio = (await text(page, '[data-uri="study-card"]')).lower()
+        print("sector de estudio:", estudio[:120])
+        if "cobertura parcial" not in estudio:
+            errors.append("la tarjeta del sector no dice que la cobertura es parcial")
+        if "115 sitios" not in estudio:
+            errors.append("la tarjeta del sector no cuenta los sitios")
+
+        # La procedencia viaja en pantalla y sale de los datos.
+        prov = await text(page, '[data-uri="provenance"]')
+        print("procedencia:", prov[:160])
+        for needed in ("Copernicus", "OpenStreetMap", "datos n.º"):
             if needed.lower() not in prov.lower():
                 errors.append(f"la barra de procedencia no nombra '{needed}'")
-        print("procedencia:", " ".join(prov.split())[:160])
+        for gone in RETIRED:
+            if gone.lower() in prov.lower():
+                errors.append(f"la procedencia nombra a '{gone}', que no aporta dato")
 
-        # ── Territorio: donde estamos, antes de que pasa (ADR-22) ────────
-        #
-        # La vista por defecto situa: ciudad, evento, comunas, imagen. Si el
-        # visor vuelve a abrir en un panel de cifras, el lugar se perdio.
-        activa = await page.locator('[data-uri="nav"][data-active="true"]').get_attribute(
-            "data-view"
-        )
-        if activa != "territorio":
-            errors.append(f"la vista por defecto es '{activa}', no 'territorio'")
-        ciudad = await page.locator('[data-uri="city-line"]').inner_text()
-        if "pereira" not in ciudad.lower():
-            errors.append("el cromo no dice en que ciudad estamos")
-        if not await page.locator('[data-uri="locator"] svg').count():
-            errors.append("el localizador (Colombia > Risaralda > Pereira) no se dibujo")
-        etiquetas = await page.evaluate("() => window.__uriLabels && window.__uriLabels()")
-        print("etiquetas:", etiquetas)
-        if not etiquetas or not etiquetas.get("comunas"):
-            errors.append("el mapa no etiqueta ninguna comuna")
-        if not etiquetas or not etiquetas.get("landmarks"):
-            errors.append("el mapa no etiqueta ningun hito")
-        comunas = await page.locator('[data-uri="comuna"]').count()
-        print("comunas listadas:", comunas)
-        if not comunas:
-            errors.append("Territorio no lista comunas")
-        else:
-            antes = await page.evaluate("() => window.__uriCenter && window.__uriCenter()")
-            await page.locator('[data-uri="comuna"]').first.click()
-            await page.wait_for_timeout(2000)
-            despues = await page.evaluate("() => window.__uriCenter && window.__uriCenter()")
-            if antes == despues:
-                errors.append("elegir una comuna no encuadra el mapa")
-            await page.locator('[data-uri="comuna"]').first.click()
-            await page.wait_for_timeout(1200)
-        await page.screenshot(path=f"/tmp/{prefix}_territorio.png")
-
-        # La imagen nunca va sola: fecha, razon y limitacion al lado (ADR-19).
-        sentinel = page.locator('[data-uri="imagery-toggle"]').first
-        if await sentinel.locator("input").is_enabled():
-            await sentinel.click()
-            await page.wait_for_timeout(3500)
-            if not await page.locator('[data-uri="swipe"]').count():
-                errors.append("la cortina Sentinel no aparece al activar la imagen")
-            leyenda_img = (
-                await page.locator('[data-uri="imagery-caption"]').first.inner_text()
-            ).lower()
-            for needed in ("sentinel", "no dano", "2026"):
-                if needed not in leyenda_img.replace("ñ", "n"):
-                    errors.append(f"la leyenda de la imagen no dice '{needed}'")
-            await page.screenshot(path=f"/tmp/{prefix}_sentinel.png")
-            await sentinel.click()
-            await page.wait_for_timeout(800)
-        else:
-            print("sin vistas Sentinel versionadas en este despliegue: se omite la cortina")
-
-        # Las ortofotos sin licencia verificada aparecen, deshabilitadas y con
-        # la razon: un control que desaparece es una fuente que nadie audita.
-        ortos = page.locator('[data-uri="imagery-toggle"]', has_text="Ortofoto")
-        for i in range(await ortos.count()):
-            toggle = ortos.nth(i)
-            if await toggle.locator("input").is_enabled():
-                continue
-            texto = (await toggle.inner_text()).lower()
-            if "no se publica" not in texto:
-                errors.append("una ortofoto deshabilitada no dice por que")
-
-        # Tipo de mapa (ADR-22 §8): la cartografia base de OSM servida por
-        # nosotros es la vista por defecto; el mapa de solo datos sigue ahi.
-        tipos = await page.locator('[data-uri="basemap"]').count()
-        if tipos != 3:
-            errors.append(f"hay {tipos} tipos de mapa y se esperaban 3")
-        base = await page.locator('[data-uri="basemap"][data-active="true"]').get_attribute(
-            "data-basemap"
-        )
-        print("tipo de mapa por defecto:", base)
-        if base not in ("calles", "datos"):
-            errors.append(f"tipo de mapa por defecto inesperado: {base}")
-        await page.locator('[data-uri="basemap"][data-basemap="datos"]').click()
-        await page.wait_for_timeout(2500)
-        await page.screenshot(path=f"/tmp/{prefix}_datos.png")
-        await page.locator('[data-uri="basemap"][data-basemap="calles"]').click()
-        await page.wait_for_timeout(2500)
-
-        await page.locator('[data-uri="territory-cta"]').click()
-        await page.wait_for_timeout(1500)
-        activa = await page.locator('[data-uri="nav"][data-active="true"]').get_attribute(
-            "data-view"
-        )
-        if activa != "situacion":
-            errors.append("el enlace de Territorio no lleva a Situacion")
-        await page.screenshot(path=f"/tmp/{prefix}_situacion.png")
-
-        # ── Contextos ────────────────────────────────────────────────────
-        #
-        # Uno a la vez y partiendo de todo apagado. Se recorren todos porque un
-        # contexto que no pinta nada solo se nota mirandolo.
-        present = await page.locator('[data-uri="context"]').count()
-        if present != len(CONTEXTS):
-            errors.append(f"hay {present} contextos y se esperaban {len(CONTEXTS)}")
-
-        for key in CONTEXTS:
-            boton = page.locator(f'[data-uri="context"][data-context="{key}"]')
+        # ── Capas: una a la vez, cada una con su leyenda ────────────────
+        present = await page.locator('[data-uri="layer"]').count()
+        if present != len(LAYERS):
+            errors.append(f"hay {present} capas y se esperaban {len(LAYERS)}")
+        for key in LAYERS:
+            boton = page.locator(f'[data-uri="layer"][data-layer="{key}"]')
             if not await boton.count():
-                errors.append(f"falta el contexto '{key}'")
+                errors.append(f"falta la capa '{key}'")
                 continue
             await boton.click()
-            await page.wait_for_timeout(2500)
-            leyenda = await page.locator('[data-uri="legend"]').inner_text()
-            if not leyenda.strip():
-                errors.append(f"el contexto '{key}' no describe su leyenda")
-            # El texto lateral sigue al contexto (ADR-23): cada opcion de la
-            # barra inferior explica sus variables. Territorio conserva su
-            # propio "donde estamos".
-            if key == "TERRITORIO":
-                donde = await page.locator('[data-uri="where-are-we"]').count()
-                intro_t = await page.locator(
-                    '[data-uri="context-intro"][data-context="TERRITORIO"]'
-                ).count()
-                if not donde and not intro_t:
-                    errors.append("con el contexto TERRITORIO el lateral no dice donde estamos")
-            else:
-                intro = page.locator(f'[data-uri="context-intro"][data-context="{key}"]')
-                if not await intro.count():
-                    errors.append(f"el lateral no explica el contexto '{key}'")
-                else:
-                    texto = (await intro.inner_text()).lower()
-                    if "fuente:" not in texto or "límite" not in texto and "limite" not in texto:
-                        errors.append(f"la explicacion de '{key}' no cita fuentes ni limites")
-        await page.screenshot(path=f"/tmp/{prefix}_contextos.png")
+            await page.wait_for_timeout(1500)
+            if await boton.get_attribute("data-active") != "true":
+                errors.append(f"la capa '{key}' no queda activa al elegirla")
+            leyenda = (await text(page, '[data-uri="legend"]')).lower()
+            esperado = {
+                "territorio": "sitio con evidencia",
+                "dano": "destruido",
+                "poblacion": "estimación",
+                "espacio": "espacio público",
+                "equipamientos": "equipamiento",
+            }[key]
+            if esperado not in leyenda:
+                errors.append(f"la leyenda de '{key}' no dice '{esperado}'")
+            await page.screenshot(path=f"/tmp/{prefix}_capa_{key}.png")
+        await page.locator('[data-uri="layer"][data-layer="territorio"]').click()
 
-        # Un eje cubierto puede no ordenar nada, y el visor tiene que decirlo
-        # (ADR-21, regla 3). `pedestrian_accessibility` vale 1,0 en 112 de 115
-        # sitios: si esta advertencia desaparece, el color empezo a mentir.
-        await page.locator('[data-uri="context"][data-context="ACCESO"]').click()
-        await page.wait_for_timeout(2000)
-        aviso = page.locator('[data-uri="flat-axis"]')
-        if await aviso.count():
-            print("aviso de eje plano:", " ".join((await aviso.inner_text()).split())[:120])
-        else:
+        # ── Ubicar: buscar un barrio abre su tarjeta ─────────────────────
+        await page.get_by_placeholder("Buscar lugar o sitio").fill("corocito")
+        await page.wait_for_selector('#search-results [role="option"]', timeout=15000)
+        await page.keyboard.press("Enter")
+        await page.wait_for_selector('[data-uri="place-card"]', timeout=15000)
+        await page.wait_for_timeout(1800)
+        tarjeta = await text(page, '[data-uri="place-card"]')
+        print("tarjeta:", tarjeta[:200])
+        if "Corocito" not in tarjeta:
+            errors.append("buscar 'corocito' no abre la tarjeta de Corocito")
+        filas = await page.locator('[data-uri="place-card"] [data-uri="place-row"]').count()
+        if filas != 4:
+            errors.append(f"la tarjeta tiene {filas} filas y el diseño pide 4")
+        for needed in (
+            "Sin validar en campo",
+            "POT sin dato publicable",
+            "Ver posibles intervenciones",
+        ):
+            if needed not in tarjeta:
+                errors.append(f"la tarjeta del lugar no dice '{needed}'")
+        if "sitio=" not in page.url:
+            errors.append("la URL no guarda el sitio seleccionado")
+        if not await page.locator('[data-uri="leader"]').count():
+            errors.append("no se dibuja la linea entre el pin y la tarjeta")
+        await page.screenshot(path=f"/tmp/{prefix}_lugar.png")
+
+        # Una captacion degenerada no se presenta como alcance.
+        await page.goto(f"{base}#sitio={COROCITO}", wait_until="domcontentloaded")
+        await page.wait_for_selector('[data-uri="place-card"]', timeout=30000)
+        await page.wait_for_timeout(1500)
+        if "no confiable" not in (await text(page, '[data-uri="place-card"]')).lower():
+            errors.append(f"{COROCITO} tiene una captacion de 1.680 m² y la tarjeta no lo advierte")
+
+        # ── Examinar evidencia ───────────────────────────────────────────
+        await page.get_by_role("button", name="Examinar evidencia").click()
+        await page.wait_for_selector('[data-uri="panel"][data-panel="evidencia"]', timeout=15000)
+        await page.wait_for_timeout(1500)
+        evid = (await text(page, '[data-uri="panel"][data-panel="evidencia"]')).lower()
+        for needed in ("foto-interpretación", "sin validar en campo", "no dice", "copernicus"):
+            if needed not in evid:
+                errors.append(f"el panel de evidencia no dice '{needed}'")
+        if "sintétic" in evid:
             errors.append(
-                "el contexto ACCESO no advierte que el eje no ordena, "
-                "y en el AOI actual no discrimina"
+                "el panel de evidencia repite la etiqueta 'sintético', retirada por ADR-17"
             )
-
-        # Ninguna fuente retirada puede quedar anunciada en la atribucion.
-        atribucion = await page.locator('[data-uri="attribution"]').inner_text()
-        for gone in RETIRED:
-            if gone.lower() in atribucion.lower():
-                errors.append(f"la atribucion nombra a '{gone}', que no aporta dato")
-        print("atribucion:", atribucion.strip()[:160])
-
-        # ── Oportunidad: de la lista al detalle y a la descomposicion ────
-        await page.locator('[data-uri="nav"][data-view="oportunidades"]').click()
-        await page.wait_for_selector('[data-uri="opportunity-card"]', timeout=30000)
-        # La vista explica el metodo antes de listar resultados (ADR-22 §9), y
-        # lo dice como lo que es: multicriterio explicable, no aprendizaje
-        # automatico ni prediccion.
-        await page.locator('[data-uri="method-toggle"]').click()
-        await page.wait_for_timeout(500)
-        metodo = (await page.locator('[data-uri="method"]').inner_text()).lower()
-        for needed in ("multicriterio", "restricciones", "pesos", "no hay aprendizaje"):
-            if needed not in metodo:
-                errors.append(f"el panel de metodo no dice '{needed}'")
-        tarjetas = await page.locator('[data-uri="opportunity-card"]').count()
-        print("tarjetas de oportunidad (idoneidad >= 64):", tarjetas)
-        if not tarjetas:
-            errors.append("no se listo ninguna oportunidad")
-        # El umbral de idoneidad por defecto oculta parte de la lista; "Ver
-        # todas" la recupera entera (ADR-23).
-        umbral = await page.locator('[data-uri="suitability-range"]').input_value()
-        if umbral != "64":
-            errors.append(f"el umbral de idoneidad por defecto es {umbral}, no 64")
-        await page.locator('[data-uri="suitability-filter"] button:has-text("Ver todas")').click()
-        await page.wait_for_timeout(800)
-        todas = await page.locator('[data-uri="opportunity-card"]').count()
-        print("tarjetas con 'Ver todas':", todas)
-        if todas <= tarjetas:
-            errors.append("bajar el umbral de idoneidad no muestra mas oportunidades")
-        await page.locator('[data-uri="suitability-filter"] button:has-text("≥ 64")').click()
-        await page.wait_for_timeout(500)
-
-        # Una barra de 0 px no rompe nada y no se ve: hay que comprobarla.
-        barras = await page.evaluate(
-            """() => {
-                const fills = [...document.querySelectorAll('[data-uri="bar-fill"]')];
-                return {
-                    n: fills.length,
-                    widths: fills.slice(0, 8).map(e => +e.getBoundingClientRect().width.toFixed(1)),
-                };
-            }"""
+        crops = await page.locator('[data-uri="sentinel-crop"]').count()
+        print("recortes Sentinel:", crops)
+        if crops and crops != 2:
+            errors.append("las imagenes antes/despues no van en pareja")
+        activa = await page.locator('[data-uri="layer"][data-active="true"]').get_attribute(
+            "data-layer"
         )
-        print("barras inline:", barras)
-        if barras["n"] and not any(w > 0 for w in barras["widths"]):
-            errors.append("las barras inline se renderizan con ancho 0")
-
-        # Cada tarjeta dice donde, antes de que (ADR-22).
-        lugar_tarjeta = (await page.locator('[data-uri="card-place"]').first.inner_text()).lower()
-        if not any(k in lugar_tarjeta for k in ("barrio", "comuna", "sin fuente")):
-            errors.append("la tarjeta de oportunidad no dice en que barrio o comuna esta")
-
-        await page.locator('[data-uri="opportunity-card"]').first.click()
-        await page.wait_for_selector('[data-uri="detail"]', timeout=30000)
-
-        # La ficha abre con el lugar: barrio, comuna, esquina, hito — o "sin fuente".
-        lugar = (await page.locator('[data-uri="place-line"]').inner_text()).lower()
-        print("lugar de la ficha:", " ".join(lugar.split())[:120])
-        if not any(k in lugar for k in ("barrio", "comuna", "sin fuente")):
-            errors.append("la ficha no abre con el lugar del sitio")
-        migas = (await page.locator('[data-uri="breadcrumb"]').inner_text()).lower()
-        if "pereira" not in migas or "comuna" not in migas:
-            errors.append("las migas no leen Pereira > Comuna > Barrio > sitio")
-
-        # El titular explica; el puntaje solo ordena (ADR-20, regla 3).
-        # Se compara en minusculas: `innerText` aplica `text-transform`, asi que
-        # los titulos de seccion llegan en mayusculas.
-        detalle = (await page.locator('[data-uri="detail"]').inner_text()).lower()
-        for needed in ("problema", "viabilidad", "impacto", "evidencia"):
-            if needed not in detalle:
-                errors.append(f"la ficha no muestra la seccion '{needed}'")
-        # Las incognitas se cuentan, no se esconden.
-        if "sin fuente" not in detalle:
-            errors.append("la ficha no declara ninguna condicion sin fuente")
-        await page.screenshot(path=f"/tmp/{prefix}_detalle.png")
-
-        await page.locator('[data-uri="technical-toggle"]').click()
-        await page.wait_for_selector('[data-uri="decomposition"]', timeout=30000)
-        filas = await page.locator('[data-uri="decomposition"] tbody tr').count()
-        print("filas de la descomposicion:", filas)
-        if filas < 2:
-            errors.append("la descomposicion exacta no tiene filas")
-        await page.screenshot(path=f"/tmp/{prefix}_tecnica.png")
-
-        # La camara sigue al sitio seleccionado: exploracion progresiva.
-        centro_sitio = await page.evaluate("() => window.__uriCenter && window.__uriCenter()")
-        await page.locator('[data-uri="detail"] button:has-text("✕")').first.click()
-        await page.wait_for_timeout(2000)
-        centro_aoi = await page.evaluate("() => window.__uriCenter && window.__uriCenter()")
-        if centro_sitio and centro_aoi and centro_sitio == centro_aoi:
-            errors.append("la camara no volvio al AOI al cerrar la ficha")
-        print("la camara se movio al seleccionar:", centro_sitio != centro_aoi)
-
-        # ── Escenarios ───────────────────────────────────────────────────
-        await page.locator('[data-uri="nav"][data-view="escenarios"]').click()
-        await page.wait_for_timeout(1500)
-        escenarios = await page.locator("main, div").first.inner_text()
-        del escenarios
-        await page.screenshot(path=f"/tmp/{prefix}_escenarios.png")
-
-        # Relieve real del terreno, desde Territorio: deck.gl dibuja en su
-        # propio lienzo sobre el de MapLibre.
-        await page.locator('[data-uri="nav"][data-view="territorio"]').click()
-        await page.wait_for_timeout(1500)
-        relieve = page.locator('[data-uri="imagery-toggle"][data-layer="Relieve real del terreno"]')
-        if await relieve.count() and await relieve.locator("input").is_enabled():
-            await relieve.click()
-            await page.wait_for_timeout(4000)
-            lienzos = await page.evaluate(
-                "() => document.querySelectorAll('[data-uri=\"map\"] canvas').length"
-            )
-            print("lienzos tras activar el relieve:", lienzos)
-            if lienzos < 2:
-                errors.append("deck.gl no anadio su lienzo al mapa")
-            await relieve.click()
-            await page.wait_for_timeout(800)
-        await page.screenshot(path=f"/tmp/{prefix}_relieve.png")
-
-        # ── Evidencia ────────────────────────────────────────────────────
-        await page.locator('[data-uri="nav"][data-view="evidencia"]').click()
-        await page.wait_for_timeout(1500)
-        evidencia = await page.locator('[data-uri="nav"][data-view="evidencia"]').evaluate(
-            "() => document.body.innerText"
-        )
-        # La prohibicion de datos sinteticos y la puerta de licencia son las dos
-        # cosas que esta vista existe para decir (ADR-17, fuentes.md §6).
-        for needed in ("sintética", "licencia"):
-            if needed.lower() not in evidencia.lower():
-                errors.append(f"la vista de evidencia no menciona '{needed}'")
+        if activa != "dano":
+            errors.append("abrir la evidencia no enciende la capa de daño")
         await page.screenshot(path=f"/tmp/{prefix}_evidencia.png")
 
-        # Las seis vistas cargan sin error.
-        for view in VIEWS:
-            await page.locator(f'[data-uri="nav"][data-view="{view}"]').click()
-            await page.wait_for_timeout(900)
+        # ── Explorar el entorno ──────────────────────────────────────────
+        await page.get_by_role("button", name="Explorar el entorno").click()
+        await page.wait_for_selector('[data-uri="panel"][data-panel="entorno"]', timeout=15000)
+        await page.wait_for_timeout(2000)
+        entorno = (await text(page, '[data-uri="panel"][data-panel="entorno"]')).lower()
+        for needed in ("500 m", "sigper", "no prueba"):
+            if needed not in entorno:
+                errors.append(f"el panel de entorno no dice '{needed}'")
+        await page.screenshot(path=f"/tmp/{prefix}_entorno.png")
 
-        print("errores de consola:", errors or "ninguno")
+        # ── Comparar dos hipotesis ───────────────────────────────────────
+        await page.get_by_role("button", name="Ver posibles intervenciones").click()
+        await page.wait_for_selector(
+            '[data-uri="panel"][data-panel="intervenciones"]', timeout=15000
+        )
+        await page.wait_for_timeout(1000)
+        alts = await page.locator('[data-uri="alternative"]').count()
+        print("alternativas:", alts)
+        if alts != 2:
+            errors.append(f"la comparacion muestra {alts} alternativas y deberian ser 2")
+        comp = (await text(page, '[data-uri="panel"][data-panel="intervenciones"]')).lower()
+        for needed in ("qué falta comprobar", "pendiente de validación", "estimación paramétrica"):
+            if needed not in comp:
+                errors.append(f"la comparacion no dice '{needed}'")
+        falsas = await page.locator(
+            '[data-uri="evidence-chip"][data-available="true"]', has_text="Fotos de campo"
+        ).count()
+        if falsas:
+            errors.append("la comparacion anuncia fotos de campo que no existen en esta version")
+        await page.screenshot(path=f"/tmp/{prefix}_comparacion.png")
+        await page.get_by_role("button", name="Guardar comparación").click()
+        await page.wait_for_timeout(400)
+        if "Guardadas" not in await page.locator("header").inner_text():
+            errors.append("la cabecera no ofrece 'Guardadas'")
+
+        # ── Preparar la verificacion ─────────────────────────────────────
+        await page.get_by_role("button", name="Preparar verificación").click()
+        await page.wait_for_selector('[data-uri="panel"][data-panel="verificacion"]', timeout=15000)
+        await page.wait_for_timeout(1500)
+        items = await page.locator('[data-uri="verify-item"]').count()
+        print("puntos de verificacion:", items)
+        if items < 5:
+            errors.append("la lista de verificacion tiene menos de 5 puntos")
+        if not await page.locator('[data-uri="verify-item"][data-item="pot"]').count():
+            errors.append("la verificacion no incluye la normativa POT")
+        await page.locator('[data-uri="verify-item"][data-item="estado"] input').check()
+        await page.screenshot(path=f"/tmp/{prefix}_verificacion.png")
+        await page.reload(wait_until="domcontentloaded")
+        await page.wait_for_selector('[data-uri="verify-item"][data-item="estado"]', timeout=30000)
+        if not await page.locator(
+            '[data-uri="verify-item"][data-item="estado"] input'
+        ).is_checked():
+            errors.append("el borrador de verificacion no sobrevive a recargar la pagina")
+
+        # Escape cierra el panel y vuelve a la tarjeta del lugar.
+        await page.keyboard.press("Escape")
+        await page.wait_for_timeout(600)
+        if await page.locator('[data-uri="panel"]').count():
+            errors.append("Escape no cierra el panel")
+
+        # ── Un sitio excluido no inventa hipotesis ───────────────────────
+        await page.goto(
+            f"{base}#sitio={EXCLUDED}&panel=intervenciones", wait_until="domcontentloaded"
+        )
+        await page.wait_for_selector(
+            '[data-uri="panel"][data-panel="intervenciones"]', timeout=30000
+        )
+        await page.wait_for_timeout(1200)
+        excl = (await text(page, '[data-uri="panel"][data-panel="intervenciones"]')).lower()
+        if "no propone" not in excl or "área" not in excl:
+            errors.append(f"{EXCLUDED} esta excluido y la comparacion no lo explica")
+
+        # ── Movil: tarjeta abajo, sin desborde lateral ───────────────────
+        movil = await browser.new_page(viewport={"width": 390, "height": 844})
+        movil.on("pageerror", lambda e: errors.append(f"pageerror (movil): {e}"))
+        await movil.goto(f"{base}#sitio={COROCITO}", wait_until="domcontentloaded")
+        await movil.wait_for_selector('[data-uri="place-card"]', timeout=30000)
+        await movil.wait_for_timeout(2500)
+        ancho = await movil.evaluate("() => [document.documentElement.scrollWidth, innerWidth]")
+        if ancho[0] > ancho[1]:
+            errors.append(f"en movil la pagina desborda: {ancho[0]} px sobre {ancho[1]}")
+        await movil.screenshot(path=f"/tmp/{prefix}_movil.png")
+
+        print("errores:", errors or "ninguno")
         await browser.close()
         return 1 if errors else 0
 

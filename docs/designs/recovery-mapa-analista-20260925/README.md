@@ -33,3 +33,7 @@ La imagen se generó con la herramienta integrada de imágenes. Tomó como refer
 La pregunta útil para una primera prueba con analistas es: «Al abrir Corocito, ¿puedes encontrar la evidencia, entender sus límites y escoger por dónde continuar sin que el sistema te empuje a una obra?»
 
 [Prompts de generación y corrección](PROMPT.md).
+
+## Implementación
+
+Implementado el 2026-09-25 como interfaz del visor: [ADR-27](../../adr/ADR-27-el-visor-es-un-espacio-de-analisis-sobre-el-mapa.md). La tarjeta del lugar, la mesa de comparación (variante B) y el cuaderno de verificación (variante C) usan solo la salida versionada del sistema; lo que el mockup dibujaba como ilustrativo quedó fuera o se muestra como no disponible.
