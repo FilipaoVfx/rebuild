@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { DAMAGE_LABEL, fecha, LICENSE_LABEL, n, pct } from '../lib/format';
+import { DAMAGE_LABEL, fecha, LICENSE_LABEL, n, pct, shown as accented } from '../lib/format';
 import { useStore } from '../state/store';
 import { Bar, Chip, Note, Panel, SectionTitle, Stat, StatusBadge } from '../components/ui';
 
@@ -53,15 +53,14 @@ export function EvidenceView() {
       <Panel className="p-4">
         <SectionTitle>Ninguna capa es sintética</SectionTitle>
         <p className="mt-2 text-[13px] leading-relaxed text-graphite-700">
-          Todo corre sobre fuentes reales, y no por convención: la base de datos lo impone con una
-          restricción sobre las
-          cinco tablas que podrían cargar contexto inventado. Una migración futura que intente
-          escribir una capa simulada falla al insertar.
+          Todo corre sobre fuentes reales, y no por costumbre: el sistema está hecho para rechazar
+          cualquier dato inventado. Si alguien intentara cargar una capa simulada, la carga fallaría
+          antes de llegar a este concepto.
         </p>
         <ul className="mt-3 divide-y divide-rule border-y border-rule text-[12.5px]">
           {(provenance.layers ?? []).map((l) => (
             <li key={l.source_id} title={l.attribution} className="flex items-baseline justify-between gap-3 py-1.5">
-              <span className="text-toner">{l.layer}</span>
+              <span className="text-toner">{accented(l.layer)}</span>
               <span className="shrink-0 text-graphite-500">
                 {l.is_synthetic ? 'sintético' : 'real'} · {LICENSE_LABEL[l.license_class] ?? l.license_class}
               </span>

@@ -136,7 +136,7 @@ export const CONTEXTS: ContextDef[] = [
     key: 'OPORTUNIDADES',
     label: 'Oportunidades',
     question: '¿Dónde podemos actuar, y con qué?',
-    unit: 'idoneidad del baseline por reglas (0–100)',
+    unit: 'idoneidad según reglas de partida (0–100)',
     legend: ['Menor', 'Mayor'],
     value: (_s, o) => (o ? clamp01(o.suitability / 100) : null),
     readout: (_s, o) =>

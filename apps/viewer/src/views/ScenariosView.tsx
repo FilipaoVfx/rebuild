@@ -97,7 +97,7 @@ export function ScenariosView() {
           <Panel className="p-4">
             <SectionTitle>Cuánto pesa cada criterio</SectionTitle>
             <p className="mt-1.5 text-[11px] leading-relaxed text-graphite-500">
-              Los pesos son política urbana, no un hiperparámetro. Estos valores son provisionales
+              Los pesos son política urbana, no un ajuste técnico. Estos valores son provisionales
               hasta que exista un dueño institucional que los fije.
             </p>
             <div className="mt-3 flex flex-col gap-2.5">

@@ -11,7 +11,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { assetUrl, sentinelImageUrl, type SentinelScene } from '../data';
 import { REDUNDANT_ON_BASEMAP, isBasemap, styleFor } from '../lib/basemap';
 import { contextByKey } from '../lib/contexts';
-import { fecha } from '../lib/format';
+import { fecha, shown } from '../lib/format';
 import {
   ADMIN_COLOR, BUILDING_FILL, BUILDING_FILL_TERRITORY, INTERVENTION_COLOR, LANDMARK_COLOR,
   RAMPS, ROAD_DEFAULT, ROAD_STYLE, WATER_COLOR, sample, type RGB, type RGBA,
@@ -956,7 +956,7 @@ export function MapCanvas() {
           setSwipe={setSwipe}
           pre={scenes.pre}
           post={scenes.post}
-          limitation={sentinel.limitation}
+          limitation={shown(sentinel.limitation)}
           attribution={sentinel.attribution}
         />
       )}
@@ -970,7 +970,7 @@ export function MapCanvas() {
       )}
 
       <div data-uri="attribution"
-           className="pointer-events-none absolute bottom-0 left-0 z-10 max-w-full truncate bg-sheet/85 px-2 py-1 text-left text-[9px] leading-tight text-graphite-500 sm:max-w-[calc(100%-272px)] sm:whitespace-normal">
+           className="pointer-events-none absolute bottom-0 left-0 z-10 max-w-[calc(100%-7rem)] truncate bg-sheet/85 px-2 py-1 text-left text-[9px] leading-tight text-graphite-500 sm:max-w-[calc(100%-272px)] sm:whitespace-normal">
         {attribution}
         {sentinelOn && sentinel ? ` · ${sentinel.attribution}` : ''}
         {terrain?.attribution && showTerrain ? ` · ${terrain.attribution}` : ''}

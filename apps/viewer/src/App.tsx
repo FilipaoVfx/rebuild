@@ -43,7 +43,7 @@ function Layout() {
             {/* Línea de marco: dentro está lo que el anexo afirma. */}
             <div className="relative h-full w-full overflow-hidden border border-toner">
               <MapCanvas />
-              <div className="pointer-events-none absolute right-2 bottom-7 z-20 hidden sm:block">
+              <div className="pointer-events-none absolute right-2 bottom-10 z-20 hidden sm:block">
                 <Rotulo />
               </div>
               {/* En móvil no cabe el rótulo: queda la clave de los dos signos que sostienen la tesis. */}

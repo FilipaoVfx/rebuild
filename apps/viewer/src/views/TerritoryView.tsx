@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { fecha, n, pct, dec, plainReason } from '../lib/format';
+import { fecha, n, pct, dec, plainReason, shown } from '../lib/format';
 import { useStore, type AnnexRef } from '../state/store';
 import type { GeoJSON, Territory } from '../types';
 import { ContextIntro } from '../components/ContextIntro';
@@ -201,7 +201,7 @@ export function TerritoryView() {
           />
         </div>
         {sentinel && (
-          <Note>{sentinel.limitation}</Note>
+          <Note>{shown(sentinel.limitation)}</Note>
         )}
       </Panel>
 

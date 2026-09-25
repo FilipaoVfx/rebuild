@@ -77,6 +77,13 @@ export const SITE_STATE_LABEL: Record<string, string> = {
   CANDIDATE: 'candidato', SHORTLISTED: 'preseleccionado', ENDORSED: 'respaldado',
 };
 
+/** Tildes que el paquete de datos trae sin poner. Se corrigen al mostrar, no en la fuente. */
+const ACCENTS: [RegExp, string][] = [
+  [/\bactivacion\b/g, 'activación'], [/\bretrodispersion\b/g, 'retrodispersión'],
+];
+export const shown = (t: string | null | undefined) =>
+  ACCENTS.reduce((acc, [re, to]) => acc.replace(re, to), t ?? '');
+
 /** Quita del texto de la fuente las referencias a documentos internos del proyecto. */
 export const plainReason = (r: string | null | undefined) => (r ?? "sin razón declarada").replace(/\s*\([^)]*\.md[^)]*\)/g, '').trim();
 
