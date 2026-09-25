@@ -1,0 +1,600 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-25T02:50:04+00:00",
+  "title": "Design System: Urban Recovery Intelligence — Visor",
+  "extensions": {
+    "colorMeta": {
+      "sheet": {
+        "role": "neutral",
+        "displayName": "Bond Sheet",
+        "canonical": "oklch(100.0% 0.000 90)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242424",
+          "#404040",
+          "#5d5d5d",
+          "#7d7d7d",
+          "#9e9e9e",
+          "#c4c4c4",
+          "#eeeeee"
+        ]
+      },
+      "sheet-2": {
+        "role": "neutral",
+        "displayName": "Sheet Inset",
+        "canonical": "oklch(97.0% 0.003 265)",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#232425",
+          "#3f4041",
+          "#5d5e5f",
+          "#7c7d7f",
+          "#9d9ea0",
+          "#c3c4c6",
+          "#edeef0"
+        ]
+      },
+      "sheet-3": {
+        "role": "neutral",
+        "displayName": "Bar Track",
+        "canonical": "oklch(93.7% 0.006 265)",
+        "tonalRamp": [
+          "#0a0b0e",
+          "#232427",
+          "#3e4043",
+          "#5c5e61",
+          "#7b7d81",
+          "#9c9ea2",
+          "#c2c4c8",
+          "#eceef2"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Hairline Rule",
+        "canonical": "oklch(90.6% 0.008 261)",
+        "tonalRamp": [
+          "#090b0e",
+          "#222428",
+          "#3d4044",
+          "#5b5e62",
+          "#7b7d82",
+          "#9c9ea3",
+          "#c1c4c9",
+          "#eceff4"
+        ]
+      },
+      "rule-2": {
+        "role": "neutral",
+        "displayName": "Working Rule",
+        "canonical": "oklch(82.8% 0.011 257)",
+        "tonalRamp": [
+          "#080b10",
+          "#21242a",
+          "#3c4046",
+          "#5a5e64",
+          "#797e84",
+          "#9a9fa5",
+          "#bfc4cb",
+          "#eaeff6"
+        ]
+      },
+      "toner": {
+        "role": "primary",
+        "displayName": "Toner Black",
+        "canonical": "oklch(20.9% 0.006 271)",
+        "tonalRamp": [
+          "#0a0b0e",
+          "#232427",
+          "#3e4043",
+          "#5c5d61",
+          "#7c7d81",
+          "#9d9ea2",
+          "#c2c4c8",
+          "#edeef3"
+        ]
+      },
+      "graphite-700": {
+        "role": "neutral",
+        "displayName": "Graphite 700",
+        "canonical": "oklch(33.2% 0.011 264)",
+        "tonalRamp": [
+          "#090b10",
+          "#21242a",
+          "#3d4046",
+          "#5a5e64",
+          "#7a7d84",
+          "#9b9ea6",
+          "#c0c4cc",
+          "#ebeff6"
+        ]
+      },
+      "graphite-600": {
+        "role": "neutral",
+        "displayName": "Graphite 600",
+        "canonical": "oklch(41.6% 0.014 264)",
+        "tonalRamp": [
+          "#080b11",
+          "#21242b",
+          "#3c4048",
+          "#5a5e66",
+          "#797d86",
+          "#9a9ea8",
+          "#bfc4ce",
+          "#eaeff8"
+        ]
+      },
+      "graphite-500": {
+        "role": "neutral",
+        "displayName": "Graphite 500",
+        "canonical": "oklch(49.1% 0.016 262)",
+        "tonalRamp": [
+          "#080b12",
+          "#20242c",
+          "#3b4048",
+          "#595e67",
+          "#787d87",
+          "#999fa8",
+          "#bfc4cf",
+          "#e9eff9"
+        ]
+      },
+      "graphite-400": {
+        "role": "neutral",
+        "displayName": "Graphite 400 (hatch line)",
+        "canonical": "oklch(59.5% 0.015 262)",
+        "tonalRamp": [
+          "#080b12",
+          "#20242b",
+          "#3b4048",
+          "#595e66",
+          "#787d86",
+          "#999fa8",
+          "#bfc4ce",
+          "#e9eff9"
+        ]
+      },
+      "stamp": {
+        "role": "secondary",
+        "displayName": "Stamp Violet",
+        "canonical": "oklch(44.6% 0.161 293)",
+        "tonalRamp": [
+          "#130037",
+          "#290e57",
+          "#442f78",
+          "#614e9a",
+          "#816ebe",
+          "#a28fe2",
+          "#c7b5ff",
+          "#f1e0ff"
+        ]
+      },
+      "ok": {
+        "role": "tertiary",
+        "displayName": "Printed Green",
+        "canonical": "oklch(47.1% 0.097 158)",
+        "tonalRamp": [
+          "#001500",
+          "#00310f",
+          "#004e2a",
+          "#216e48",
+          "#458f66",
+          "#67b187",
+          "#8dd8ac",
+          "#b7ffd5"
+        ]
+      },
+      "warn": {
+        "role": "tertiary",
+        "displayName": "Printed Amber",
+        "canonical": "oklch(49.4% 0.109 67)",
+        "tonalRamp": [
+          "#250000",
+          "#441200",
+          "#643000",
+          "#864f00",
+          "#a86f2c",
+          "#cc904f",
+          "#f4b675",
+          "#ffe19e"
+        ]
+      },
+      "bad": {
+        "role": "tertiary",
+        "displayName": "Printed Red",
+        "canonical": "oklch(48.1% 0.168 29)",
+        "tonalRamp": [
+          "#2d0000",
+          "#4f0000",
+          "#721d16",
+          "#953e34",
+          "#ba5f53",
+          "#df8073",
+          "#ffa697",
+          "#ffd0c0"
+        ]
+      },
+      "unknown": {
+        "role": "tertiary",
+        "displayName": "Unknown Grey",
+        "canonical": "oklch(54.4% 0.015 262)",
+        "tonalRamp": [
+          "#080b12",
+          "#20242c",
+          "#3b4048",
+          "#595e67",
+          "#787d87",
+          "#999fa8",
+          "#bfc4ce",
+          "#e9eff9"
+        ]
+      },
+      "mark": {
+        "role": "primary",
+        "displayName": "Selection Mark (alias of toner)",
+        "canonical": "oklch(20.9% 0.006 271)",
+        "tonalRamp": [
+          "#0a0b0e",
+          "#232427",
+          "#3e4043",
+          "#5c5d61",
+          "#7c7d81",
+          "#9d9ea2",
+          "#c2c4c8",
+          "#edeef3"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "letterhead": {
+        "displayName": "Letterhead",
+        "purpose": "Issuer name, section titles, annex and rótulo heads, stamp text. Expanded (font-stretch 122%) tracked capitals; the heading itself, never a kicker."
+      },
+      "document-title": {
+        "displayName": "Document title",
+        "purpose": "'Concepto técnico de caracterización'; 14px on mobile."
+      },
+      "consideration": {
+        "displayName": "Consideration",
+        "purpose": "The concept's numbered statements and context summaries (15px)."
+      },
+      "note": {
+        "displayName": "Note",
+        "purpose": "Footnote on any figure that is not a direct measurement; led by a 10px hairline dash."
+      },
+      "figure-lg": {
+        "displayName": "Figure large",
+        "purpose": "Headline Stat values."
+      },
+      "figure-md": {
+        "displayName": "Figure",
+        "purpose": "Default Stat values (19px small variant)."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Navigation, tabs, list rows, breadcrumbs (12.5–13px)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Stat labels, badges, metadata; 10–10.5px only inside the rótulo, legends and attribution."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Hashes and reproducibility blocks in the technical annex only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "map-instrument",
+        "value": "0 2px 10px -4px rgb(23 24 27 / .25)",
+        "purpose": "Rótulo and compare tray floating over the map (with a 1px toner border)."
+      },
+      {
+        "name": "map-control",
+        "value": "0 10px 15px -3px rgb(23 24 27 / .1), 0 4px 6px -4px rgb(23 24 27 / .1)",
+        "purpose": "Circular north indicator and swipe handle over the map."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(.16,1,.3,1)",
+        "purpose": "The shared easing for stamp, rule-draw and fade-up."
+      },
+      {
+        "name": "stamp-press",
+        "value": "0.42s ease-out-expo 0.25s, once",
+        "purpose": "The stamp presses once on load: scale 1.18→0.97→1 at −4°, blur clears."
+      },
+      {
+        "name": "rule-draw",
+        "value": "0.38s ease-out-expo, scaleX from left",
+        "purpose": "Active tab underline and a consideration's reference drawn in the annex."
+      },
+      {
+        "name": "fade-up",
+        "value": "0.22s ease-out-expo, translateY 4px",
+        "purpose": "Ficha and panels opening."
+      },
+      {
+        "name": "fade-in",
+        "value": "0.18s ease",
+        "purpose": "Technical view reveal."
+      },
+      {
+        "name": "map-transition",
+        "value": "320ms",
+        "purpose": "Coverage veil, hatch and AOI frame weight when a consideration is pointed."
+      },
+      {
+        "name": "bar-width",
+        "value": "300ms",
+        "purpose": "Bar fill width changes."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "all animation/transition durations → .01ms",
+        "purpose": "prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ],
+    "mapInks": {
+      "rampCurve": "6 stops, HSL lightness 91,80,67,53,40,28 with saturation 26,38,46,50,52,54; hue shifts across stops; no hue in 250–300°.",
+      "ramps": {
+        "TERRITORIO": [
+          "#e7e8e9",
+          "#c8cbd0",
+          "#a3aab3",
+          "#7b8593",
+          "#5b6471",
+          "#40464f"
+        ],
+        "SITUACION": [
+          "#e2e9ee",
+          "#b9d0df",
+          "#84b4d2",
+          "#4b99c3",
+          "#31789b",
+          "#21576e"
+        ],
+        "DANO": [
+          "#eee4e2",
+          "#dfbfb9",
+          "#d29284",
+          "#c3624b",
+          "#9b4831",
+          "#6e3321"
+        ],
+        "NECESIDAD": [
+          "#eee8e2",
+          "#dfcdb9",
+          "#d2af84",
+          "#c3914b",
+          "#9b7131",
+          "#6e5221"
+        ],
+        "DEFICIT": [
+          "#e2edee",
+          "#b9dadf",
+          "#84c6d2",
+          "#4baec3",
+          "#31859b",
+          "#215c6e"
+        ],
+        "ACCESO": [
+          "#e2eee6",
+          "#b9dfc8",
+          "#84d2a6",
+          "#4bc383",
+          "#319b66",
+          "#216e4a"
+        ],
+        "OPORTUNIDADES": [
+          "#e7e8e9",
+          "#cacbce",
+          "#a6a9af",
+          "#80858e",
+          "#60646c",
+          "#43464c"
+        ]
+      },
+      "hatch": {
+        "css": "repeating-linear-gradient(-45deg, var(--color-graphite-400) 0 1px, transparent 1px 6px)",
+        "map": "45° geometric lines, step 0.0016° (~178 m), rgba(122,127,136,.49); rgba(72,76,84,.78) when 'outside' is pointed",
+        "veil": "rgba(255,255,255,.47) outside the AOI; .59/.69/.75 while a reference/outside/aoi is pointed"
+      },
+      "aoiFrame": {
+        "color": "rgb(91 58 163)",
+        "width": "2px rest, 5px when consideration 2 is pointed"
+      },
+      "annexMarker": {
+        "certifying": "rgb(91 58 163)",
+        "default": "rgb(23 24 27)"
+      },
+      "adminLines": {
+        "municipio": "rgba(23,24,27,.82)",
+        "comuna": "rgba(72,76,84,.78)",
+        "barrio": "rgba(140,146,156,.67)"
+      },
+      "buildingFill": "rgba(218,221,226,.78)",
+      "water": "rgba(104,150,190,.84)",
+      "roads": "toner-grey ramp by OSM class: motorway rgb(88,94,104) 2.8px → footway rgb(206,210,216) 0.5px"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid toner action, square; used for committing actions like 'Ver comparación'.",
+      "html": "<button class=\"ds-btn-primary\">Ver comparación</button>",
+      "css": ".ds-btn-primary{background:var(--color-toner,#17181b);color:var(--color-sheet,#fff);border:0;border-radius:0;padding:4px 10px;font:600 12px/1.3 'Archivo Variable',Archivo,'Helvetica Neue',Arial,sans-serif;cursor:pointer;transition:background .15s}.ds-btn-primary:hover{background:var(--color-graphite-700,#33363c)}.ds-btn-primary:focus-visible{outline:2px solid var(--color-toner,#17181b);outline-offset:2px}"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Filter/toggle chip; active is solid toner (ink, not color).",
+      "html": "<span class=\"ds-chips\"><button class=\"ds-chip\" aria-pressed=\"false\">Solo construibles</button><button class=\"ds-chip ds-chip--on\" aria-pressed=\"true\">Idoneidad <b>69,6</b></button></span>",
+      "css": ".ds-chips{display:inline-flex;gap:6px}.ds-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--color-rule-2,#c2c7ce);background:var(--color-sheet,#fff);color:var(--color-graphite-700,#33363c);border-radius:3px;padding:3px 8px;font:400 12px/1.3 'Archivo Variable',Archivo,Arial,sans-serif;font-variant-numeric:tabular-nums;cursor:pointer;transition:color .15s,border-color .15s}.ds-chip:hover{border-color:var(--color-toner,#17181b);color:var(--color-toner,#17181b)}.ds-chip--on,.ds-chip--on:hover{background:var(--color-toner,#17181b);border-color:var(--color-toner,#17181b);color:#fff}.ds-chip:focus-visible{outline:2px solid var(--color-toner,#17181b);outline-offset:2px}"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "Plain white field, 3px corner; focus shifts the border toward toner.",
+      "html": "<input class=\"ds-input\" placeholder=\"Intervención, sitio o factor del problema…\" />",
+      "css": ".ds-input{width:280px;background:var(--color-sheet,#fff);color:var(--color-toner,#17181b);border:1px solid var(--color-rule,#dde0e5);border-radius:3px;padding:10px 12px;font:400 13px/1.3 'Archivo Variable',Archivo,Arial,sans-serif;outline:none}.ds-input::placeholder{color:var(--color-graphite-400,#7a7f88)}.ds-input:focus{border-color:rgb(23 24 27 / .6)}"
+    },
+    {
+      "name": "Section Index",
+      "kind": "nav",
+      "refersTo": "segmented",
+      "description": "Roman-folio section tabs; the active tab draws a 2px toner rule.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-i ds-on\"><b>I</b> Territorio y alcance</a><a class=\"ds-nav-i\"><b>II</b> Situación</a><a class=\"ds-nav-i\"><b>III</b> Oportunidades</a></nav>",
+      "css": ".ds-nav{display:flex;gap:4px;border-bottom:1px solid var(--color-rule,#dde0e5);padding:0 8px;font-family:'Archivo Variable',Archivo,Arial,sans-serif}.ds-nav-i{position:relative;display:flex;align-items:baseline;gap:6px;padding:10px 10px 8px;font-size:13px;font-weight:500;color:var(--color-graphite-500,#5c616a);cursor:pointer;transition:color .15s}.ds-nav-i b{font-size:11px;color:var(--color-graphite-400,#7a7f88)}.ds-nav-i:hover{color:var(--color-toner,#17181b)}.ds-on{color:var(--color-toner,#17181b);font-weight:600}.ds-on b{color:var(--color-toner,#17181b)}.ds-on::after{content:'';position:absolute;left:10px;right:10px;bottom:-1px;height:2px;background:var(--color-toner,#17181b);transform-origin:left;animation:ds-rule .38s cubic-bezier(.16,1,.3,1) both}@keyframes ds-rule{from{transform:scaleX(0)}to{transform:scaleX(1)}}"
+    },
+    {
+      "name": "Map Type Switch",
+      "kind": "custom",
+      "refersTo": "segmented-active",
+      "description": "Square segmented control; active cell solid toner.",
+      "html": "<div class=\"ds-seg\"><button class=\"ds-seg-b ds-seg-on\">Calles</button><button class=\"ds-seg-b\">Oscuro</button><button class=\"ds-seg-b\">Datos</button></div>",
+      "css": ".ds-seg{display:inline-flex;border:1px solid var(--color-rule-2,#c2c7ce);font:500 11.5px/1.3 'Archivo Variable',Archivo,Arial,sans-serif}.ds-seg-b{border:0;background:var(--color-sheet,#fff);color:var(--color-graphite-600,#484c54);padding:3px 8px;cursor:pointer}.ds-seg-b+.ds-seg-b{border-left:1px solid var(--color-rule-2,#c2c7ce)}.ds-seg-b:hover{color:var(--color-toner,#17181b)}.ds-seg-on,.ds-seg-on:hover{background:var(--color-toner,#17181b);color:#fff}"
+    },
+    {
+      "name": "Status Badge + NoSource",
+      "kind": "chip",
+      "refersTo": "status-badge",
+      "description": "Drawn-stroke state marks; unknown is dashed grey and 'sin fuente' carries the hatch.",
+      "html": "<span class=\"ds-row\"><span class=\"ds-badge ds-ok\"><svg width=\"10\" height=\"10\" viewBox=\"0 0 10 10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M2 5.4 4.2 7.6 8 2.6\"/></svg>cumple</span><span class=\"ds-badge ds-unk\"><svg width=\"10\" height=\"10\" viewBox=\"0 0 10 10\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"><path d=\"M3.4 3.6a1.7 1.7 0 1 1 2.3 1.6c-.5.2-.7.6-.7 1v.3\"/><path d=\"M5 7.8v.1\"/></svg>sin verificar</span><span class=\"ds-badge ds-unk\"><i class=\"ds-hatch\"></i>sin fuente</span></span>",
+      "css": ".ds-row{display:inline-flex;gap:6px;font-family:'Archivo Variable',Archivo,Arial,sans-serif}.ds-badge{display:inline-flex;align-items:center;gap:4px;border:1px solid;border-radius:3px;background:var(--color-sheet,#fff);padding:2px 6px;font-size:11px;font-weight:500}.ds-ok{border-color:rgb(29 107 69 / .4);color:var(--color-ok,#1d6b45)}.ds-unk{border:1px dashed var(--color-graphite-400,#7a7f88);color:var(--color-graphite-600,#484c54)}.ds-hatch{display:inline-block;width:10px;height:10px;background-image:repeating-linear-gradient(-45deg,var(--color-graphite-400,#7a7f88) 0 1px,transparent 1px 6px)}"
+    },
+    {
+      "name": "Stamp — Salida consultiva",
+      "kind": "custom",
+      "refersTo": "stamp",
+      "description": "The only self-applied mark; violet certifying ink, rotated −4°, pressed once.",
+      "html": "<span class=\"ds-stamp\"><span class=\"ds-stamp-in\"><span class=\"ds-stamp-t\">Salida consultiva</span><span class=\"ds-stamp-s\">no vinculante</span></span></span>",
+      "css": ".ds-stamp{display:inline-flex;border:2.5px solid var(--color-stamp,#5b3aa3);padding:3px;color:var(--color-stamp,#5b3aa3);mix-blend-mode:multiply;font-family:'Archivo Variable',Archivo,Arial,sans-serif;animation:ds-press .42s cubic-bezier(.16,1,.3,1) .25s both}.ds-stamp-in{display:flex;flex-direction:column;align-items:center;border:1px solid var(--color-stamp,#5b3aa3);padding:4px 12px}.ds-stamp-t{font-size:13px;font-weight:700;font-stretch:122%;letter-spacing:.12em;text-transform:uppercase;line-height:1}.ds-stamp-s{margin-top:4px;font-size:8.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase}@keyframes ds-press{0%{opacity:0;transform:rotate(-4deg) scale(1.18);filter:blur(1.5px)}60%{opacity:1;transform:rotate(-4deg) scale(.97);filter:blur(0)}100%{opacity:1;transform:rotate(-4deg) scale(1)}}@media (prefers-reduced-motion:reduce){.ds-stamp{animation-duration:.01ms}}"
+    },
+    {
+      "name": "Consideration",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Numbered serif statement with its independent-source support; pointing inverts the number.",
+      "html": "<ol class=\"ds-cons\"><li tabindex=\"0\"><span class=\"ds-n\">1</span><div><p>Pereira tiene <b>477.027</b> habitantes en un perímetro urbano de <b>32,8 km²</b>.</p><span class=\"ds-sup\"><svg width=\"14\" height=\"10\"><path d=\"M1 9H13\" stroke=\"currentColor\" stroke-width=\"1.2\"/><path d=\"M4 9V2\" stroke=\"currentColor\" stroke-width=\"1.2\"/></svg>una fuente · OpenStreetMap</span></div></li><li tabindex=\"0\" class=\"ds-stampc\"><span class=\"ds-n\">2</span><div><p>Este concepto cubre <b>21,66 km²</b>, el <b>66%</b> del perímetro.</p><span class=\"ds-sup\"><svg width=\"26\" height=\"10\"><path d=\"M1 2Q13 14 25 2\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-dasharray=\"2 2\" fill=\"none\"/></svg>sin soporte independiente</span></div></li></ol>",
+      "css": ".ds-cons{list-style:none;margin:0;padding:0;max-width:380px}.ds-cons li{display:grid;grid-template-columns:28px 1fr;column-gap:8px;padding:12px 0;border-top:1px solid var(--color-rule,#dde0e5);outline:none}.ds-n{margin-top:2px;width:22px;height:22px;line-height:22px;text-align:center;font:700 12.5px/22px 'Archivo Variable',Archivo,Arial,sans-serif;color:var(--color-toner,#17181b);transition:background .2s,color .2s}.ds-stampc .ds-n{color:var(--color-stamp,#5b3aa3)}.ds-cons li:hover .ds-n,.ds-cons li:focus .ds-n{background:var(--color-toner,#17181b);color:#fff}.ds-stampc:hover .ds-n,.ds-stampc:focus .ds-n{background:var(--color-stamp,#5b3aa3);color:#fff}.ds-cons p{margin:0;font:400 15.5px/1.5 'Source Serif 4 Variable','Source Serif 4',Georgia,serif;color:var(--color-toner,#17181b);text-wrap:pretty}.ds-sup{display:inline-flex;align-items:center;gap:8px;margin-top:6px;font:400 11px 'Archivo Variable',Archivo,Arial,sans-serif;color:var(--color-graphite-500,#5c616a)}"
+    },
+    {
+      "name": "Rótulo",
+      "kind": "card",
+      "refersTo": "rotulo",
+      "description": "Annex title block: ramp legend, hatch key, provenance; the one floating instrument with a shadow.",
+      "html": "<div class=\"ds-rot\"><div class=\"ds-rot-h\">Anexo 1 · Daño</div><div class=\"ds-rot-b\"><div class=\"ds-ramp\"><i style=\"background:#eee4e2\"></i><i style=\"background:#dfbfb9\"></i><i style=\"background:#d29284\"></i><i style=\"background:#c3624b\"></i><i style=\"background:#9b4831\"></i><i style=\"background:#6e3321\"></i></div><div class=\"ds-ends\"><span>Menor</span><span>Mayor</span></div><div class=\"ds-key\"><i class=\"ds-hk\"></i>fuera del área cubierta: sin evidencia</div></div><div class=\"ds-rot-f\"><b>Fuente:</b> Copernicus EMS · OpenStreetMap</div></div>",
+      "css": ".ds-rot{width:248px;background:var(--color-sheet,#fff);border:1px solid var(--color-toner,#17181b);box-shadow:0 2px 10px -4px rgb(23 24 27 / .25);font-family:'Archivo Variable',Archivo,Arial,sans-serif;font-size:11px}.ds-rot-h{border-bottom:1px solid var(--color-toner,#17181b);padding:6px 10px;font-size:9.5px;font-weight:700;font-stretch:122%;letter-spacing:.12em;text-transform:uppercase}.ds-rot-b{padding:8px 10px}.ds-ramp{display:flex;height:10px;border:1px solid var(--color-rule-2,#c2c7ce)}.ds-ramp i{flex:1}.ds-ends{display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--color-graphite-500,#5c616a)}.ds-key{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:10.5px;color:var(--color-graphite-600,#484c54)}.ds-hk{display:inline-block;width:16px;height:12px;border:1px solid var(--color-graphite-400,#7a7f88);background-image:repeating-linear-gradient(-45deg,var(--color-graphite-400,#7a7f88) 0 1px,transparent 1px 6px)}.ds-rot-f{border-top:1px solid var(--color-rule,#dde0e5);padding:6px 10px;font-size:10px;line-height:1.35;color:var(--color-graphite-500,#5c616a)}.ds-rot-f b{color:var(--color-graphite-700,#33363c)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "El concepto técnico firmado",
+    "overview": "The viewer reads as a document a technical office issues and signs: a white bond sheet, toner-black type, fine rules instead of boxes, and one heavy rule under the letterhead. The considerations on the left say what the evidence covers and where it stops; the city on the right is the cartographic annex that proves them. The stamp is the only place the document marks itself, in violet ink, and that ink appears nowhere else except where the concept certifies a limit.\n\nDensity is that of an administrative document: small, exact sans-serif for the interface, a text serif for the document's voice, and tabular numbers written the Colombian way (69,6 · 477.027). Everything is still. Only three things move: the stamp presses once on load, a reference rule draws when a consideration or section is pointed at, and panels fade up when they open. The dark GIS dashboard of floating panels and layer checkboxes was deliberately discarded. The sheet is light and flat.\n\nWhat the evidence doesn't cover is shown, never left blank or drawn as a zero. One hatch sign means \"sin información\" on both the map and the interface. Unknown gets its own grey, dashed treatment, never green and never red.",
+    "keyCharacteristics": [
+      "White paper, toner ink, hairline rules; a 3px toner rule under the letterhead.",
+      "Expanded Archivo capitals for the letterhead and section titles; Source Serif 4 for the document's voice.",
+      "Violet stamp ink only where the concept certifies something.",
+      "One hatch for \"sin información\", shared by map and UI.",
+      "The map annex takes most of the sheet, framed by a single toner line.",
+      "Honest absences: \"sin fuente\", hatch, dashed borders, never an invented zero."
+    ],
+    "rules": [
+      {
+        "name": "The Stamp Ink Rule",
+        "body": "Violet means the document certifies something: a non-binding output, the covered area, a limit, a license block. If the element doesn't certify, it doesn't get violet.",
+        "section": "colors"
+      },
+      {
+        "name": "The Paper Ramp Rule",
+        "body": "On paper, lighter to darker means more value, and every context uses the same lightness curve. Changing context changes the hue, never how the map reads. No ramp or map ink may fall in the 250–300° hue band, because that band belongs to the stamp.",
+        "section": "colors"
+      },
+      {
+        "name": "The Unknown Is Its Own Color Rule",
+        "body": "Unknown uses the unknown grey with a dashed border or the hatch. It is never shown as green or red.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Not Color Rule",
+        "body": "Selection, active state and emphasis are toner (solid, or tinted with alpha), never a hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Letterhead Rule",
+        "body": "Expanded tracked capitals name a part of the document: the issuer, a section, an annex, the rótulo, the stamp. They are the heading itself. Never put them as a kicker above another heading.",
+        "section": "typography"
+      },
+      {
+        "name": "The Serif Voice Rule",
+        "body": "The serif carries what the concept states: the title, considerations, summaries, notes, and the annex question. Controls, data and chrome stay in Archivo.",
+        "section": "typography"
+      },
+      {
+        "name": "The Comma Decimal Rule",
+        "body": "Numbers use tabular figures in es-CO format: comma for decimals, point for thousands, \"—\" when there is no value, and $…M / $…MM for pesos. A decimal point never appears on screen.",
+        "section": "typography"
+      },
+      {
+        "name": "The Annex Dominates Rule",
+        "body": "The map is the concept's evidence and always gets the largest share of the sheet. Chrome never floats across it except the rótulo, north indicator, compare tray and swipe handle.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Sheet Rule",
+        "body": "Nothing on the paper casts a shadow. Only instruments lying over the map annex get the soft instrument shadow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Rule Not Box Rule",
+        "body": "A section is a top hairline and air, never a card. Bordered boxes are reserved for instruments: fields, chips, notices, the rótulo and the annex frame.",
+        "section": "shapes"
+      },
+      {
+        "name": "The One Sign for Absence Rule",
+        "body": "\"Sin información\" has exactly one sign, a 45° hatch of 1px graphite-400 lines every 6px (CSS `repeating-linear-gradient(-45deg, …)`). On the map it is geometry: 45° lines about 178 m apart outside the covered area, under a white veil. The same sign fills empty bars, the empty state, the NoSource swatch and the legend key. Never draw missing data as zero or as empty white.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** separate sections with a top hairline (rule) and air. Keep the 3px toner rule under the letterhead only.",
+      "**Do** reserve stamp violet for what the concept certifies: the stamp, the covered-area frame, the coverage consideration, LÍMITE labels, license-blocked marks.",
+      "**Do** use the single 45° hatch for every \"sin información\", on the map and in the UI alike.",
+      "**Do** keep every sequential ramp on the shared light→dark curve (more ink is more value) and outside the 250–300° hue band.",
+      "**Do** say absences in words (\"sin fuente\", \"barrio sin fuente\", \"—\") with the hatch or a dashed border.",
+      "**Do** format every number in es-CO with tabular figures.",
+      "**Do** draw icons as single-stroke SVG Marks.",
+      "**Do** keep motion to the stamp press, the rule draw, and short fade-ups, and honor reduced motion."
+    ],
+    "donts": [
+      "**Don't** return to the dark GIS dashboard of floating panels and layer checkboxes.",
+      "**Don't** use violet for location emphasis, selection, hover, brand color or decoration.",
+      "**Don't** show unknown as green or red, or draw a missing value as zero.",
+      "**Don't** wrap sections in cards or lift anything on the paper with a shadow. Shadows belong only to instruments over the map.",
+      "**Don't** put expanded letterhead capitals above a heading as a kicker. They are the heading.",
+      "**Don't** use Unicode glyphs (▲ ▼ ✓ ✕) as icons.",
+      "**Don't** set controls or data in the serif, or the document's statements in the sans.",
+      "**Don't** show a decimal point, or fetch fonts from a third-party server."
+    ]
+  }
+}

@@ -289,11 +289,11 @@ function Locator({ territory, regions, admin }: {
               <path key={`c${i}`} d={d} fill="var(--color-rule)" stroke="var(--color-graphite-400)" strokeWidth="0.8" />
             ))}
             {national.state.map((d, i) => (
-              <path key={`s${i}`} d={d} fill="rgb(91 58 163 / .35)" stroke="var(--color-stamp)" strokeWidth="0.8" />
+              <path key={`s${i}`} d={d} fill="var(--color-rule-2)" stroke="var(--color-graphite-600)" strokeWidth="0.8" />
             ))}
             {national.city && (
               <>
-                <circle cx={national.city[0]} cy={national.city[1]} r="3.2" fill="var(--color-stamp)" />
+                <circle cx={national.city[0]} cy={national.city[1]} r="3.2" fill="var(--color-toner)" />
                 <text x={national.city[0] + 6} y={national.city[1] + 3} fontSize="9" fill="var(--color-toner)">
                   {city?.display_name ?? 'Pereira'}
                 </text>

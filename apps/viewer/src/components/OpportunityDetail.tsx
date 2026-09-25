@@ -343,10 +343,11 @@ export function OpportunityDetail({ site, opp }: { site: Site; opp: Opportunity 
           <button
             data-uri="technical-toggle"
             onClick={() => setTechnical(!technical)}
-            className="flex w-full items-center justify-between rounded-[3px] border border-rule bg-sheet-2 px-3 py-2 text-[11px] text-graphite-600 hover:text-toner"
+            aria-expanded={technical}
+            className="flex w-full items-center justify-between border-y border-rule py-2 text-[12px] text-graphite-600 hover:text-toner"
           >
-            <span>Vista técnica · features, pesos y descomposición exacta</span>
-            <span className="text-graphite-400">{technical ? '▲' : '▼'}</span>
+            <span>Anexo técnico · pesos y descomposición exacta</span>
+            <span className="text-graphite-500 underline">{technical ? 'ocultar' : 'mostrar'}</span>
           </button>
 
           {technical && detail && best && (

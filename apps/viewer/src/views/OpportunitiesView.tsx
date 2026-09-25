@@ -77,7 +77,7 @@ export function OpportunitiesView() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Intervención, sitio o factor del problema…"
-          className="mt-2 w-full rounded-[3px] border border-rule bg-sheet px-3 py-2.5 text-[13px] text-toner placeholder:text-graphite-400 focus:border-mark/60 focus:outline-none"
+          className="mt-2 w-full rounded-[3px] border border-rule bg-sheet px-3 py-2.5 text-[13px] text-toner placeholder:text-graphite-400 focus:border-toner"
         />
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           <Chip active={onlyBuildable} onClick={() => setOnlyBuildable(!onlyBuildable)}
