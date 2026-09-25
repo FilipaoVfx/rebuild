@@ -253,6 +253,8 @@ export function MapCanvas() {
   );
 
   const landmarks = gj('landmarks');
+  /* A escala de ciudad el reconocimiento lo dan los nombres de comuna; los
+     hitos aparecen al acercarse, cuando ya no compiten con ellos. */
   const landmarkCap = zoom >= 16 ? 4 : zoom >= 15 ? 3 : 2;
   const visibleLandmarks = useMemo(
     () => (landmarks?.features ?? []).filter((f) => Number(f.properties.priority) <= landmarkCap),

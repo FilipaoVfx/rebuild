@@ -79,9 +79,13 @@ async def main(base: str, prefix: str) -> int:
 
         # La procedencia viaja en el cromo, no en una pestaña (ADR-21).
         prov = await page.locator('[data-uri="provenance"]').inner_text()
-        for needed in ("Copernicus", "OpenStreetMap", "data v"):
+        for needed in ("Copernicus", "OpenStreetMap"):
             if needed.lower() not in prov.lower():
                 errors.append(f"la barra de procedencia no nombra '{needed}'")
+        # La versión de datos sigue visible: es el número del concepto en el membrete.
+        membrete = (await page.locator("header").first.inner_text()).lower()
+        if "n.º" not in membrete:
+            errors.append("el membrete no muestra el número del concepto (versión de datos)")
         print("procedencia:", " ".join(prov.split())[:160])
 
         # ── Territorio: donde estamos, antes de que pasa (ADR-22) ────────
@@ -102,8 +106,6 @@ async def main(base: str, prefix: str) -> int:
         print("etiquetas:", etiquetas)
         if not etiquetas or not etiquetas.get("comunas"):
             errors.append("el mapa no etiqueta ninguna comuna")
-        if not etiquetas or not etiquetas.get("landmarks"):
-            errors.append("el mapa no etiqueta ningun hito")
         comunas = await page.locator('[data-uri="comuna"]').count()
         print("comunas listadas:", comunas)
         if not comunas:
@@ -115,6 +117,12 @@ async def main(base: str, prefix: str) -> int:
             despues = await page.evaluate("() => window.__uriCenter && window.__uriCenter()")
             if antes == despues:
                 errors.append("elegir una comuna no encuadra el mapa")
+            # El anexo abre con toda la ciudad, donde reconocen los nombres de comuna; los
+            # hitos se etiquetan al acercarse. Se comprueban a escala de comuna.
+            cerca = await page.evaluate("() => window.__uriLabels && window.__uriLabels()")
+            print("etiquetas a escala de comuna:", cerca)
+            if not cerca or not cerca.get("landmarks"):
+                errors.append("el mapa no etiqueta ningun hito al encuadrar una comuna")
             await page.locator('[data-uri="comuna"]').first.click()
             await page.wait_for_timeout(1200)
         await page.screenshot(path=f"/tmp/{prefix}_territorio.png")
@@ -337,7 +345,7 @@ async def main(base: str, prefix: str) -> int:
 
         # La camara sigue al sitio seleccionado: exploracion progresiva.
         centro_sitio = await page.evaluate("() => window.__uriCenter && window.__uriCenter()")
-        await page.locator('[data-uri="detail"] button:has-text("✕")').first.click()
+        await page.locator('[data-uri="detail"] button[aria-label="Cerrar la ficha"]').first.click()
         await page.wait_for_timeout(2000)
         centro_aoi = await page.evaluate("() => window.__uriCenter && window.__uriCenter()")
         if centro_sitio and centro_aoi and centro_sitio == centro_aoi:
