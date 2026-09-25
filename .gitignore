@@ -17,3 +17,8 @@ data/sentinel/**/*.tiff
 # Ortofotos (ADR-22): teselas reconstruibles desde el indice, ~20 MB por fuente.
 # El sandbox nunca se versiona: es donde caen las fuentes en UNCLEAR.
 data/ortofoto/
+
+# POT de IDE AMCO (ADR-26): capas e informe por sitio. Mientras la fuente siga
+# en UNCLEAR todo cae en data/ide_amco/.sandbox/, que no se versiona ni se
+# sirve. Publicable o no, se reconstruye desde las consultas de index.json.
+data/ide_amco/

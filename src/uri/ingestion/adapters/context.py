@@ -185,8 +185,9 @@ def load_seismic_hazard(path: Path) -> dict:
     }
 
 
-#: Usos de suelo de OSM que sirven como proxy del POT mientras IDE AMCO no sea
-#: alcanzable. Es dato real con una limitación declarada, no una simulación.
+#: Usos de suelo de OSM que sirven como proxy del POT mientras el de IDE AMCO
+#: siga sin licencia declarada (ADR-26). Es dato real con una limitación
+#: declarada, no una simulación.
 OSM_LANDUSE_COMPATIBILITY: dict[str, float] = {
     "grass": 1.0,
     "meadow": 1.0,

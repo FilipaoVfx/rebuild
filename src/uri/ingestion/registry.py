@@ -516,6 +516,43 @@ SOURCES: list[SourceRegistration] = [
             "Mientras: teselas al sandbox, nada publicado."
         ),
     ),
+    SourceRegistration(
+        source_id="ide_amco",
+        display_name="IDE AMCO — POT de Pereira (GeoServer del AMCO)",
+        tier="A",
+        source_url="https://geo.ideamco.gov.co:8443/geoserver/amco/wfs",
+        access_method="wfs",
+        spatial_reference="EPSG:4326",
+        # UNCLEAR con via de desbloqueo escrita (ADR-26). El servicio responde,
+        # publica 399 capas y cubre 112 de los 115 sitios con el POT
+        # normativo y con la microzonificacion sismica. Lo que no tiene es
+        # una sola frase de terminos: Fees y AccessConstraints valen NONE,
+        # que es el valor por defecto de GeoServer y no una licencia, y el
+        # ServiceProvider esta vacio. Ver db/terms/ide_amco_20260924.txt.
+        license_class=LicenseClass.UNCLEAR,
+        terms_snapshot_path="storage://terms/ide_amco_20260924.txt",
+        verification_notes=(
+            "UNCLEAR. WFS 2.0.0 operativo desde el 2026-09-24 (OI-F3 "
+            "respondida: si publica servicios OGC). Capas sin titulo, resumen, "
+            "fecha ni acto administrativo; ServiceProvider vacio; NONE es el "
+            "valor por defecto del servidor. La pagina de geoservicios y la de "
+            "datos abiertos de ideamco.gov.co no declaran terminos. Lo "
+            "desbloquea la respuesta al derecho de peticion "
+            "(docs/plan/derecho-de-peticion-amco.md). Mientras: capas al "
+            "sandbox, informe interno, nada publicado."
+        ),
+    ),
 ]
 
 SOURCES_BY_ID = {source.source_id: source for source in SOURCES}
+
+
+def is_publishable(source_id: str) -> bool:
+    """Lo que la puerta de publicacion exige: clase distinta de UNCLEAR y
+    redistribucion permitida. Las dos, no una."""
+    source = SOURCES_BY_ID.get(source_id)
+    return (
+        source is not None
+        and source.license_class is not LicenseClass.UNCLEAR
+        and source.redistribution_allowed is True
+    )

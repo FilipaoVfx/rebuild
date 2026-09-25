@@ -1,0 +1,98 @@
+IDE AMCO — GeoServer del Área Metropolitana Centro Occidente (espacio de trabajo "amco")
+Auditoría del 2026-09-24. VEREDICTO: UNCLEAR. No puede publicarse.
+
+=== QUÉ HAY ===
+
+Servicio: https://geo.ideamco.gov.co:8443/geoserver/amco/{wfs,wms}
+WFS 2.0.0 y WMS responden 200 con certificado TLS válido. GetCapabilities del WFS: 399
+tipos de rasgo en el espacio de trabajo "amco" (Pereira, Dosquebradas, La Virginia y
+capas metropolitanas).
+
+Esto responde OI-F3 ("¿Publica IDE AMCO WFS operativo?"): SÍ. La nota de
+docs/plan/estado-actual.md que lo daba por bloqueado por el puerto 8443 dejó de ser
+cierta desde este entorno.
+
+Capas que interesan al producto, consultadas sobre el AOI
+(-75.7251, 4.7878, -75.6748, 4.8229, EPSG:4326):
+
+  amco:pot_sectores_normativos        138 rasgos. cattrat, subcattrat, actividad, sectnorm.
+                                      Cubre 112 de 115 sitios. Es la NORMA del POT.
+  amco:pot_microzonificacion_sismica    6 rasgos. zona, leyenda. Cubre 112 de 115 sitios.
+  amco:pere_zonsism                   138 rasgos. zona, leyenda. Otra versión de la
+                                      anterior; no coinciden en 11 sitios.
+  amco:dosq_zonsism                    13 rasgos. zona, leyenda. Microzonificación de
+                                      Dosquebradas: cubre los 3 sitios restantes.
+
+Capas revisadas y descartadas para compatibilidad:
+
+  amco:uso_del_suelo_pereira          COBERTURA del suelo (Bosque Secundario, Guadua,
+                                      Pasto Manejado, Zona Urbana…), no norma: "Zona
+                                      Urbana" en 110 de 112 sitios.
+  amco:pot_clasificacion_suelo        "Suelo Urbano" en los 112. No distingue.
+  amco:pot_amenaza_mov_masa           245 rasgos, 0 sitios dentro.
+  amco:dosq_zonampot2000              "Zona Urbana" en los 3 de Dosquebradas; POT del 2000.
+
+Los 3 sitios sin sector normativo (site_0054, site_0055, site_0114) están en
+Dosquebradas según amco:limite_municipal (nom_muncp = "Dosquebradas", 66170).
+
+=== POR QUÉ NO SE PUBLICA ===
+
+1. GetCapabilities, ServiceIdentification (literal):
+     Title "GeoServer Web Feature Service"
+     Abstract "This is the reference implementation of WFS 1.0.0 and WFS 1.1.0,
+              supports all WFS operations including Transaction."
+     Fees "NONE"   AccessConstraints "NONE"
+   Son los valores por defecto de una instalación de GeoServer, no una declaración del
+   AMCO. "NONE" en AccessConstraints no concede redistribución: es el campo sin llenar.
+
+2. ServiceProvider: ProviderName, IndividualName, ElectronicMailAddress, todos vacíos.
+   El servicio no dice quién es su productor.
+
+3. Las capas no tienen título propio (Title = nombre técnico), ni Abstract, ni
+   MetadataURL, ni fecha, ni acto administrativo de adopción. No hay forma de saber
+   desde el servicio a qué versión del POT corresponden.
+
+4. ideamco.gov.co: las páginas "Geoservicios" y "Datos abiertos" no declaran términos.
+   "Datos abiertos" solo ofrece el histórico de bases catastrales (Registro 1 y 2,
+   GeoDatabase), no estas capas. El sitio pertenece a "AMCO - Catastro" (gestor
+   catastral); su pie enlaza "Políticas de Privacidad y Condiciones de Uso".
+
+5. amco.gov.co, "Políticas y Condiciones": habla de datos personales de los usuarios
+   del sitio y de uso del portal. No dice nada de reutilización de información
+   geográfica.
+
+fuentes.md §10: "'Es público' no responde ninguno de los cinco ejes". Que el WFS
+responda sin clave no dice que se pueda copiar y volver a servir. Es la lección de
+ADR-18: así se publicó la capa del SGC durante semanas incumpliendo sus términos.
+
+=== LO QUE SÍ SE PUEDE HACER MIENTRAS TANTO ===
+
+Uso interno. La información es pública por defecto (Ley 1712 de 2014, art. 2 y 4) y
+consultarla para análisis no es redistribuirla. El adaptador
+(src/uri/ingestion/adapters/ide_amco.py) descarga las cuatro capas de arriba, una por
+una, a data/ide_amco/.sandbox/, que no se versiona ni se sirve, y produce un informe
+por sitio. Nada llega a la base, a la API ni al paquete estático.
+
+=== DATOS PERSONALES EN EL MISMO ESPACIO DE TRABAJO ===
+
+El espacio de trabajo "amco" publica, junto al POT, capas cuyo nombre indica datos
+personales (p. ej. "dosquebradas_personas_naturales"). No se consultaron. Es la razón
+de que el adaptador pida capas por nombre, de una lista cerrada, y nunca descargue el
+espacio completo (Ley 1581 de 2012).
+
+=== QUÉ LO DESBLOQUEA ===
+
+Respuesta escrita del AMCO al derecho de petición de
+docs/plan/derecho-de-peticion-amco.md, que pide: licencia o condiciones de
+reutilización de las cuatro capas, acto de adopción y fecha de cada una, cuál de las
+dos microzonificaciones de Pereira está vigente, y el diccionario de datos.
+
+Canal: pqr@amco.gov.co, o el formulario PQRSD enlazado desde amco.gov.co.
+Sede de Catastro: Carrera 10 # 17-55, piso 3, Edificio Torre Central, Pereira.
+Plazo legal: 10 días hábiles para solicitudes de información (Ley 1755 de 2015,
+art. 14, num. 1).
+
+Si la respuesta declara una licencia abierta (p. ej. el texto Ley 1712 que usa la
+Alcaldía en pereira_sig), la fila pasa a ATTRIBUTION y el mismo script escribe en
+data/ide_amco/ en lugar del sandbox. La compatibilidad necesita además que Planeación
+valide el criterio (ADR-26 §4); la licencia sola no basta.

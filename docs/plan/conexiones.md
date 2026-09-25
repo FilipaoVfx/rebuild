@@ -205,6 +205,15 @@ Ruta alternativa mientras tanto: `ebsr-7cb7` (barrios por comuna) y `upu2-u87w` 
 
 Si AMCO no publica servicios OGC, `FR-ING-05` pierde su caso principal y `E1-4` cambia de tamaño. Conviene preguntarlo por oficio en la semana 1, no descubrirlo en la semana 6.
 
+**Verificado 2026-09-24 — sí publica.** 🟢 red / 🔴 licencia
+
+```
+https://geo.ideamco.gov.co:8443/geoserver/amco/wfs?service=WFS&version=2.0.0&request=GetCapabilities   → 200, 399 capas
+https://geo.ideamco.gov.co:8443/geoserver/amco/wms?service=WMS&request=GetCapabilities                 → 200
+```
+
+Las capas que sirven: `pot_sectores_normativos` (tratamiento y área de actividad, 112 de 115 sitios), `pot_microzonificacion_sismica` y `pere_zonsism` (Pereira, dos versiones) y `dosq_zonsism` (Dosquebradas). El bloqueo por el puerto 8443 que registraba `estado-actual.md` ya no se reproduce. Lo que bloquea es la licencia: el servicio no declara ninguna. Ver [ADR-26](../adr/ADR-26-el-pot-se-lee-de-ide-amco-con-criterio-declarado.md) y el [derecho de petición](derecho-de-peticion-amco.md).
+
 ---
 
 ## 7. OpenStreetMap — red peatonal y contexto urbano 🟡

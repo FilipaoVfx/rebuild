@@ -191,7 +191,7 @@ declarado**, y **lo que no ordena nada**.
 | Salida | Por qué |
 |---|---|
 | **Exclusión por riesgo sísmico** | Sin fuente utilizable (ADR-18). Antes: un solo valor (0,28) que no excluía ni penalizaba |
-| **Compatibilidad de uso de suelo** | Dato en 1 de 115 sitios; sin POT ingerido (OI-F3) |
+| **Compatibilidad de uso de suelo** | Publicada en 1 de 115 sitios (OSM). El POT de IDE AMCO la responde en 112, pero solo en el informe interno: su licencia no está declarada (ADR-26) |
 | **Vulnerabilidad social** | Nula en los 115; el 20 % del vector de pesos no está actuando |
 | **Respuesta a "¿qué hago con más presupuesto?"** | La cobertura satura en 19 proyectos (§3) |
 
@@ -219,12 +219,17 @@ En orden de impacto:
    `deficit` y la equidad. Es la palanca única más grande. *Bloqueado: DANE
    devuelve 403/404 desde este entorno.*
 2. **Microzonificación sísmica de Pereira** (D6). Activa una restricción dura
-   que hoy no filtra porque no tiene fuente. *Bloqueado: no publicada como capa
-   para el AOI; y la amenaza nacional del SGC, además de constante, no es
-   redistribuible (ADR-18).*
+   que hoy no filtra porque no tiene fuente. *Ya no falta la capa: IDE AMCO
+   publica la de Pereira —en dos versiones que discrepan en 11 sitios— y la de
+   Dosquebradas, y entre las dos cubren los 115 sitios (ADR-26). Faltan la
+   licencia, que el servicio no declara, y la tabla que traduce zona a nivel de
+   riesgo, que sale del estudio de microzonificación.*
 3. **POT / uso de suelo de IDE AMCO** (OI-F3). Sube `land_use` del 1 %.
-   *Bloqueado: el GeoServer de IDE AMCO responde en el puerto 8443, fuera de
-   la política de salida de este entorno.*
+   *Ya no está bloqueado por red: desde el 2026-09-24 el WFS responde y el
+   sector normativo cubre 112 de 115 sitios; los 3 restantes están en
+   Dosquebradas (ADR-26). Faltan la licencia —derecho de petición en
+   [derecho-de-peticion-amco.md](derecho-de-peticion-amco.md)— y que Planeación
+   valide el criterio de compatibilidad por intervención.*
 4. **Un índice de vulnerabilidad** de cualquier fuente aceptable. Hoy el 20 %
    del vector de pesos está inactivo.
 5. **Ampliar el AOI más allá de los 6,91 km²** de la activación EMSR916.
@@ -257,8 +262,8 @@ En orden de impacto:
 | Pendiente | Bloqueado por |
 |---|---|
 | Población, hogares y vulnerabilidad reales | Disponibilidad DANE (OI-F4) — 403/404 desde este entorno |
-| Cualquier capa de riesgo | La del SGC no es redistribuible (ADR-18); no hay microzonificación de Pereira (D6) |
-| Uso de suelo real | IDE AMCO en el puerto 8443 (OI-F3) |
+| Cualquier capa de riesgo | La del SGC no es redistribuible (ADR-18). La microzonificación de IDE AMCO existe y cubre los 115 sitios, pero no declara licencia y falta la tabla zona→nivel (ADR-26) |
+| Uso de suelo real | Licencia de IDE AMCO sin declarar y criterio de compatibilidad sin validar (ADR-26) |
 | Evidencia de daño del RUD | Decisión sobre agregación y PII (D3) |
 | Capas de IDEAM y CARDER | Sin resolución DNS desde este entorno |
 | Costos unitarios oficiales | Fuente institucional (OI-05) |

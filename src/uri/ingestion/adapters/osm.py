@@ -241,10 +241,10 @@ def load_overpass(path: Path) -> tuple[list[OsmRoad], list[OsmGreenSpace], list[
 def load_landuse(path: Path) -> list[OsmLandUse]:
     """Usos de suelo de OSM.
 
-    Es un PROXY del POT, no el POT. IDE AMCO publica la capa normativa en un
-    GeoServer que esta sesión no alcanza (puerto 8443 fuera de la política de
-    red), así que mientras tanto se usa dato real de OSM con esa limitación
-    declarada — no una capa inventada.
+    Es un PROXY del POT, no el POT. IDE AMCO publica la capa normativa por WFS
+    (alcanzable desde el 2026-09-24), pero sin licencia declarada: hasta que
+    la declare solo alimenta un informe interno (ADR-26). Mientras tanto se usa
+    dato real de OSM con esa limitación declarada — no una capa inventada.
     """
     opener = gzip.open if path.suffix == ".gz" else open
     with opener(path, "rt", encoding="utf-8") as handle:

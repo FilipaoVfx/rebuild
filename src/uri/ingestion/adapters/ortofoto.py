@@ -25,8 +25,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from uri.contracts import LicenseClass
-from uri.ingestion.registry import SOURCES_BY_ID
+from uri.ingestion import registry
 
 ROOT = Path(__file__).resolve().parents[4]
 DATA = ROOT / "data" / "ortofoto"
@@ -79,12 +78,7 @@ SOURCES_BY_KEY = {s.source_id: s for s in SOURCES}
 def is_publishable(source_id: str) -> bool:
     """Lo que la puerta de publicacion exige: clase distinta de UNCLEAR y
     redistribucion permitida. Las dos, no una."""
-    source = SOURCES_BY_ID.get(source_id)
-    return (
-        source is not None
-        and source.license_class is not LicenseClass.UNCLEAR
-        and source.redistribution_allowed is True
-    )
+    return registry.is_publishable(source_id)
 
 
 def output_dir(source_id: str) -> Path:

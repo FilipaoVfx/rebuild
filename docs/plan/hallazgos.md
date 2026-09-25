@@ -357,6 +357,7 @@ metadatos, parámetros y hash, sin copiar el material (ADR-18 ya lo prescribe).
 | **`pereira_edam`** (7.697 inspecciones) | **Silencio**, entidad sujeta a Ley 1712 | Rutas 1, 2 y 3 viables. El bloqueo real no es la licencia: es la PII |
 | **Ortofoto municipal 14-ago** | **Silencio**, sin datos personales | La menos bloqueada de todas. Rutas 1, 2 y 3. Desatascar primero |
 | **Ortofoto IGAC** | **Sí tiene licencia** (CC BY 4.0, Res. 616/2020) condicionada a titularidad del IGAC | No hace falta licencia nueva: hay que *verificar quién es el titular*. Pregunta de hecho, no de permiso |
+| **IDE AMCO** (POT y microzonificación) | **Silencio**: `NONE` por defecto de GeoServer, sin proveedor ni términos. Añadida 2026-09-24 | Rutas 1 y 2. Uso interno ya en marcha (sandbox, ADR-26); [derecho de petición](derecho-de-peticion-amco.md) redactado |
 
 ### 4.4 Lo que no tiene alternativa
 
@@ -384,7 +385,15 @@ El permiso de uso no exime de eso.
       14-ago-2026: licencia y productor.
 - [ ] **P3** Registrar credenciales CDSE y correr el pipeline de ADR-19.
 - [ ] **P4** Correo al SGC solicitando consentimiento previo por escrito.
-- [ ] **P5** Verificar titularidad de la ortofoto IGAC (¿IGAC o AMCO?).
+- [ ] **P5** Verificar titularidad de la ortofoto IGAC (¿IGAC o AMCO?). Va
+      como petición 7 dentro de P6.
+- [ ] **P6** Derecho de petición al AMCO por las capas del POT en IDE AMCO:
+      licencia, titularidad, vigencia, cuál microzonificación rige y
+      diccionario. Texto listo en [derecho-de-peticion-amco.md](derecho-de-peticion-amco.md)
+      (ADR-26 §6, primera puerta).
+- [ ] **P7** Validar con la Secretaría de Planeación de Pereira la tabla de
+      compatibilidad de `src/uri/constraints/pot.py` contra las fichas
+      normativas (ADR-26 §4, segunda puerta).
 
 ### Semana 1–2 — desbloquea trabajo interno sin esperar respuesta
 

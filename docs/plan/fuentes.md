@@ -63,7 +63,7 @@ Estado actual, con la distinción entre lo verificado y lo asumido marcada expl�
 | datosdelterremoto.org (crudos) | hereda del original | — | — | — | Cada archivo conserva su licencia de origen |
 | SGC | `NON_COMMERCIAL` | ❌ | ❌ | ❌ | **Verificado 2026-09-15** — «Ningún contenido […] copiado, reproducido […] publicado, transmitido, distribuido […] sin su consentimiento previo por escrito». **Capa retirada (ADR-18)** |
 | IDEAM | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** — por dataset |
-| IDE AMCO | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** — por capa |
+| IDE AMCO | `UNCLEAR` | ? | ? | ? | **Auditada 2026-09-24** — WFS operativo; ni el servicio ni el portal declaran términos (`NONE` es el valor por defecto de GeoServer). Derecho de petición en curso. Ver §7.4 y ADR-26 |
 | CARDER | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** — por dataset |
 | Megabús | `UNCLEAR` | ? | ? | ? | **POR VERIFICAR** |
 | Copernicus EMS | `ATTRIBUTION` | ✅ | ✅ | ✅ | **Verificado 2026-09-15** — CC BY 4.0 según el manual de producto del JRC; falta abrir el paquete de EMSR916 |
@@ -246,13 +246,13 @@ C5 es el que convierte este documento en algo vivo. Sin él, la matriz de §2 en
 | | |
 |---|---|
 | **Aporta** | `land_use_compatibility` (**bloqueante**), barrios y comunas para resolución de referencias administrativas, predios para `building_density` |
-| **Acceso** | WFS/WMS si está operativo — preferente por `FR-ING-05`, que obliga a registrar endpoint y parámetros de consulta en la procedencia. Si no, descarga manual versionada |
-| **Formato / CRS** | GML/GeoJSON vía WFS. CRS a confirmar; probable MAGNA-SIRGAS origen Bogotá u origen occidente |
+| **Acceso** | **WFS 2.0.0 operativo, verificado 2026-09-24**: `https://geo.ideamco.gov.co:8443/geoserver/amco/wfs`, 399 capas, TLS válido. La consulta exacta se archiva en `index.json` (`FR-ING-05`) |
+| **Formato / CRS** | GeoJSON (`outputFormat=application/json`), EPSG:4326 en orden lon/lat con el bbox en forma corta. El adaptador rechaza respuestas truncadas o con ejes invertidos |
 | **Modo degradado** | Uso de suelo: **parada total** — no se puede puntuar sin saber si la intervención es compatible. Límites administrativos: **parada total** (`FR-DC-01` exige resolver barrio y comuna). Predios: omisión |
-| **Licencia** | `UNCLEAR` — auditar **por capa**, no por portal. Una IDE municipal puede publicar capas con regímenes distintos |
-| **Adaptador** | `packages/ingestion/adapters/amco.py` |
+| **Licencia** | `UNCLEAR`, auditada: `db/terms/ide_amco_20260924.txt`. `Fees` y `AccessConstraints` = `NONE` (valor por defecto del servidor), proveedor vacío, capas sin descripción ni fecha. Vía abierta: [derecho de petición](derecho-de-peticion-amco.md) |
+| **Adaptador** | `src/uri/ingestion/adapters/ide_amco.py` + `scripts/fetch_ide_amco.py`. Cuatro capas por nombre, al sandbox |
 
-> Esta es la fuente de la que más depende el sistema y sobre la que menos se sabe hoy. Si AMCO no publica WFS operativo, `FR-ING-05` pierde su caso principal y E1-4 cambia de tamaño. Es la primera pregunta que hay que resolver en E0-9.
+> **Estado 2026-09-24 ([ADR-26](../adr/ADR-26-el-pot-se-lee-de-ide-amco-con-criterio-declarado.md)).** La pregunta de E0-9 está respondida: AMCO publica WFS operativo. Sobre los 115 sitios, `pot_sectores_normativos` (tratamiento y área de actividad) cubre 112 y `pot_microzonificacion_sismica` + `dosq_zonsism` cubren los 115. `uso_del_suelo_pereira` es **cobertura**, no norma: dice «Zona Urbana» en 110 sitios y no sirve. Lo que falta no es técnico: la licencia, y que Planeación valide el criterio de compatibilidad por intervención (`src/uri/constraints/pot.py`, en borrador). El mismo espacio de trabajo publica capas con datos personales: se piden capas por nombre, nunca el espacio entero.
 
 ---
 
@@ -577,7 +577,7 @@ Es trabajo de E0-6 y condiciona la puerta de M0. Una fuente Tier A sin auditar e
 |---|---|---|---|
 | OI-F1 | ODbL share-alike sobre base derivada servida por API en un producto comercial | Comercialización. **No** el piloto | Legal |
 | ~~OI-F2~~ | ~~Auditoría de licencia del SGC~~ — **cerrado 2026-09-15**: `NON_COMMERCIAL`, capa retirada (ADR-18). Sigue abierto para IDEAM, AMCO, CARDER y Megabús | M0 (puerta), y M3 por dependencia | Datos |
-| OI-F3 | ¿Publica IDE AMCO WFS operativo? | E1-4, y el caso principal de `FR-ING-05` | GIS |
+| ~~OI-F3~~ | ~~¿Publica IDE AMCO WFS operativo?~~ — **cerrado 2026-09-24**: sí, 399 capas; licencia sin declarar (ADR-26) | E1-4, y el caso principal de `FR-ING-05` | GIS |
 | OI-F4 | ¿Población DANE a nivel de manzana o de sector? | OI-07 (imputación), umbral efectivo de `FR-PII-03` | Datos |
 | OI-F5 | Vía de acceso y términos exactos de datosdelterremoto.org | Tier C, M2 | Datos |
 | OI-F6 | Cadena de custodia real de los productos Copernicus / Charter: ¿directa, o vía entidad municipal? | Tier B, y las condiciones que de verdad aplican | Producto |

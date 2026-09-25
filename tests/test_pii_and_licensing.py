@@ -161,7 +161,15 @@ def test_las_fuentes_sin_verificar_siguen_en_unclear():
     # capa cubre el AOI con 47.443 predios y no declara licencia ninguna.
     # Las dos ortofotos entraron el 2026-09-18 igual: auditadas, con via de
     # desbloqueo escrita en db/terms/, y bloqueadas mientras tanto.
-    assert sin_verificar == {"unosat", "igac_catastro", "igac_ortofoto", "pereira_ortofoto_post"}
+    # ide_amco entro el 2026-09-24: responde por WFS y cubre 112 de 115 sitios,
+    # pero no declara terminos (ADR-26, db/terms/ide_amco_20260924.txt).
+    assert sin_verificar == {
+        "unosat",
+        "igac_catastro",
+        "igac_ortofoto",
+        "pereira_ortofoto_post",
+        "ide_amco",
+    }
 
 
 def test_copernicus_es_redistribuible_y_sertit_no():

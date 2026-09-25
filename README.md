@@ -47,12 +47,13 @@ reales, verificado por `scripts/checks/signal_check.py`:
 | Edificación | Microsoft Building Footprints — 15.024 huellas |
 | Población | Total publicado del AOI, repartido dasimétricamente sobre huellas |
 | Red peatonal, parques, equipamientos, uso de suelo | OpenStreetMap |
-| Amenaza sísmica | **ninguna** — la del SGC se retiró por licencia ([ADR-18](docs/adr/ADR-18-retirada-de-la-capa-del-sgc.md)) |
+| Amenaza sísmica | **ninguna** — la del SGC se retiró por licencia ([ADR-18](docs/adr/ADR-18-retirada-de-la-capa-del-sgc.md)); la microzonificación de IDE AMCO espera la suya ([ADR-26](docs/adr/ADR-26-el-pot-se-lee-de-ide-amco-con-criterio-declarado.md)) |
 
 **Lo que falta se declara en vez de rellenarse.** Tres features del vector no
 tienen fuente utilizable y quedan nulas: amenaza sísmica (SGC, retirada por
-licencia), uso de suelo normativo (IDE AMCO, cubierto al 1 %) y vulnerabilidad
-social (DANE, 0 %). En la tabla se leen como `sin fuente`, no como una barra en
+licencia), uso de suelo normativo (cubierto al 1 % por OSM; el POT de IDE AMCO
+cubre 112 de 115 sitios pero no declara licencia, [ADR-26](docs/adr/ADR-26-el-pot-se-lee-de-ide-amco-con-criterio-declarado.md))
+y vulnerabilidad social (DANE, 0 %). En la tabla se leen como `sin fuente`, no como una barra en
 cero: el cero es el valor más favorable en esas escalas. Ver
 [estado actual](docs/plan/estado-actual.md).
 

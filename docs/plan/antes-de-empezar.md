@@ -169,6 +169,6 @@ Es la primera pregunta que hay que responder, antes de escribir una migración.
 | D3 | ¿El RUD entra agregado, o no entra? | M1, `CON-04` | Producto + Legal |
 | D4 | Volumen de referencia real de Pereira (`NFR-SCALE-01`) | Todas las mediciones de rendimiento | GIS |
 | D5 | Descongelar el contrato para admitir geometría de punto | M0 | Backend + GIS |
-| D6 | ¿Existe microzonificación oficial de Pereira como capa? | `risk_score`, que es bloqueante | GIS |
+| D6 | ¿Existe microzonificación oficial de Pereira como capa? — **Sí** (2026-09-24): IDE AMCO la publica, en dos versiones; licencia sin declarar (ADR-26) | `risk_score`, que es bloqueante | GIS |
 | D7 | Dueño institucional de los pesos por defecto | M4, credibilidad del piloto | Institución |
 | D8 | Qué fue el evento del 22 de agosto (`EQ20260822COL`) | Modelo del evento | Datos |

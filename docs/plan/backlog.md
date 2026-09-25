@@ -35,7 +35,7 @@ Convención de tamaño: **S** ≤ 2 días · **M** 3-5 días · **L** 1-2 semana
 | E1-1 | Marco de ingesta: versiones append-only, reejecución reproducible | `FR-ING-02..03`, ADR-06 | L |
 | E1-2 | Normalización de geometría y CRS (4326 almacenado, 3116 métrico) | `FR-ING-04` | M |
 | E1-3 | Adaptador DANE (población, hogares, geografía censal) | PRD §9.2 | M |
-| E1-4 | Adaptador IDE AMCO vía WFS (POT, uso de suelo, barrios, comunas, predios) | `FR-ING-05`, PRD §9.5 | L |
+| E1-4 | Adaptador IDE AMCO vía WFS (POT, uso de suelo, barrios, comunas, predios) — **POT y microzonificación hechos, al sandbox** (ADR-26); falta la base cuando la licencia se declare | `FR-ING-05`, PRD §9.5 | L |
 | E1-5 | Adaptador SGC (microzonificación, amenaza sísmica, movimientos en masa) | PRD §9.6 | M |
 | E1-6 | Adaptador OSM (red peatonal, edificaciones, parques, equipamientos, POIs) | PRD §9.4 | L |
 | E1-7 | Adaptador Megabús (estaciones + frecuencia de servicio) | ADR-03 | S |

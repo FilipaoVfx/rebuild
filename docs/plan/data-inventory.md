@@ -26,10 +26,10 @@ Este documento es la puerta de M0. Mientras una fila diga "por verificar", el hi
 | Daño / demolición post-sismo | Municipio (no existe, CON-01) | `no existe` | generada | interna | — | parada total | M2, todo |
 | Población y hogares | DANE | por verificar | | | | omisión + penalización | M3 · `population_10min`, `households_10min` |
 | Geografía censal (manzanas/sectores) | DANE | por verificar | | | | parada total | M3 · imputación poblacional |
-| POT / uso de suelo | IDE AMCO | por verificar | WFS? | | | **parada total** | M4 · `land_use_compatibility` |
+| POT / uso de suelo | IDE AMCO | **disponible** (112 de 115 sitios) | WFS 2.0.0 | `UNCLEAR` — sin términos (ADR-26) | sin fecha declarada | **parada total** | M4 · `land_use_compatibility` |
 | Barrios y comunas | IDE AMCO | por verificar | WFS? | | | parada total | M1 · resolución de referencias administrativas |
 | Predios / catastro | IDE AMCO | por verificar | | | | omisión | M3 · `building_density` |
-| Microzonificación sísmica | SGC | por verificar | | | | **parada total** | M4 · `risk_score` |
+| Microzonificación sísmica | ~~SGC~~ IDE AMCO | **disponible** (115 de 115 sitios; dos versiones en Pereira) | WFS 2.0.0 | `UNCLEAR` — sin términos (ADR-26) | sin fecha declarada | **parada total** | M4 · `risk_score` |
 | Amenaza por movimientos en masa | SGC / CARDER | por verificar | | | | **parada total** | M4 · `risk_score` |
 | Red peatonal | OSM | probable | descarga directa | ODbL | continua | fallback a buffer | M3 · catchments, `pedestrian_accessibility` |
 | Parques y áreas verdes | AMCO + OSM | por verificar | | | | omisión + penalización | M3 · `park_deficit` |
