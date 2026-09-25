@@ -1,0 +1,15 @@
+# Prompts del mockup
+
+Modo: `imagegen` integrado. El primer PNG generado se corrigió con una edición puntual del marcador. El archivo entregado es `mapa-analista-v1.png`.
+
+## Generación
+
+Referencias: `../recovery-recorrido-20260925/variant-B.png` como estilo; un fotograma del segundo 78 de `docs/demo/recovery-pereira-demo.mp4` como geografía.
+
+> Generate a new high-fidelity 1536x1024 desktop application mockup for RECOVERY, urban analyst's map workspace, in Spanish. Image 1 is STYLE REFERENCE ONLY: preserve its ivory/off-white, restrained cobalt and deep navy editorial visual language, elegant serif headlines, clean sans UI, thin rules, spacing and civic seriousness. Do not copy its layout or comparison content. Image 2 is GEOGRAPHIC REFERENCE ONLY: use the real street-map structure and labels around Pereira, Río Otún, Villavicencio and Corocito from the existing Recovery visor as faithfully as possible. Do not copy its dark panels or dark visual style. Composition: a slim white top header with RECOVERY, a search field “Buscar lugar o sitio”, and utility links “Fuentes” and “Ayuda”. Below the header, one continuous pale map canvas occupies essentially the entire screen; no permanent sidebar, split view or collapsible divs. Analyst controls float above the map as small white cards. A selected site has a cobalt pin near Corocito and a short leader line to a floating card detached from viewport edges. Upper-left card: “Sector de estudio · Pereira”, “182 observaciones · 115 sitios”, “Cobertura parcial: este mapa no representa toda la ciudad”. Floating layer bar: “Territorio”, “Daño”, “Población”, “Espacio público”, “Equipamientos”. Place card: “Corocito”, “Comuna Villavicencio · sitio seleccionado”; evidence “Copernicus EMS · foto-interpretación”, “Sin validar en campo”; nearby context “Calles, espacios públicos y equipamientos”, “OSM · SIGPER”; population “Alcance estimado con reparto sobre edificios”, “Censo DANE 2018: contexto de vulnerabilidad”; regulation “POT sin dato publicable”. Actions: “Examinar evidencia”, “Explorar el entorno”; quiet tertiary link “Ver posibles intervenciones”. No wizard, ranking, prominent score or imposed building recommendation. Bottom provenance: “Copernicus EMS · OSM · Microsoft · SIGPER · DANE” and “Mapa ilustrativo del área de estudio”. Do not invent per-site metrics, costs, photos, approvals or validation.
+
+## Corrección
+
+Referencias: primer PNG como objetivo de edición; el mismo fotograma como referencia geográfica.
+
+> Preserve the entire RECOVERY screen design, including ivory/cobalt typography, floating cards, header, all Spanish text, layer bar, CTA buttons, proportions and map style. One targeted correction: the blue Corocito pin and label are north of Río Otún, which is incorrect. Move only that pin, label and connector line to a plausible site in Corocito, Comuna Villavicencio, south of Río Otún, near Carrera 10 / Calle 7; preserve the information card's position. The OSM Corocito boundary in the repository is latitude 4.8083622–4.8122116 and longitude -75.6879671 to -75.6843351. Keep all other elements unchanged. No new data or invented per-site values.
