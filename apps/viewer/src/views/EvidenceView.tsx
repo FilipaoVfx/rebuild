@@ -52,23 +52,22 @@ export function EvidenceView() {
     <div className="flex flex-col gap-3 p-3">
       <Panel className="p-4">
         <SectionTitle>Ninguna capa es sintética</SectionTitle>
-        <p className="mt-2 text-[13px] leading-relaxed text-mute-200">
+        <p className="mt-2 text-[13px] leading-relaxed text-graphite-700">
           Todo corre sobre fuentes reales, y no por convención: la base de datos lo impone con una
-          restricción <code className="font-mono text-[11px] text-mute-300">CHECK</code> sobre las
+          restricción sobre las
           cinco tablas que podrían cargar contexto inventado. Una migración futura que intente
           escribir una capa simulada falla al insertar.
         </p>
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <ul className="mt-3 divide-y divide-rule border-y border-rule text-[12.5px]">
           {(provenance.layers ?? []).map((l) => (
-            <Chip key={l.source_id} title={l.attribution}>
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-ok" />
-              {l.layer}
-              <span className="text-mute-500">
+            <li key={l.source_id} title={l.attribution} className="flex items-baseline justify-between gap-3 py-1.5">
+              <span className="text-toner">{l.layer}</span>
+              <span className="shrink-0 text-graphite-500">
                 {l.is_synthetic ? 'sintético' : 'real'} · {LICENSE_LABEL[l.license_class] ?? l.license_class}
               </span>
-            </Chip>
+            </li>
           ))}
-        </div>
+        </ul>
         <Note>
           Lo <b>derivado</b> no es lo sintético, y la distinción sostiene el sistema. La población
           se reparte dasimétricamente sobre huellas reales a partir de un total publicado: es un
@@ -79,18 +78,12 @@ export function EvidenceView() {
 
       <Panel className="p-4">
         <SectionTitle>Cadena de trazabilidad</SectionTitle>
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 font-mono text-[10px]">
-          {['dato', 'evidencia', 'necesidad', 'oportunidad', 'intervención', 'impacto', 'portafolio', 'decisión']
-            .map((step, i, arr) => (
-              <span key={step} className="flex items-center gap-1.5">
-                <span className="rounded-md border border-ink-700 bg-ink-850 px-2 py-1 text-mute-200">
-                  {step}
-                </span>
-                {i < arr.length - 1 && <span className="text-ink-500">→</span>}
-              </span>
-            ))}
-        </div>
-        <div className="mt-3 rounded-lg border border-ink-800 bg-ink-950 p-2.5 font-mono text-[10px] leading-relaxed text-mute-400">
+        <p className="mt-3 text-[13px] leading-relaxed text-graphite-700">
+          {['dato', 'evidencia', 'necesidad', 'oportunidad', 'intervención', 'impacto', 'portafolio', 'decisión'].join(' → ')}
+        </p>
+        <details className="group mt-3">
+        <summary className="cursor-pointer list-none text-[11.5px] text-graphite-500 underline [&::-webkit-details-marker]:hidden">Versiones técnicas del corte</summary>
+        <div className="mt-2 rounded-[3px] border border-rule bg-sheet p-2.5 font-mono text-[10px] leading-relaxed text-graphite-500">
           <div>data_version: {provenance.data_version}</div>
           <div>feature_version: {provenance.feature_version}</div>
           <div>constraint_set_version: {provenance.constraint_set_version}</div>
@@ -98,11 +91,12 @@ export function EvidenceView() {
           <div>is_synthetic: {String(provenance.is_synthetic)}</div>
           <div>despliegue: {isStatic ? 'estático (escenarios precalculados)' : 'en vivo sobre la API'}</div>
         </div>
+        </details>
       </Panel>
 
       <Panel className="p-4">
         <SectionTitle>Evidencia de daño ≠ estado consolidado</SectionTitle>
-        <p className="mt-2 text-[12px] leading-relaxed text-mute-300">
+        <p className="mt-2 text-[12px] leading-relaxed text-graphite-600">
           Las observaciones se guardan crudas, con su fuente, fecha, licencia y precisión posicional.
           La clase consolidada se calcula después y conserva cuántas fuentes la sostienen y cuánto
           concuerdan. No se interpreta que un cambio detectado desde la vertical sea un edificio
@@ -122,7 +116,7 @@ export function EvidenceView() {
 
         {evidenceStats.byClass.size > 0 && (
           <div className="mt-4">
-            <div className="text-[10px] tracking-[0.14em] text-mute-400 uppercase">
+            <div className="text-[10px] tracking-[0.14em] text-graphite-500 uppercase">
               Clases observadas
             </div>
             <div className="mt-2 flex flex-col gap-2">
@@ -130,12 +124,12 @@ export function EvidenceView() {
                 <div key={k}>
                   <div className="flex items-baseline justify-between text-[11px]">
                     <span>{DAMAGE_LABEL[k] ?? k}</span>
-                    <span className="num text-mute-400">{n(v)}</span>
+                    <span className="num text-graphite-500">{n(v)}</span>
                   </div>
                   <div className="mt-1">
                     <Bar value={v / evidenceStats.total}
                          color={k === 'DESTROYED' ? 'var(--color-bad)'
-                           : k === 'DAMAGED' ? 'var(--color-warn)' : 'var(--color-mute-400)'}
+                           : k === 'DAMAGED' ? 'var(--color-warn)' : 'var(--color-graphite-500)'}
                          height={4} />
                   </div>
                 </div>
@@ -153,29 +147,28 @@ export function EvidenceView() {
       {unknownsByCheck.length > 0 && (
         <Panel className="p-4">
           <SectionTitle>Lo que el sistema no sabe</SectionTitle>
-          <p className="mt-1.5 text-[11px] text-mute-400">
+          <p className="mt-1.5 text-[11px] text-graphite-500">
             Condiciones que salen <b>sin fuente</b> en vez de colapsar a «cumple» o «bloquea».
           </p>
           <ul className="mt-2.5 flex flex-col gap-2">
             {unknownsByCheck.map((u) => (
-              <li key={u.label} className="rounded-lg border border-dashed border-ink-500 px-2.5 py-2">
+              <li key={u.label} className="rounded-[3px] border border-dashed border-graphite-400 px-2.5 py-2">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="flex items-center gap-2 text-[12px] font-medium">
                     <StatusBadge status="UNKNOWN" />
                     {u.label}
                   </span>
-                  <span className="num shrink-0 text-[10px] text-mute-400">
+                  <span className="num shrink-0 text-[10px] text-graphite-500">
                     {u.count} de {opportunities.length}
                   </span>
                 </div>
-                <p className="mt-1 text-[11px] leading-snug text-mute-400">{u.detail}</p>
+                <p className="mt-1 text-[11px] leading-snug text-graphite-500">{u.detail}</p>
               </li>
             ))}
           </ul>
           <Note>
-            Antes de retirarla, la capa de riesgo se envolvía en un <code className="font-mono">COALESCE(…, 0)</code>{' '}
-            y todos los sitios puntuaban riesgo cero —el valor más favorable— sin que nadie se
-            enterara. Contar las incógnitas es la corrección de ese error.
+            Antes de retirarla, la capa de riesgo rellenaba con un cero lo que no sabía, y todos
+            los sitios puntuaban riesgo cero —el valor más favorable— sin que nadie se enterara. Contar las incógnitas es la corrección de ese error.
           </Note>
         </Panel>
       )}
@@ -183,18 +176,18 @@ export function EvidenceView() {
       {(blocked.length > 0 || unverified.length > 0) && (
         <Panel className="p-4">
           <SectionTitle>Puerta de licencia</SectionTitle>
-          <p className="mt-1.5 text-[12px] leading-relaxed text-mute-300">
+          <p className="mt-1.5 text-[12px] leading-relaxed text-graphite-600">
             Publicar un sitio web es redistribuir. Estas fuentes no pueden contribuir al paquete
             público, y la puerta bloquearía la publicación si volvieran a hacerlo.
           </p>
           <ul className="mt-2.5 flex flex-col gap-1.5">
             {[...blocked, ...unverified.filter((u) => !blocked.includes(u))].map((s) => (
               <li key={s.source_id}
-                  className="flex items-start gap-2.5 rounded-lg border border-bad/30 bg-bad/5 px-2.5 py-2">
+                  className="flex items-start gap-2.5 rounded-[3px] border border-bad/30 bg-bad/5 px-2.5 py-2">
                 <StatusBadge status="BLOCKED" />
                 <div className="min-w-0">
                   <div className="text-[12px] font-medium text-bad">{s.display_name}</div>
-                  <div className="mt-0.5 text-[10px] text-mute-400">
+                  <div className="mt-0.5 text-[10px] text-graphite-500">
                     {s.redistribution_allowed === false
                       ? 'No permite redistribución'
                       : 'Licencia sin verificar'}
@@ -209,13 +202,13 @@ export function EvidenceView() {
 
       {alerts.length > 0 && (
         <Panel className="p-4">
-          <SectionTitle right={<span className="text-[10px] text-mute-400">{alerts.length}</span>}>
+          <SectionTitle right={<span className="text-[10px] text-graphite-500">{alerts.length}</span>}>
             Alertas de calidad
           </SectionTitle>
           <ul className="mt-2.5 flex flex-col gap-1.5">
             {alerts.map((a) => (
               <li key={a.alert_id} className={[
-                'rounded-lg border px-2.5 py-2 text-[11px] leading-snug',
+                'rounded-[3px] border px-2.5 py-2 text-[11px] leading-snug',
                 a.severity === 'error' ? 'border-bad/30 bg-bad/5 text-bad'
                   : 'border-warn/30 bg-warn/5 text-warn',
               ].join(' ')}>
@@ -231,28 +224,26 @@ export function EvidenceView() {
       )}
 
       <Panel className="p-4">
-        <SectionTitle right={<span className="text-[10px] text-mute-400">{shown.length}</span>}>
+        <SectionTitle right={<span className="text-[10px] text-graphite-500">{shown.length}</span>}>
           Fuentes y licencias
         </SectionTitle>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {tiers.map((t) => (
             <Chip key={t} active={t === tier} onClick={() => setTier(t)}>
-              {t === 'todas' ? 'todas' : `tier ${t}`}
+              {t === 'todas' ? 'todas' : `nivel ${t}`}
             </Chip>
           ))}
         </div>
 
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-3 flex flex-col border-t border-rule">
           {shown.map((s) => (
-            <details key={s.source_id}
-                     className="rounded-lg border border-ink-700 bg-ink-850 px-3 py-2.5">
+            <details key={s.source_id} className="border-b border-rule py-2.5">
               <summary className="cursor-pointer list-none">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-[12px] font-medium">{s.display_name}</div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-mute-400">
-                      <span className="font-mono">{s.source_id}</span>
-                      <span>tier {s.tier}</span>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-graphite-500">
+                      <span>nivel {s.tier}</span>
                       {s.license_class && <span>{LICENSE_LABEL[s.license_class] ?? s.license_class}</span>}
                     </div>
                   </div>
@@ -271,10 +262,10 @@ export function EvidenceView() {
                 <Field k="redistribución" v={s.redistribution_allowed ? 'permitida' : 'no permitida'} />
               </dl>
               {s.attribution_text && (
-                <p className="mt-2 text-[10px] leading-relaxed text-mute-300">{s.attribution_text}</p>
+                <p className="mt-2 text-[10px] leading-relaxed text-graphite-600">{s.attribution_text}</p>
               )}
               {s.verification_notes && (
-                <p className="mt-2 border-t border-ink-800 pt-2 text-[10px] leading-relaxed text-mute-400">
+                <p className="mt-2 border-t border-rule pt-2 text-[10px] leading-relaxed text-graphite-500">
                   {s.verification_notes}
                 </p>
               )}
@@ -282,8 +273,8 @@ export function EvidenceView() {
           ))}
         </div>
         <Note>
-          Cada licencia se leyó verbatim del documento oficial y su copia vive en{' '}
-          <code className="font-mono">db/terms/</code>. Una fuente sin verificar no alimenta features.
+          Cada licencia se leyó verbatim del documento oficial y su copia se archiva con el
+          proyecto. Una fuente sin verificar no alimenta features.
         </Note>
       </Panel>
     </div>
@@ -293,8 +284,8 @@ export function EvidenceView() {
 function Field({ k, v }: { k: string; v: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-mute-500">{k}</dt>
-      <dd className="truncate text-mute-200" title={v}>{v}</dd>
+      <dt className="text-graphite-400">{k}</dt>
+      <dd className="truncate text-graphite-700" title={v}>{v}</dd>
     </div>
   );
 }

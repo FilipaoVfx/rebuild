@@ -1,237 +1,239 @@
+import { useMemo } from 'react';
+import { populationOutside } from '../lib/coverage';
+import type { GeoJSON } from '../types';
 import { BASEMAPS } from '../lib/basemap';
 import { CONTEXTS, contextByKey } from '../lib/contexts';
 import { RAMPS, rgbCss } from '../lib/palette';
 import { CITY_LINE, useStore } from '../state/store';
 import type { ViewKey } from '../types';
-import { Chip } from './ui';
+import { Chip, Mark, Stamp } from './ui';
 
-/* Territorio primero: dónde estamos, antes de qué pasa (ADR-22). */
-const NAV: { key: ViewKey; label: string; question: string }[] = [
-  { key: 'territorio', label: 'Territorio', question: '¿Dónde estamos?' },
-  { key: 'situacion', label: 'Situación', question: '¿Qué está pasando?' },
-  { key: 'oportunidades', label: 'Oportunidades', question: '¿Dónde podemos actuar?' },
-  { key: 'escenarios', label: 'Escenarios', question: '¿Qué cambia si cambian las prioridades?' },
-  { key: 'evidencia', label: 'Evidencia', question: '¿En qué nos estamos basando?' },
+/* El índice del concepto: las secciones van en el orden del argumento, y ese
+   orden es información — por eso llevan numeral. */
+export const NAV: { key: ViewKey; folio: string; label: string; question: string }[] = [
+  { key: 'territorio', folio: 'I', label: 'Territorio y alcance', question: '¿Dónde estamos y qué cubre la evidencia?' },
+  { key: 'situacion', folio: 'II', label: 'Situación', question: '¿Qué está pasando?' },
+  { key: 'oportunidades', folio: 'III', label: 'Oportunidades', question: '¿Dónde se puede actuar, y por qué ahí?' },
+  { key: 'escenarios', folio: 'IV', label: 'Escenarios', question: '¿Qué cambia si cambian las prioridades?' },
+  { key: 'evidencia', folio: 'V', label: 'Fuentes y límites', question: '¿En qué se basa y qué no sabe?' },
 ];
 
-export function TopBar() {
-  const { view, setView, provenance } = useStore();
+/** Membrete: quién emite, qué es, de cuándo. Y el sello, antes que nada. */
+export function Letterhead() {
+  const { provenance } = useStore();
+  /* El corte es la obtención más reciente entre las capas que contribuyen. */
+  const retrieved = (provenance.layers ?? []).map((l) => l.retrieved_at).sort();
+  const cut = retrieved.length ? fechaCorta(retrieved[retrieved.length - 1]) : 'sin fecha';
   return (
-    <header className="z-30 flex shrink-0 flex-col border-b border-ink-700 bg-ink-950/95">
-      <div className="flex items-center gap-3 px-4 py-2.5">
-        <div className="flex items-center gap-2.5">
-          <Glyph />
-          <div className="leading-tight">
-            <div className="text-[12px] font-semibold tracking-tight sm:text-[13px]">
-              Urban Recovery Intelligence
-            </div>
-            <div data-uri="city-line" className="text-[10px] text-mute-400">
-              <span className="sm:hidden">{CITY_LINE.split(' · ')[0]}</span>
-              <span className="hidden sm:inline">{CITY_LINE} · sismo M7,4 del 10-08-2026</span>
-            </div>
+    <header className="z-30 shrink-0 bg-sheet">
+      <div className="flex items-start gap-3 px-4 pt-2.5 pb-2 sm:gap-4 sm:px-6 sm:pt-4 sm:pb-2.5">
+        <Glyph />
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="letterhead text-[10.5px] tracking-[0.07em] text-toner sm:text-[13px] sm:tracking-[0.12em]">Urban Recovery Intelligence</div>
+          <div className="mt-0.5 font-serif text-[14px] text-toner sm:mt-1 sm:text-[17px]">
+            Concepto técnico de caracterización
+            <span title="El número del concepto es el de la edición de datos del corte"
+                  className="num ml-2 text-[12px] text-graphite-500 sm:text-[13px]">N.º {provenance.data_version}</span>
+          </div>
+          <div data-uri="city-line" className="mt-0.5 text-[11.5px] text-graphite-500 sm:text-[12px]">
+            {CITY_LINE} · sismo M7,4 del 10-08-2026
+            <span className="md:hidden"> · <b className="num font-semibold text-toner">corte {cut}</b></span>
           </div>
         </div>
-
-        <nav className="ml-4 hidden items-center gap-1 lg:flex">
-          {NAV.map((n) => (
-            <button
-              key={n.key}
-              data-uri="nav"
-              data-view={n.key}
-              data-active={view === n.key ? 'true' : 'false'}
-              onClick={() => setView(n.key)}
-              title={n.question}
-              className={[
-                'rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors',
-                view === n.key ? 'bg-ink-700 text-paper' : 'text-mute-300 hover:bg-ink-850 hover:text-paper',
-              ].join(' ')}
-            >
-              {n.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="ml-auto flex items-center gap-2">
-          <ConsultativeBadge />
+        <dl className="hidden shrink-0 grid-cols-[auto_auto] gap-x-3 gap-y-0.5 text-[12px] md:grid">
+          <dt className="text-graphite-500">Corte de datos</dt><dd className="num font-semibold text-toner">{cut}</dd>
+          <dt className="text-graphite-500">Carácter</dt><dd className="text-toner">consultivo, no vinculante</dd>
+          <dt className="text-graphite-500">Emite</dt><dd className="text-toner">URI, no la administración</dd>
+        </dl>
+        <div className="shrink-0 pt-0.5">
+          <span className="hidden sm:inline-flex"><Stamp /></span>
+          <span className="sm:hidden"><Stamp compact /></span>
         </div>
       </div>
-
-      <ProvenanceBar />
-
-      <nav className="flex gap-1 overflow-x-auto border-t border-ink-800 px-3 py-1.5 lg:hidden">
-        {NAV.map((n) => (
-          <button
-            key={n.key}
-            data-uri="nav-mobile"
-            data-view={n.key}
-            onClick={() => setView(n.key)}
-            className={[
-              'shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-medium',
-              view === n.key ? 'bg-ink-700 text-paper' : 'text-mute-300',
-            ].join(' ')}
-          >
-            {n.label}
-          </button>
-        ))}
-      </nav>
-      <span className="sr-only">
-        versión de datos {provenance.data_version} · {provenance.scoring_version}
-      </span>
+      {/* El filete grueso bajo el membrete, como en todo documento emitido. */}
+      <div className="mx-4 h-[3px] bg-toner sm:mx-6" />
+      <SectionIndex />
     </header>
   );
 }
 
-function Glyph() {
+function fechaCorta(iso: string) {
+  const d = iso.slice(0, 10).split('-');
+  return d.length === 3 ? `${d[2]}-${d[1]}-${d[0]}` : iso;
+}
+
+function SectionIndex() {
+  const { view, setView, selectSite } = useStore();
   return (
-    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden className="shrink-0">
-      <rect x="1" y="1" width="20" height="20" rx="5" fill="none" stroke="var(--color-ink-600)" />
-      <rect x="5" y="11" width="3.4" height="6" rx="1" fill="var(--color-mute-400)" />
-      <rect x="9.3" y="7.5" width="3.4" height="9.5" rx="1" fill="var(--color-mute-300)" />
-      <rect x="13.6" y="4.4" width="3.4" height="12.6" rx="1" fill="var(--color-accent)" />
+    <nav aria-label="Secciones del concepto"
+         className="relative flex gap-1 overflow-x-auto border-b border-rule px-2 sm:px-4">
+      {NAV.map((n) => {
+        const active = view === n.key;
+        return (
+          <button
+            key={n.key}
+            data-uri="nav"
+            data-view={n.key}
+            data-active={active ? 'true' : 'false'}
+            aria-current={active ? 'page' : undefined}
+            onClick={() => { setView(n.key); if (n.key !== 'oportunidades') selectSite(null); }}
+            title={n.question}
+            className={[
+              'group relative flex shrink-0 items-baseline gap-1.5 px-2.5 pt-2.5 pb-2 text-[13px] transition-colors',
+              active ? 'text-toner' : 'text-graphite-500 hover:text-toner',
+            ].join(' ')}
+          >
+            <span className={`num text-[11px] font-bold ${active ? 'text-toner' : 'text-graphite-400 group-hover:text-graphite-600'}`}>{n.folio}</span>
+            <span className={active ? 'font-semibold' : 'font-medium'}>{n.label}</span>
+            {active && <span className="animate-rule absolute inset-x-2.5 -bottom-px h-[2px] bg-toner" />}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function Glyph() {
+  /* El emblema del emisor: tres barras de evidencia, la última en tinta plena. */
+  return (
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden className="mt-0.5 hidden shrink-0 sm:block">
+      <rect x="0.75" y="0.75" width="28.5" height="28.5" fill="none" stroke="var(--color-toner)" strokeWidth="1.5" />
+      <rect x="7" y="16" width="4" height="8" fill="var(--color-graphite-400)" />
+      <rect x="13" y="11" width="4" height="13" fill="var(--color-graphite-600)" />
+      <rect x="19" y="6" width="4" height="18" fill="var(--color-toner)" />
     </svg>
   );
 }
 
-/**
- * CON-05: toda salida es consultiva. No es un descargo legal escondido en un
- * pie de página — es la primera cosa que el visor dice sobre sí mismo.
- */
-function ConsultativeBadge() {
+/** Encabezado del anexo: título, ruta del sitio, vistas del mapa y tipo de mapa. */
+export function AnnexHeader() {
+  const { context } = useStore();
+  const def = contextByKey(context);
   return (
-    <span
-      title="Ninguna decisión del sistema es vinculante. No sustituye inspección estructural, licencias ni el POT."
-      className="flex items-center gap-1.5 rounded-full border border-ink-600 bg-ink-850 px-2.5 py-1 text-[10px] font-medium text-mute-200"
-    >
-      <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
-      <span className="hidden sm:inline">SALIDA CONSULTIVA</span>
-      <span className="sm:hidden">CONSULTIVA</span>
-    </span>
-  );
-}
-
-/** La procedencia viaja en el cromo, no en una pestaña que nadie abre. */
-function ProvenanceBar() {
-  const { provenance, setView, isStatic, alerts } = useStore();
-  const layers = provenance.layers ?? [];
-  const errors = alerts.filter((a) => a.severity === 'error').length;
-  return (
-    <div data-uri="provenance"
-         className="flex items-center gap-1.5 overflow-x-auto border-t border-ink-800 px-4 py-1.5 text-[10px]">
-      <span className="shrink-0 tracking-[0.14em] text-mute-500 uppercase">Procedencia</span>
-      {layers.map((l) => (
-        <button
-          key={l.source_id}
-          onClick={() => setView('evidencia')}
-          title={`${l.attribution} · ${l.license_class}`}
-          className="flex shrink-0 items-center gap-1.5 rounded-md border border-ink-700 bg-ink-850 px-2 py-0.5 text-mute-200 hover:border-mute-400/50"
-        >
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-ok" />
-          {l.layer}
-          <span className="text-mute-500">{l.is_synthetic ? 'sintético' : 'real'}</span>
-        </button>
-      ))}
-      <span className="shrink-0 rounded-md border border-ink-800 bg-ink-900 px-2 py-0.5 font-mono text-mute-400">
-        data v{provenance.data_version} · {provenance.feature_version} · {provenance.scoring_version}
-      </span>
-      {errors > 0 && (
-        <button
-          onClick={() => setView('evidencia')}
-          className="flex shrink-0 items-center gap-1.5 rounded-md border border-bad/40 bg-bad/10 px-2 py-0.5 text-bad"
-        >
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-bad" />
-          {errors} alerta{errors === 1 ? '' : 's'} de licencia
-        </button>
-      )}
-      {isStatic && (
-        <span
-          title="GitHub Pages sirve archivos, no procesos: los escenarios van precalculados a presupuestos fijos."
-          className="shrink-0 rounded-md border border-ink-700 bg-ink-850 px-2 py-0.5 text-mute-400"
-        >
-          modo estático
-        </span>
-      )}
+    <div className="shrink-0 bg-sheet">
+      <div className="flex items-center gap-3 px-3 pt-2.5 sm:px-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="letterhead hidden shrink-0 text-[10.5px] text-graphite-600 sm:inline">Anexo cartográfico</span>
+            <Breadcrumb />
+          </div>
+        </div>
+        <MapTypeSwitcher />
+      </div>
+      <ContextSwitcher />
+      <p className="hidden px-4 pb-1.5 font-serif text-[13px] text-graphite-600 md:block">
+        {def.question} <span className="text-graphite-400">· {def.unit}</span>
+      </p>
     </div>
   );
 }
 
 export function ContextSwitcher() {
   const { context, setContext } = useStore();
-  const def = contextByKey(context);
   return (
-    <div className="pointer-events-auto">
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-ink-600 bg-ink-950/97 p-1 shadow-lg shadow-black/50 sm:flex-wrap sm:overflow-visible">
-        {CONTEXTS.map((c) => {
-          const active = c.key === context;
-          return (
-            <button
-              key={c.key}
-              data-uri="context"
-              data-context={c.key}
-              onClick={() => setContext(c.key)}
-              title={c.question}
-              className={[
-                'flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium whitespace-nowrap transition-colors',
-                active ? 'bg-ink-700 text-paper' : 'text-mute-400 hover:bg-ink-850 hover:text-mute-200',
-              ].join(' ')}
-            >
-              <span className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: active ? rgbCss(RAMPS[c.key][4]) : 'var(--color-ink-500)' }} />
-              {c.label}
-            </button>
-          );
-        })}
-      </div>
-      <p className="mt-1.5 hidden max-w-[360px] pl-1 text-[10px] leading-relaxed text-mute-400 sm:block">
-        {def.question} <span className="text-mute-500">· {def.unit}</span>
-      </p>
+    <div role="tablist" aria-label="Vistas del anexo"
+         className="flex gap-0.5 overflow-x-auto px-2 pt-1.5 sm:px-3">
+      {CONTEXTS.map((c) => {
+        const active = c.key === context;
+        return (
+          <button
+            key={c.key}
+            role="tab"
+            aria-selected={active}
+            data-uri="context"
+            data-context={c.key}
+            onClick={() => setContext(c.key)}
+            title={c.question}
+            className={[
+              'relative flex shrink-0 items-center gap-1.5 px-2 py-1.5 text-[12.5px] whitespace-nowrap transition-colors',
+              active ? 'font-semibold text-toner' : 'text-graphite-500 hover:text-toner',
+            ].join(' ')}
+          >
+            <span className="h-2 w-2" style={{ background: active ? rgbCss(RAMPS[c.key][4]) : 'var(--color-rule-2)' }} />
+            {c.label}
+            {active && <span className="animate-rule absolute inset-x-2 bottom-0 h-[2px] bg-toner" />}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-export function Legend() {
-  const { context, discrimination } = useStore();
+/**
+ * El rótulo del anexo: lo que en una plancha oficial dice qué es el mapa, de
+ * dónde sale y cómo se lee. Aquí viven la leyenda y la procedencia.
+ */
+export function Rotulo() {
+  const { context, discrimination, provenance, alerts, setView, layers: geo, territory } = useStore();
   const def = contextByKey(context);
   const ramp = RAMPS[context];
-  if (def.categoricalLegend) {
-    /* Un contexto de orientación no tiene rampa que explicar: dice qué es cada trazo. */
-    return (
-      <div data-uri="legend"
-           className="pointer-events-none rounded-lg border border-ink-600 bg-ink-950/97 px-2.5 py-2 shadow-lg shadow-black/50">
-        <ul className="grid grid-cols-2 gap-x-3 gap-y-1 text-[9px] text-mute-300">
-          {def.categoricalLegend.map((item) => (
-            <li key={item.label} className="flex items-center gap-1.5">
-              <span className="inline-block h-0 w-4 border-t-2"
-                    style={{ borderColor: item.color, borderStyle: item.dashed ? 'dashed' : 'solid' }} />
-              {item.label}
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
+  const popOut = useMemo(
+    () => populationOutside(geo.population as GeoJSON | undefined, territory?.aoi.bbox),
+    [geo.population, territory],
+  );
+  const layers = provenance.layers ?? [];
+  const blocked = alerts.filter((a) => a.severity === 'error').length;
   return (
     <div data-uri="legend"
-         className="pointer-events-none rounded-lg border border-ink-600 bg-ink-950/97 px-2.5 py-2 shadow-lg shadow-black/50">
-      <div className="flex h-1.5 w-32 overflow-hidden rounded-full">
-        {ramp.map((c, i) => <div key={i} className="flex-1" style={{ background: rgbCss(c) }} />)}
+         className="pointer-events-auto w-[248px] border border-toner bg-sheet text-[11px] shadow-[0_2px_10px_-4px_rgb(23_24_27/.25)]">
+      <div className="border-b border-toner px-2.5 py-1.5">
+        <div className="letterhead text-[9.5px] text-toner">Anexo 1 · {def.label}</div>
       </div>
-      <div className="mt-1 flex justify-between text-[9px] text-mute-400">
-        <span>{def.legend[0]}</span><span>{def.legend[1]}</span>
+      <div className="px-2.5 py-2">
+        {def.categoricalLegend ? (
+          <ul className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10.5px] text-graphite-700">
+            {def.categoricalLegend.map((item) => (
+              <li key={item.label} className="flex items-center gap-1.5">
+                <span className="inline-block h-0 w-4 border-t-2"
+                      style={{ borderColor: item.color, borderStyle: item.dashed ? 'dashed' : 'solid' }} />
+                {item.label}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <>
+            <div className="flex h-2.5 w-full overflow-hidden border border-rule-2">
+              {ramp.map((c, i) => <div key={i} className="flex-1" style={{ background: rgbCss(c) }} />)}
+            </div>
+            <div className="mt-1 flex justify-between text-[10px] text-graphite-500">
+              <span>{def.legend[0]}</span><span>{def.legend[1]}</span>
+            </div>
+          </>
+        )}
+        <div className="mt-2 flex items-center gap-1.5 text-[10.5px] text-graphite-600">
+          <span className="hatch inline-block h-3 w-4 border border-graphite-400" />
+          fuera del área cubierta: sin evidencia
+        </div>
+        {def.populationChoropleth && popOut && popOut.outside > 0 && (
+          <div className="mt-1 pl-[22px] text-[10.5px] leading-snug text-graphite-600">
+            {popOut.outside.toLocaleString('es-CO')} celdas de población quedan bajo la trama
+          </div>
+        )}
+        {discrimination.covered < discrimination.total && (
+          <div className="mt-1 flex items-center gap-1.5 text-[10.5px] text-graphite-600">
+            <span className="inline-block h-2.5 w-2.5 rounded-full border border-graphite-400 bg-sheet-3" />
+            {discrimination.total - discrimination.covered} sitios sin fuente para este eje
+          </div>
+        )}
+        {discrimination.flat && (
+          <div data-uri="flat-axis"
+               className="mt-1.5 border-t border-rule pt-1.5 text-[10.5px] leading-snug text-warn">
+            Este eje está cubierto pero <b>no ordena</b>: {discrimination.distinct} valor
+            {discrimination.distinct === 1 ? '' : 'es'} distinto
+            {discrimination.distinct === 1 ? '' : 's'} en {discrimination.covered} sitios.
+          </div>
+        )}
       </div>
-      {discrimination.covered < discrimination.total && (
-        <div className="mt-1.5 hidden items-center gap-1.5 border-t border-ink-800 pt-1.5 text-[9px] text-mute-400 sm:flex">
-          <span className="inline-block h-2 w-2 rounded-full bg-mute-400/60" />
-          {discrimination.total - discrimination.covered} sitios sin fuente para este eje
-        </div>
-      )}
-      {discrimination.flat && (
-        <div data-uri="flat-axis"
-             className="mt-1.5 max-w-[170px] border-t border-warn/30 pt-1.5 text-[9px] leading-snug text-warn">
-          Este eje está cubierto pero <b>no ordena</b>: {discrimination.distinct} valor
-          {discrimination.distinct === 1 ? '' : 'es'} distinto
-          {discrimination.distinct === 1 ? '' : 's'} en {discrimination.covered} sitios.
-        </div>
-      )}
+      <div data-uri="provenance" className="border-t border-rule px-2.5 py-1.5 text-[10px] leading-snug text-graphite-500">
+        <span className="font-semibold text-graphite-700">Fuente: </span>
+        {layers.map((l) => l.layer.split(' — ')[0].split(' (')[0]).join(' · ') || 'sin capas'}
+        {blocked > 0 && (
+          <button onClick={() => setView('evidencia')}
+                  className="mt-1 block text-left text-bad underline decoration-bad/40 hover:decoration-bad">
+            {blocked} fuente{blocked === 1 ? '' : 's'} existe{blocked === 1 ? '' : 'n'} y no se puede{blocked === 1 ? '' : 'n'} usar → V
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -244,37 +246,31 @@ export function Breadcrumb() {
     commune: site.commune ?? null, neighborhood: site.neighborhood ?? null,
   } : null);
   const city = territory?.city?.display_name ?? 'Pereira';
-  const sep = <span className="text-ink-500">›</span>;
+  const sep = <span className="text-graphite-400">›</span>;
   return (
-    <div data-uri="breadcrumb"
-         className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-lg border border-ink-600 bg-ink-950/97 px-2 py-1.5 text-[11px] shadow-lg shadow-black/50">
+    <div data-uri="breadcrumb" className="flex min-w-0 flex-wrap items-baseline gap-1 text-[12.5px]">
       <button
         onClick={() => { selectSite(null); setHighlightedAdminId(null); }}
-        className={selectedSiteId ? 'text-mute-400 hover:text-paper' : 'font-medium text-paper'}
+        className={selectedSiteId ? 'text-graphite-500 underline decoration-rule-2 hover:text-toner' : 'font-semibold text-toner'}
       >
         {city}
       </button>
       {selectedSiteId && (
         <>
           {sep}
-          <span className={place?.commune ? 'text-mute-200' : 'text-mute-500'}>
+          <span className={place?.commune ? 'text-graphite-700' : 'text-graphite-400'}>
             {place?.commune ? `Comuna ${place.commune}` : 'comuna sin fuente'}
           </span>
           {sep}
-          <span className={place?.neighborhood ? 'text-mute-200' : 'text-mute-500'}>
+          <span className={place?.neighborhood ? 'text-graphite-700' : 'text-graphite-400'}>
             {place?.neighborhood ?? 'barrio sin fuente'}
           </span>
           {sep}
-          <span className="font-medium text-paper">
-            {opp?.intervention_label ?? selectedSiteId}
-          </span>
-          <span className="font-mono text-[10px] text-mute-500">{selectedSiteId}</span>
+          <span className="font-semibold text-toner">{opp?.intervention_label ?? selectedSiteId}</span>
         </>
       )}
       {!selectedSiteId && (
-        <span className="ml-1.5 hidden border-l border-ink-700 pl-2 text-[10px] text-mute-500 sm:inline">
-          clic en un sitio para ver su oportunidad
-        </span>
+        <span className="hidden text-[12px] text-graphite-400 lg:inline">· señale un sitio para abrir su ficha</span>
       )}
     </div>
   );
@@ -282,44 +278,36 @@ export function Breadcrumb() {
 
 /**
  * Tipo de mapa (ADR-22 §8). Calles y Oscuro son OpenStreetMap servido por
- * nosotros; Datos es el mapa original sin cartografía base. Si el extracto no
- * está publicado en este despliegue, solo queda Datos y el control lo dice.
+ * nosotros; Datos es el mapa sin cartografía base.
  */
 export function MapTypeSwitcher() {
   const { baseMap, setBaseMap, territory } = useStore();
   const available = territory?.imagery.basemap?.available ?? false;
-  const replica = territory?.imagery.basemap?.osm_replication_time;
   return (
-    <div className="pointer-events-auto flex flex-col items-end gap-1">
-      <div data-uri="basemap-switcher"
-           className="flex gap-0.5 rounded-lg border border-ink-600 bg-ink-950/97 p-0.5 text-[11px] shadow-lg shadow-black/50">
-        {BASEMAPS.map((b) => {
-          const disabled = b.key !== 'datos' && !available;
-          return (
-            <button
-              key={b.key}
-              data-uri="basemap"
-              data-basemap={b.key}
-              data-active={baseMap === b.key ? 'true' : 'false'}
-              disabled={disabled}
-              onClick={() => setBaseMap(b.key)}
-              title={disabled ? 'Sin extracto de cartografía base en este despliegue' : b.help}
-              className={[
-                'rounded-md px-2.5 py-1 font-medium transition-colors',
-                baseMap === b.key ? 'bg-ink-700 text-paper' : 'text-mute-300 hover:bg-ink-850 hover:text-paper',
-                disabled ? 'cursor-not-allowed opacity-40' : '',
-              ].join(' ')}
-            >
-              {b.label}
-            </button>
-          );
-        })}
-      </div>
-      {baseMap !== 'datos' && replica && (
-        <span className="hidden rounded bg-ink-950/80 px-1.5 text-[9px] text-mute-400 sm:inline">
-          OpenStreetMap · réplica {replica.slice(0, 10)}
-        </span>
-      )}
+    <div data-uri="basemap-switcher" className="flex shrink-0 border border-rule-2 text-[11.5px]">
+      {BASEMAPS.map((b) => {
+        const disabled = b.key !== 'datos' && !available;
+        const active = baseMap === b.key;
+        return (
+          <button
+            key={b.key}
+            data-uri="basemap"
+            data-basemap={b.key}
+            data-active={active ? 'true' : 'false'}
+            aria-pressed={active}
+            disabled={disabled}
+            onClick={() => setBaseMap(b.key)}
+            title={disabled ? 'Sin extracto de cartografía base en este despliegue' : b.help}
+            className={[
+              'px-2 py-[3px] font-medium transition-colors not-first:border-l not-first:border-rule-2',
+              active ? 'bg-toner text-sheet' : 'text-graphite-600 hover:text-toner',
+              disabled ? 'cursor-not-allowed opacity-40' : '',
+            ].join(' ')}
+          >
+            {b.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -328,20 +316,20 @@ export function CompareTray() {
   const { compare, clearCompare, toggleCompare, setView } = useStore();
   if (!compare.length) return null;
   return (
-    <div className="pointer-events-auto flex items-center gap-2 rounded-xl border border-accent/40 bg-ink-950/97 px-2.5 py-2 shadow-lg shadow-black/50">
-      <span className="text-[10px] font-semibold tracking-[0.14em] text-accent uppercase">Comparar</span>
+    <div className="pointer-events-auto flex items-center gap-2 border border-toner bg-sheet px-2.5 py-2 shadow-[0_2px_10px_-4px_rgb(23_24_27/.25)]">
+      <span className="letterhead text-[10px] text-toner">Comparar</span>
       {compare.map((id) => (
         <Chip key={id} active onClick={() => toggleCompare(id)} title="Quitar de la comparación">
-          {id.replace('site_', '#')} ✕
+          {id.replace('site_', 'n.º ')} <Mark kind="close" size={9} />
         </Chip>
       ))}
       <button
         onClick={() => setView('oportunidades')}
-        className="rounded-lg bg-accent px-2.5 py-1 text-[11px] font-semibold text-ink-950 hover:bg-accent/85"
+        className="bg-toner px-2.5 py-1 text-[12px] font-semibold text-sheet hover:bg-graphite-700"
       >
         Ver comparación
       </button>
-      <button onClick={clearCompare} className="px-1 text-[11px] text-mute-400 hover:text-paper">
+      <button onClick={clearCompare} className="px-1 text-[12px] text-graphite-500 underline hover:text-toner">
         limpiar
       </button>
     </div>

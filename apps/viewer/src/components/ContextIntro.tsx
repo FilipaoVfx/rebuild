@@ -1,3 +1,6 @@
+import { useMemo } from 'react';
+import { populationOutside } from '../lib/coverage';
+import type { GeoJSON } from '../types';
 import type { ReactNode } from 'react';
 import { contextByKey } from '../lib/contexts';
 import { FACTOR_LABEL, n, pct } from '../lib/format';
@@ -32,7 +35,11 @@ interface Intro {
 }
 
 export function ContextIntro() {
-  const { context, sites, opportunities, territory, scenario, discrimination, minSuitability } = useStore();
+  const { context, sites, opportunities, territory, scenario, discrimination, minSuitability, layers } = useStore();
+  const popOut = useMemo(
+    () => populationOutside(layers.population as GeoJSON | undefined, territory?.aoi.bbox),
+    [layers.population, territory],
+  );
   const def = contextByKey(context);
   const total = sites.length;
   const candidates = sites.filter((s) => s.state === 'CANDIDATE').length;
@@ -69,7 +76,7 @@ export function ContextIntro() {
         { name: 'Equipamientos municipales', how: <>Polígonos de equipamientos colectivos y espacio público del POT.</>, source: 'Alcaldía de Pereira — SIGPER, Ley 1712 de 2014' },
       ],
       reading: [
-        <>La línea punteada ámbar es el área que este visor cubre: 21,66 km² del centro y oriente de Pereira, no la ciudad entera.</>,
+        <>El marco violeta es el área que este concepto cubre: 21,66 km² del centro y oriente de Pereira, no la ciudad entera. Fuera del marco, la ciudad va tramada.</>,
         <>Clic en una comuna la encuadra; clic en un sitio abre su ficha con barrio, comuna y esquina.</>,
       ],
       caveat: <>Los nombres son los de OpenStreetMap tal como están. Un sitio sin barrio en OSM dice «sin fuente».</>,
@@ -80,13 +87,13 @@ export function ContextIntro() {
       summary: <>
         La lectura de partida: dónde hay gente y dónde hay evidencia de daño. El mapa colorea las
         celdas de población y los {n(total)} sitios por la población que cada uno alcanza a pie; los
-        puntos rojos, naranjas y amarillos son las observaciones de daño.
+        puntos en tinta óxido son las observaciones de daño: cuanto más oscuros, más grave.
       </>,
       variables: [
         {
           name: 'Población por celda',
           how: <>Reparto <b>dasimétrico</b>: el total publicado para el AOI (190.000 personas, estadística
-            del producto EMSR916/AOI02) se distribuye sobre 15.024 huellas de edificio en proporción a
+            del producto de Copernicus EMS) se distribuye sobre 15.024 huellas de edificio en proporción a
             su área construida, y se agrega a una malla de celdas de ~150 m. Es una estimación de
             dónde vive la gente, no un conteo.</>,
           source: 'Copernicus EMS (total) · Microsoft Building Footprints (huellas)',
@@ -96,7 +103,7 @@ export function ContextIntro() {
         {
           name: 'Observaciones de daño',
           how: <>{evidence !== null ? n(evidence) : '182'} puntos de foto-interpretación satelital
-            (grading) con clase <i>posiblemente dañado</i>, <i>dañado</i> o <i>destruido</i>, fecha de
+            con clase <i>posiblemente dañado</i>, <i>dañado</i> o <i>destruido</i>, fecha de
             observación y precisión posicional declarada.</>,
           source: 'Copernicus EMS, activación EMSR916 (CC BY 4.0)',
           limit: <>Ninguna está validada en campo. La cobertura es donde apuntó el sensor, no donde hubo daño.</>,
@@ -117,7 +124,7 @@ export function ContextIntro() {
         },
       ],
       reading: [
-        <>Más claro = más gente alcanzable a 10 minutos a pie. Gris = ese sitio no tiene dato para este eje.</>,
+        <>Más tinta = más gente alcanzable a 10 minutos a pie. Gris = ese sitio no tiene dato para este eje.</>,
         <>El ranking del panel usa el mismo valor que el color: no hay dos cifras distintas para lo mismo.</>,
       ],
       caveat: <>Pereira es uno de 409 municipios afectados. Lo que queda fuera del rectángulo es invisible para este sistema.</>,
@@ -157,14 +164,13 @@ export function ContextIntro() {
         fotosDeCampo,
       ],
       reading: [
-        <>Rojo = destruido, naranja = dañado, amarillo = posiblemente dañado. Un sitio sin observación no existe: los sitios nacen de la evidencia.</>,
+        <>Óxido oscuro = destruido, óxido medio = dañado, terracota claro = posiblemente dañado. Un sitio sin observación no existe: los sitios nacen de la evidencia.</>,
         <>La ficha de cada sitio lista sus observaciones una a una, con fecha, método y ± metros.</>,
       ],
       caveat: <>Toda la evidencia disponible es foto-interpretación sin validación de campo. La Alcaldía
         levantó inspecciones edificio por edificio en toda la ciudad (EDAM, ~7.700 registros con
         habitabilidad y nivel de daño); no se han ingerido porque el ítem no declara licencia y
-        contiene datos personales que habría que suprimir antes. Ver el research en
-        <code> docs/plan/cobertura-de-dano-ciudad.md</code>.</>,
+        contiene datos personales que habría que suprimir antes.</>,
     },
 
     NECESIDAD: {
@@ -198,7 +204,7 @@ export function ContextIntro() {
         },
       ],
       reading: [
-        <>Las siluetas grises son las captaciones a 10 min. Más claro = más población alcanzable.</>,
+        <>Las siluetas grises son las captaciones a 10 min. Más tinta = más población alcanzable.</>,
         <>El mapa usa un techo de 20.000 para colorear; el modelo, 6.000 para puntuar: dos escalas distintas, las dos declaradas.</>,
       ],
       caveat: <>La población es derivada, no medida por sitio: un total publicado repartido por área construida, asumiendo densidad uniforme.</>,
@@ -230,7 +236,7 @@ export function ContextIntro() {
         },
       ],
       reading: [
-        <>Más claro = mayor déficit. Los polígonos verdes son el espacio público que ya existe.</>,
+        <>Más tinta = mayor déficit. Los polígonos verdes son el espacio público que ya existe.</>,
         <>Cobertura: {n(withDeficit)} de {n(total)} sitios con dato. Gris = sin fuente.</>,
       ],
       caveat: <>El estándar de 10 m²/hab es una convención del proyecto para el MVP; la norma colombiana (Decreto 1504 de 1998) fija 15 m²/hab como meta.</>,
@@ -333,7 +339,7 @@ export function ContextIntro() {
         },
       ],
       reading: [
-        <>El color del sitio es la intervención propuesta (verde parque, celeste plaza, azul equipamiento…). Los sitios bajo el umbral se atenúan.</>,
+        <>El color del sitio es la intervención propuesta (verde parque y espacio abierto, azul plaza, azul oscuro equipamiento, ocre deporte). Los sitios bajo el umbral se atenúan.</>,
         <>El titular de cada tarjeta nombra los factores que aportan ≥ 15 % del puntaje; lo que no tiene fuente se lista junto al titular.</>,
       ],
       caveat: <>Análisis multicriterio explicable, no aprendizaje automático ni predicción: no hay verdad de terreno con la que entrenar ni validar. Toda salida es consultiva (CON-05).</>,
@@ -342,29 +348,38 @@ export function ContextIntro() {
 
   const intro = intros[context];
   return (
-    <Panel data-uri="context-intro" data-context={context} className="border-accent/25 p-4">
-      <SectionTitle right={<span className="text-[10px] text-mute-400">{def.label}</span>}>
+    <Panel data-uri="context-intro" data-context={context} className="border-t-0 py-2">
+      <SectionTitle right={<span className="text-[10px] text-graphite-500">{def.label}</span>}>
         {intro.question}
       </SectionTitle>
-      <p className="mt-2 text-[13px] leading-relaxed text-mute-200">{intro.summary}</p>
+      <p className="mt-2 font-serif text-[15px] leading-[1.5] text-toner [text-wrap:pretty]">{intro.summary}</p>
 
-      <dl className="mt-3 flex flex-col gap-2.5">
+      <dl className="mt-4 divide-y divide-rule border-y border-rule">
         {intro.variables.map((v) => (
-          <div key={v.name} className="rounded-lg border border-ink-700 bg-ink-950/60 px-2.5 py-2">
-            <dt className="text-[12px] font-medium text-paper">{v.name}</dt>
-            <dd className="mt-0.5 text-[11px] leading-relaxed text-mute-300">{v.how}</dd>
-            <dd className="mt-1 text-[10px] text-mute-500">Fuente: {v.source}</dd>
-            {v.limit && <dd className="mt-0.5 text-[10px] leading-snug text-warn/90">Límite: {v.limit}</dd>}
+          <div key={v.name} className="py-3">
+            <dt className="text-[13px] font-semibold text-toner">{v.name}</dt>
+            <dd className="mt-1 font-serif text-[13.5px] leading-relaxed text-graphite-700">{v.how}</dd>
+            <dd className="mt-1.5 text-[11.5px] text-graphite-500">Fuente: {v.source}</dd>
+            {v.limit && <dd className="mt-1.5 text-[12px] leading-snug text-graphite-700"><span className="letterhead mr-1.5 text-[9.5px] text-stamp">Límite</span>{v.limit}</dd>}
           </div>
         ))}
       </dl>
 
-      <div className="mt-3">
-        <div className="text-[10px] font-semibold tracking-[0.14em] text-mute-400 uppercase">Cómo leer el mapa</div>
+      {def.populationChoropleth && popOut && popOut.outside > 0 && (
+        <p data-uri="population-outside" className="mt-3 text-[12.5px] leading-snug text-graphite-700">
+          <span className="letterhead mr-1.5 text-[9.5px] text-stamp">Límite</span>
+          El reparto de población excede el área cubierta: {n(popOut.outside)} de {n(popOut.total)} celdas
+          ({n(popOut.people)} personas) quedan fuera del marco y se ven bajo la trama. No son evidencia
+          de esa parte de la ciudad.
+        </p>
+      )}
+
+      <div className="mt-4">
+        <div className="letterhead text-[10.5px] text-graphite-600">Cómo leer el anexo</div>
         <ul className="mt-1 flex flex-col gap-1">
           {intro.reading.map((r, i) => (
-            <li key={i} className="flex gap-1.5 text-[11px] leading-relaxed text-mute-300">
-              <span className="mt-[6px] inline-block h-1 w-1 shrink-0 rounded-full bg-accent" />
+            <li key={i} className="flex gap-2 text-[12.5px] leading-relaxed text-graphite-700">
+              <span className="mt-[10px] inline-block h-px w-2.5 shrink-0 bg-graphite-400" />
               <span>{r}</span>
             </li>
           ))}

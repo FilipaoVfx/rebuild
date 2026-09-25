@@ -23,15 +23,15 @@ export function PhotoStrip({ photos, loading }: { photos: FieldPhoto[]; loading:
   return (
     <div className="mt-3" data-uri="photo-strip" data-count={photos.length}>
       <div className="flex items-baseline justify-between">
-        <div className="text-[10px] tracking-[0.14em] text-mute-400 uppercase">
+        <div className="text-[10px] tracking-[0.14em] text-graphite-500 uppercase">
           Fotos de campo
         </div>
-        <span className="num text-[10px] text-mute-500">
+        <span className="num text-[10px] text-graphite-400">
           {photos.length}{pending ? ` · ${pending} sin revisar` : ''}
         </span>
       </div>
       {photos.length === 0 ? (
-        <p className="mt-1.5 text-[11px] text-mute-400">
+        <p className="mt-1.5 text-[11px] text-graphite-500">
           Sin fotos de campo todavía. Se toman con <b>pereiramap</b> a menos de 75 m del sitio y
           aparecen aquí tras la siguiente corrida del pipeline.
         </p>
@@ -42,16 +42,16 @@ export function PhotoStrip({ photos, loading }: { photos: FieldPhoto[]; loading:
               <button
                 data-uri="photo-thumb"
                 onClick={() => setOpen(p)}
-                className="group relative block aspect-square w-full overflow-hidden rounded-md border border-ink-700 bg-ink-900"
+                className="group relative block aspect-square w-full overflow-hidden rounded-[3px] border border-rule bg-sheet"
                 title={`${FIELD_CATEGORY[p.category ?? ''] ?? 'Foto'} · ${fechaHora(p.captured_at)}`}
               >
                 <img src={src(p.thumb_url)} alt="" loading="lazy"
                      className="h-full w-full object-cover opacity-90 transition group-hover:opacity-100" />
                 {p.review_status === 'PENDIENTE' && (
-                  <span className="absolute top-1 left-1 rounded bg-ink-950/80 px-1 text-[9px] text-warn">sin revisar</span>
+                  <span className="absolute top-1 left-1 rounded bg-sheet/80 px-1 text-[9px] text-warn">sin revisar</span>
                 )}
                 {p.category && (
-                  <span className="absolute right-1 bottom-1 rounded bg-ink-950/80 px-1 text-[9px] text-mute-200">
+                  <span className="absolute right-1 bottom-1 rounded bg-sheet/80 px-1 text-[9px] text-graphite-700">
                     {FIELD_CATEGORY[p.category] ?? p.category}
                   </span>
                 )}
@@ -69,17 +69,17 @@ export function PhotoStrip({ photos, loading }: { photos: FieldPhoto[]; loading:
 
       {open && (
         <div role="dialog" aria-modal="true" data-uri="photo-lightbox"
-             className="fixed inset-0 z-50 flex flex-col bg-ink-950/95 p-4"
+             className="fixed inset-0 z-50 flex flex-col bg-sheet/95 p-4"
              onClick={() => setOpen(null)}>
           <img src={src(open.url)} alt="" className="min-h-0 flex-1 object-contain"
                onClick={(e) => e.stopPropagation()} />
-          <div className="mx-auto mt-3 w-full max-w-xl text-[12px] text-mute-200"
+          <div className="mx-auto mt-3 w-full max-w-xl text-[12px] text-graphite-700"
                onClick={(e) => e.stopPropagation()}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <b className="text-paper">{FIELD_CATEGORY[open.category ?? ''] ?? 'Foto de campo'}</b>
-              <span className="text-mute-400">{fechaHora(open.captured_at)}</span>
+              <b className="text-toner">{FIELD_CATEGORY[open.category ?? ''] ?? 'Foto de campo'}</b>
+              <span className="text-graphite-500">{fechaHora(open.captured_at)}</span>
             </div>
-            <div className="mt-1 text-mute-400">
+            <div className="mt-1 text-graphite-500">
               {LOCATION_SOURCE[open.location_source] ?? open.location_source}
               {open.accuracy_m !== null && ` · ±${Math.round(open.accuracy_m)} m`}
               {open.heading_deg !== null && ` · rumbo ${Math.round(open.heading_deg)}°`}
@@ -87,7 +87,7 @@ export function PhotoStrip({ photos, loading }: { photos: FieldPhoto[]; loading:
               {open.exif_gps ? ' · la foto traía GPS' : ''}
               {open.review_status === 'PENDIENTE' ? ' · sin revisar' : ' · revisada'}
             </div>
-            <div className="mt-1 text-mute-500">
+            <div className="mt-1 text-graphite-400">
               {open.width}×{open.height} · {open.attribution ?? 'pereiramap, CC BY 4.0'} · Esc para cerrar
             </div>
           </div>

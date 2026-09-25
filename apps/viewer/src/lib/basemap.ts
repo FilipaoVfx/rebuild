@@ -29,7 +29,7 @@ export const BASEMAPS: { key: BaseMapKey; label: string; help: string }[] = [
 export const DATA_STYLE: StyleSpecification = {
   version: 8,
   sources: {},
-  layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#07090c' } }],
+  layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#ffffff' } }],
 };
 
 let protocolRegistered = false;

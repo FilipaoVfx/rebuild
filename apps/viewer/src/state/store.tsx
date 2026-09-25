@@ -20,6 +20,9 @@ export type ImageryMode = 'none' | 'sentinel' | string;
 /** Umbral de idoneidad por defecto (ADR-23). */
 export const DEFAULT_MIN_SUITABILITY = 64;
 
+/** Referencias que una consideración puede dibujar en el anexo cartográfico. */
+export type AnnexRef = 'aoi' | 'perimeter' | 'evidence' | 'outside' | null;
+
 interface Store {
   provenance: Provenance;
   sites: Site[];
@@ -57,6 +60,8 @@ interface Store {
 
   /** Comuna resaltada en el mapa (osm_id), desde la lista de Territorio. */
   highlightedAdminId: number | null; setHighlightedAdminId: (id: number | null) => void;
+  /** Qué referencia del concepto se está señalando en el anexo (firma del concepto técnico). */
+  annexRef: AnnexRef; setAnnexRef: (r: AnnexRef) => void;
   /** Filtro por comuna en Oportunidades (FR-UI-04). */
   communeFilter: string | null; setCommuneFilter: (c: string | null) => void;
 
@@ -110,6 +115,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [imageryCollection, setImageryCollection] = useState<'s1' | 's2'>('s2');
   const [swipe, setSwipe] = useState(0.5);
   const [highlightedAdminId, setHighlightedAdminId] = useState<number | null>(null);
+  const [annexRef, setAnnexRef] = useState<AnnexRef>(null);
   const [communeFilter, setCommuneFilter] = useState<string | null>(null);
   const [compare, setCompare] = useState<string[]>([]);
   const [technical, setTechnical] = useState(false);
@@ -227,8 +233,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       <div className="flex h-full items-center justify-center p-8 text-center">
         <div className="max-w-md">
           <p className="font-semibold text-bad">No se pudieron cargar los datos</p>
-          <p className="mt-2 text-sm text-mute-300">{error}</p>
-          <p className="mt-3 text-xs text-mute-400">
+          <p className="mt-2 text-sm text-graphite-600">{error}</p>
+          <p className="mt-3 text-xs text-graphite-500">
             En el despliegue estático los datos viven en <code>data/</code>; montado sobre la API,
             en <code>/api/v1</code>.
           </p>
@@ -250,12 +256,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     /* Cambiar de vista desde la orientación lleva al contexto que la responde:
        abrir Oportunidades con el mapa aún en Territorio dejaría los sitios
        grises justo cuando la vista habla de su color. */
+    /* El anexo sigue a la sección: cada folio abre el mapa en el contexto que
+       su argumento necesita. Dentro de la sección, las pestañas lo cambian. */
     setView: (v) => {
       setView(v);
-      if (v === 'territorio') setContext('TERRITORIO');
-      else if (context === 'TERRITORIO') {
-        setContext(v === 'oportunidades' ? 'OPORTUNIDADES' : 'SITUACION');
-      }
+      setContext(({
+        territorio: 'TERRITORIO', situacion: 'SITUACION', oportunidades: 'OPORTUNIDADES',
+        escenarios: 'OPORTUNIDADES', evidencia: 'DANO',
+      } as const)[v]);
     },
     context, setContext,
     selectedSiteId,
@@ -268,6 +276,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     imageryCollection, setImageryCollection,
     swipe, setSwipe,
     highlightedAdminId, setHighlightedAdminId,
+    annexRef, setAnnexRef,
     communeFilter, setCommuneFilter,
     compare,
     toggleCompare: (id) => setCompare((prev) =>
@@ -292,12 +301,12 @@ export const PURPOSE_LINE = 'Soporte a decisiones de recuperación urbana tras e
 function Booting() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-      <p className="text-[13px] font-semibold tracking-tight text-paper">{CITY_LINE}</p>
-      <div className="h-px w-40 overflow-hidden bg-ink-700">
-        <div className="h-full w-1/3 animate-[slide_1.1s_ease-in-out_infinite] bg-accent" />
+      <p className="text-[13px] font-semibold tracking-tight text-toner">{CITY_LINE}</p>
+      <div className="h-px w-40 overflow-hidden bg-sheet-3">
+        <div className="h-full w-1/3 animate-[slide_1.1s_ease-in-out_infinite] bg-mark" />
       </div>
-      <p className="max-w-xs text-[11px] leading-relaxed text-mute-400">{PURPOSE_LINE}</p>
-      <p className="text-[10px] tracking-[0.18em] text-mute-500 uppercase">Cargando territorio</p>
+      <p className="max-w-xs text-[11px] leading-relaxed text-graphite-500">{PURPOSE_LINE}</p>
+      <p className="text-[10px] tracking-[0.18em] text-graphite-400 uppercase">Cargando territorio</p>
       <style>{`@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}`}</style>
     </div>
   );

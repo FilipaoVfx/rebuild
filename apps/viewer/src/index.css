@@ -1,29 +1,39 @@
 @import "tailwindcss";
+@import "@fontsource-variable/archivo/wdth.css";
+@import "@fontsource-variable/source-serif-4/opsz.css";
 
+/*
+ * Concepto técnico. El visor se lee como un documento que una oficina técnica
+ * emite y firma: hoja blanca, tinta negra, filetes en lugar de cajas. Las
+ * fuentes van empaquetadas en el build; ningún byte llega de un servidor ajeno.
+ */
 @theme {
-  --color-ink-950: #07090c;
-  --color-ink-900: #0b0e13;
-  --color-ink-850: #10141b;
-  --color-ink-800: #161b24;
-  --color-ink-700: #1e2530;
-  --color-ink-600: #2a3340;
-  --color-ink-500: #3a4553;
-  --color-mute-400: #6b7787;
-  --color-mute-300: #8e9aab;
-  --color-mute-200: #b6c0ce;
-  --color-paper: #e9eef5;
+  /* Papel y tinta */
+  --color-sheet: #ffffff;
+  --color-sheet-2: #f4f5f7;
+  --color-sheet-3: #e8eaee;
+  --color-rule: #dde0e5;
+  --color-rule-2: #c2c7ce;
+  --color-toner: #17181b;
+  --color-graphite-700: #33363c;
+  --color-graphite-600: #484c54;
+  --color-graphite-500: #5c616a;
+  --color-graphite-400: #7a7f88;
 
-  --color-accent: #f0b429;
-  --color-ok: #34d399;
-  --color-warn: #fbbf24;
-  --color-bad: #f87171;
-  /* Lo desconocido tiene color propio: no es bueno, no es malo, falta. */
-  --color-unknown: #8e9aab;
+  /* Selección y énfasis: tinta, no color. */
+  --color-mark: #17181b;
+  /* Tinta de sello: solo donde el concepto certifica algo. */
+  --color-stamp: #5b3aa3;
 
-  /* Pila del sistema a propósito: una tipografía de CDN sería exactamente la
-     dependencia de terceros que el visor evita para los tiles y los scripts. */
-  --font-sans: "Inter var", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Estados impresos. Lo desconocido tiene color propio: no es bueno, no es
+     malo, falta. */
+  --color-ok: #1d6b45;
+  --color-warn: #8a5300;
+  --color-bad: #a8261d;
+  --color-unknown: #6b7079;
+
+  --font-sans: "Archivo Variable", "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -32,30 +42,63 @@ html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background: var(--color-ink-950);
-  color: var(--color-paper);
+  background: var(--color-sheet);
+  color: var(--color-toner);
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overscroll-behavior: none;
 }
 
-.num { font-variant-numeric: tabular-nums; }
+/* Las superficies que el navegador pone por su cuenta también son del documento. */
+::selection { background: color-mix(in oklab, var(--color-stamp) 22%, transparent); color: var(--color-toner); }
+input, textarea { caret-color: var(--color-stamp); }
+:focus-visible { outline: 2px solid var(--color-toner); outline-offset: 2px; border-radius: 2px; }
+a { text-underline-offset: 3px; text-decoration-thickness: 1px; }
+
+@layer components {
+  .num { font-variant-numeric: tabular-nums; }
+  .wide { font-stretch: 118%; }
+  .narrow { font-stretch: 86%; }
+  /* Versalitas del membrete: tracking abierto, anchura expandida. */
+  .letterhead { font-stretch: 122%; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
+}
+
+/* La trama: el signo cartográfico de «sin información». Se usa igual en el
+   mapa y en la interfaz, para que el lector aprenda un solo signo. */
+.hatch {
+  background-image: repeating-linear-gradient(
+    -45deg, var(--color-graphite-400) 0 1px, transparent 1px 6px);
+}
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-ink-600); border-radius: 99px;
+  background: var(--color-rule-2); border-radius: 99px;
   border: 3px solid transparent; background-clip: content-box;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--color-ink-500); background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-graphite-400); background-clip: content-box; }
+* { scrollbar-color: var(--color-rule-2) transparent; scrollbar-width: thin; }
 
-.maplibregl-ctrl-attrib { font-size: 10px !important; background: rgba(7,9,12,.8) !important; }
-.maplibregl-ctrl-attrib a, .maplibregl-ctrl-attrib { color: var(--color-mute-400) !important; }
+.maplibregl-ctrl-attrib { font-size: 10px !important; background: rgb(255 255 255 / .9) !important; }
+.maplibregl-ctrl-attrib a, .maplibregl-ctrl-attrib { color: var(--color-graphite-500) !important; }
 .maplibregl-canvas { outline: none; }
 
-@keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.animate-fade-up { animation: fade-up .22s cubic-bezier(.22,.8,.3,1) both; }
+/* El sello se estampa una vez: presión corta, tinta que asienta. */
+@keyframes stamp-press {
+  0%   { opacity: 0; transform: rotate(-4deg) scale(1.18); filter: blur(1.5px); }
+  60%  { opacity: 1; transform: rotate(-4deg) scale(0.97); filter: blur(0); }
+  100% { opacity: 1; transform: rotate(-4deg) scale(1); }
+}
+.animate-stamp { animation: stamp-press .42s cubic-bezier(.16,1,.3,1) .25s both; }
+
+/* Una referencia del acta se traza en el anexo. */
+@keyframes rule-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.animate-rule { transform-origin: left; animation: rule-draw .38s cubic-bezier(.16,1,.3,1) both; }
+
+@keyframes fade-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.animate-fade-up { animation: fade-up .22s cubic-bezier(.16,1,.3,1) both; }
 @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
 .animate-fade-in { animation: fade-in .18s ease both; }
 

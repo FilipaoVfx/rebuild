@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { contextByKey } from '../lib/contexts';
-import { n, pct } from '../lib/format';
+import { n, pct, dec } from '../lib/format';
 import { RAMPS, rgbCss, sample } from '../lib/palette';
 import { useStore } from '../state/store';
 import { ContextIntro } from '../components/ContextIntro';
@@ -51,16 +51,16 @@ export function SituationView() {
 
       <Panel className="p-4">
         <SectionTitle>Lectura del AOI</SectionTitle>
-        <p className="mt-2.5 text-[13px] leading-relaxed text-mute-200">
-          La evidencia de daño de Copernicus EMS cubre <b className="text-paper">6,91 km²</b> de
-          Pereira y agrupa <b className="text-paper">{n(stats.total)}</b> sitios de oportunidad, de
-          los cuales <b className="text-paper">{n(stats.candidates)}</b> son candidatos
+        <p className="mt-2.5 text-[13px] leading-relaxed text-graphite-700">
+          La evidencia de daño de Copernicus EMS cubre <b className="text-toner">6,91 km²</b> de
+          Pereira y agrupa <b className="text-toner">{n(stats.total)}</b> sitios de oportunidad, de
+          los cuales <b className="text-toner">{n(stats.candidates)}</b> son candidatos
           {stats.excluded > 0 && <> y {n(stats.excluded)} quedan excluidos por restricciones duras</>}.
-          {stats.population !== null && <> Dentro del área hay <b className="text-paper">{n(stats.population)}</b> personas
+          {stats.population !== null && <> Dentro del área hay <b className="text-toner">{n(stats.population)}</b> personas
           repartidas sobre {n(stats.cells)} celdas.</>}
         </p>
-        <p className="mt-2.5 text-[13px] leading-relaxed text-mute-300">
-          El sistema emite <b className="text-accent">{n(opportunities.length)} oportunidades</b>,
+        <p className="mt-2.5 text-[13px] leading-relaxed text-graphite-600">
+          El sistema emite <b className="text-mark">{n(opportunities.length)} oportunidades</b>,
           una por sitio y con la mejor intervención.{' '}
           {stats.noBuild > 0
             ? `${n(stats.buildable)} proponen construir algo y ${n(stats.noBuild)} responden que ahí no cabe nada.`
@@ -88,25 +88,25 @@ export function SituationView() {
         <Panel className="p-3.5">
           <Stat label="Condiciones sin fuente" value={n(stats.unknowns)} tone="unknown"
                 sub={opportunities.length
-                  ? `${(stats.unknowns / opportunities.length).toFixed(1)} por oportunidad, declaradas`
+                  ? `${dec(stats.unknowns / opportunities.length, 1)} por oportunidad, declaradas`
                   : 'declaradas, no rellenadas'} />
         </Panel>
       </div>
 
       {stats.missing.length > 0 && (
-        <Panel className="border-ink-600 p-4">
+        <Panel className="border-rule-2 p-4">
           <SectionTitle>Dos ejes del modelo no ordenan nada</SectionTitle>
           <ul className="mt-2.5 flex flex-col gap-2 text-[12px]">
-            <li className="rounded-lg border border-dashed border-ink-500 px-2.5 py-2">
-              <b className="text-mute-200">Riesgo sísmico</b>
-              <p className="mt-0.5 text-[11px] leading-snug text-mute-400">
+            <li className="rounded-[3px] border border-dashed border-graphite-400 px-2.5 py-2">
+              <b className="text-graphite-700">Riesgo sísmico</b>
+              <p className="mt-0.5 text-[11px] leading-snug text-graphite-500">
                 La capa del SGC se retiró: sus términos prohíben redistribuirla y se estaba
                 publicando sellada con la versión de otra fuente. Ninguna la sustituye.
               </p>
             </li>
-            <li className="rounded-lg border border-dashed border-ink-500 px-2.5 py-2">
-              <b className="text-mute-200">Compatibilidad con el POT</b>
-              <p className="mt-0.5 text-[11px] leading-snug text-mute-400">
+            <li className="rounded-[3px] border border-dashed border-graphite-400 px-2.5 py-2">
+              <b className="text-graphite-700">Compatibilidad con el POT</b>
+              <p className="mt-0.5 text-[11px] leading-snug text-graphite-500">
                 Sin POT de IDE AMCO. El uso de suelo de OSM cubre 1 de {n(stats.total)} sitios, así
                 que no hay con qué responder.
               </p>
@@ -115,7 +115,7 @@ export function SituationView() {
           <Note>
             Estos ejes salen <b>sin fuente</b> en toda el área, no en cero. El cero es el valor más
             favorable en esas escalas y se leería como una medición.{' '}
-            <button className="underline hover:text-mute-200" onClick={() => setView('evidencia')}>
+            <button className="underline hover:text-graphite-700" onClick={() => setView('evidencia')}>
               Ver el detalle
             </button>
           </Note>
@@ -124,13 +124,13 @@ export function SituationView() {
 
       {alerts.length > 0 && (
         <Panel className="p-4">
-          <SectionTitle right={<span className="text-[10px] text-mute-400">{alerts.length}</span>}>
+          <SectionTitle right={<span className="text-[10px] text-graphite-500">{alerts.length}</span>}>
             Alertas de calidad
           </SectionTitle>
           <ul className="mt-2.5 flex flex-col gap-1.5">
             {alerts.map((a) => (
               <li key={a.alert_id} className={[
-                'rounded-lg border px-2.5 py-2 text-[11px] leading-snug',
+                'rounded-[3px] border px-2.5 py-2 text-[11px] leading-snug',
                 a.severity === 'error' ? 'border-bad/30 bg-bad/5 text-bad'
                   : 'border-warn/30 bg-warn/5 text-warn',
               ].join(' ')}>
@@ -144,7 +144,7 @@ export function SituationView() {
 
       <Panel className="p-4">
         <SectionTitle right={
-          <span className="text-[10px] text-mute-400">por {def.label.toLowerCase()}</span>
+          <span className="text-[10px] text-graphite-500">por {def.label.toLowerCase()}</span>
         }>
           Sitios
         </SectionTitle>
@@ -156,8 +156,8 @@ export function SituationView() {
                 key={site.site_id}
                 onClick={() => selectSite(site.site_id === selectedSiteId ? null : site.site_id)}
                 className={[
-                  'grid grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors',
-                  site.site_id === selectedSiteId ? 'bg-ink-700' : 'hover:bg-ink-850',
+                  'grid grid-cols-[1fr_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors',
+                  site.site_id === selectedSiteId ? 'bg-sheet-3' : 'hover:bg-sheet-2',
                 ].join(' ')}
               >
                 <div className="min-w-0">
@@ -165,11 +165,11 @@ export function SituationView() {
                     <span className="truncate text-[12px] font-medium">
                       {opp?.intervention_label ?? site.top_intervention_label ?? 'sin recomendación'}
                     </span>
-                    <span className="num shrink-0 font-mono text-[10px] text-mute-500">
+                    <span className="num shrink-0 font-mono text-[10px] text-graphite-400">
                       {site.site_id.replace('site_', '#')}
                     </span>
                   </div>
-                  <div className="truncate text-[10px] text-mute-400">
+                  <div className="truncate text-[10px] text-graphite-500">
                     {site.neighborhood
                       ? `${site.neighborhood}${site.commune ? ` · ${site.commune}` : ''}`
                       : site.commune ? `Comuna ${site.commune}` : 'barrio sin fuente'}
@@ -181,11 +181,11 @@ export function SituationView() {
                   </div>
                 </div>
                 {value === null ? (
-                  <span className="text-[10px] text-mute-500">sin fuente</span>
+                  <span className="text-[10px] text-graphite-400">sin fuente</span>
                 ) : (
                   <span className="num text-[12px] font-semibold"
                         style={{ color: rgbCss(sample(ramp, value)) }}>
-                    {value.toFixed(2)}
+                    {dec(value, 2)}
                   </span>
                 )}
               </button>
@@ -193,7 +193,7 @@ export function SituationView() {
           })}
         </div>
         {discrimination.flat && (
-          <div className="mt-2.5 rounded-lg border border-warn/30 bg-warn/5 px-2.5 py-2 text-[11px] leading-snug text-warn">
+          <div className="mt-2.5 rounded-[3px] border border-warn/30 bg-warn/5 px-2.5 py-2 text-[11px] leading-snug text-warn">
             <b>Este eje no ordena nada.</b> Tiene cobertura en {n(discrimination.covered)} de{' '}
             {n(discrimination.total)} sitios, pero solo {discrimination.distinct} valor
             {discrimination.distinct === 1 ? '' : 'es'} distinto
@@ -210,10 +210,10 @@ export function SituationView() {
       {scenarios.length > 0 && (
         <Panel className="p-4">
           <SectionTitle>Y bajo presupuesto</SectionTitle>
-          <p className="mt-2 text-[12px] leading-relaxed text-mute-300">
-            El escenario de {(scenarios[0].budget_cop / 1e9).toFixed(0)} MM COP selecciona{' '}
-            <b className="text-paper">{scenarios[0].items.length} proyectos</b>.{' '}
-            <button className="underline hover:text-paper" onClick={() => setView('escenarios')}>
+          <p className="mt-2 text-[12px] leading-relaxed text-graphite-600">
+            El escenario de {dec(scenarios[0].budget_cop / 1e9, 0)} MM COP selecciona{' '}
+            <b className="text-toner">{scenarios[0].items.length} proyectos</b>.{' '}
+            <button className="underline hover:text-toner" onClick={() => setView('escenarios')}>
               Ver los escenarios
             </button>
           </p>

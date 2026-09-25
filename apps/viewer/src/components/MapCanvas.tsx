@@ -3,6 +3,7 @@ import { CollisionFilterExtension, MaskExtension, PathStyleExtension } from '@de
 import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox';
 import {
   BitmapLayer, GeoJsonLayer, PathLayer, ScatterplotLayer, TextLayer,
+ SolidPolygonLayer,
 } from '@deck.gl/layers';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Map, { ScaleControl, useControl, type MapRef, type ViewState } from 'react-map-gl/maplibre';
@@ -36,8 +37,19 @@ function DeckGLOverlay(props: MapboxOverlayProps) {
 }
 
 const CENTER: [number, number] = [-75.6935, 4.8085];
-const HOME_ZOOM = 14.2;
-const HOME_BEARING = -14;
+const HOME_ZOOM = 12.9;
+/* Un anexo cartográfico va con el norte arriba, como toda plancha oficial. La
+   vista girada sigue disponible desde la brújula. */
+const HOME_BEARING = 0;
+const TILT_BEARING = -14;
+
+/** El encuadre de la tesis: el área cubierta y la ciudad que queda fuera de ella. */
+function homeBBox(t: { aoi: { bbox: BBox }; urban_perimeter: { bbox: BBox } | null } | null): BBox | null {
+  if (!t) return null;
+  const a = t.aoi.bbox;
+  const p = t.urban_perimeter?.bbox ?? a;
+  return [Math.min(a[0], p[0]), Math.min(a[1], p[1]), Math.max(a[2], p[2]), Math.max(a[3], p[3])];
+}
 
 type Feature = GeoJSON['features'][number];
 /* Forma mínima que deck.gl acepta en los accesores de GeoJsonLayer sin pelear con sus genéricos. */
@@ -52,10 +64,43 @@ function roadAngle(azimuth: number): number {
   return a;
 }
 
+/** El papel alrededor del área cubierta: lo bastante grande para cubrir la ciudad. */
+function outerBBox([w, s, e, n]: BBox): BBox {
+  const dx = (e - w) * 3, dy = (n - s) * 3;
+  return [w - dx, s - dy, e + dx, n + dy];
+}
+
+function pad([w, s, e, n]: BBox, share: number): BBox {
+  const dx = (e - w) * share, dy = (n - s) * share;
+  return [w - dx, s - dy, e + dx, n + dy];
+}
+
 function padBBox([w, s, e, n]: BBox, share: number): [[number, number], [number, number]] {
   const dx = (e - w) * share;
   const dy = (n - s) * share;
   return [[w - dx, s - dy], [e + dx, n + dy]];
+}
+
+/* La trama de «sin información», como geometría: diagonales a 45° sobre el
+   papel que rodea el área cubierta, recortadas exactamente contra ella. No
+   depende de extensiones de patrón. Es el mismo signo que la clase .hatch de
+   la interfaz: el lector aprende uno solo. */
+const HATCH_STEP = 0.0016; // ≈ 178 m: ~8 px a la escala de la ciudad, ~13 px a z14
+function hatchLines(outer: BBox, hole: BBox): { path: [number, number][] }[] {
+  const [W, S, E, N] = outer; const [w, s, e, n] = hole;
+  const out: { path: [number, number][] }[] = [];
+  const seg = (a: number, b: number, c: number) => {
+    if (b - a > 1e-9) out.push({ path: [[a, a + c], [b, b + c]] });
+  };
+  for (let c = S - E; c <= N - W; c += HATCH_STEP) {
+    const x0 = Math.max(W, S - c), x1 = Math.min(E, N - c);
+    if (x0 >= x1) continue;
+    const h0 = Math.max(w, s - c), h1 = Math.min(e, n - c);
+    if (h0 >= h1 || h1 <= x0 || h0 >= x1) { seg(x0, x1, c); continue; }
+    seg(x0, Math.max(x0, h0), c);
+    seg(Math.min(x1, h1), x1, c);
+  }
+  return out;
 }
 
 function bboxRing([w, s, e, n]: BBox): [number, number][] {
@@ -67,7 +112,7 @@ export function MapCanvas() {
     sites, oppBySite, layers, context, selectedSiteId, selectSite,
     hoverSiteId, setHoverSiteId, visibleOpportunities,
     terrain, showTerrain, discrimination,
-    territory, sentinel, imagery, imageryCollection, swipe, setSwipe, highlightedAdminId,
+    territory, sentinel, imagery, imageryCollection, swipe, setSwipe, highlightedAdminId, annexRef,
     baseMap,
   } = useStore();
 
@@ -270,6 +315,33 @@ export function MapCanvas() {
   };
   const collision = { extensions: [new CollisionFilterExtension()], collisionGroup: 'labels' };
 
+  const hatch = useMemo(
+    () => (territory ? hatchLines(outerBBox(territory.aoi.bbox), territory.aoi.bbox) : []),
+    [territory],
+  );
+
+  /* Dónde cae en el anexo cada consideración que se puede señalar. */
+  const refMark = useMemo(() => {
+    if (!annexRef || !territory) return null;
+    const [w, so, e, n] = territory.aoi.bbox;
+    const dx = e - w, dy = n - so;
+    if (annexRef === 'aoi') return { n: '2', at: [w + dx * 0.035, n - dy * 0.07], stamp: true };
+    if (annexRef === 'outside') return { n: '5', at: [w - dx * 0.32, so + dy * 0.5], stamp: false };
+    if (annexRef === 'perimeter') {
+      const p = territory.urban_perimeter?.bbox ?? territory.aoi.bbox;
+      return { n: '1', at: [p[0] + (p[2] - p[0]) * 0.04, p[3] - (p[3] - p[1]) * 0.06], stamp: false };
+    }
+    const ev = gj('evidence');
+    if (ev && ev.features.length) {
+      let x = 0, y = 0;
+      for (const f of ev.features) {
+        const c = (f.geometry as { coordinates: number[] }).coordinates; x += c[0]; y += c[1];
+      }
+      return { n: '3', at: [x / ev.features.length, y / ev.features.length], stamp: false };
+    }
+    return null;
+  }, [annexRef, territory, layers]);
+
   const deckLayers = [
     /* --- imagen: observación con fecha y limitación al lado, nunca veredicto (ADR-19) --- */
     ...(sentinelOn && scenes ? [
@@ -311,8 +383,8 @@ export function MapCanvas() {
         id: 'municipal_facilities',
         data: gj('municipal_facilities') as never,
         filled: true, stroked: true,
-        getFillColor: [147, 197, 253, 22],
-        getLineColor: [147, 197, 253, 140],
+        getFillColor: [37, 99, 160, 18],
+        getLineColor: [37, 99, 160, 150],
         getLineWidth: 0.8, lineWidthUnits: 'pixels',
         pickable: true,
       }),
@@ -367,8 +439,8 @@ export function MapCanvas() {
         id: 'admin-highlight',
         data: highlighted as never,
         filled: true, stroked: true,
-        getFillColor: [240, 180, 41, 40],
-        getLineColor: [240, 180, 41, 220],
+        getFillColor: [23, 24, 27, 22],
+        getLineColor: [23, 24, 27, 230],
         getLineWidth: 2, lineWidthUnits: 'pixels',
         pickable: false,
       }),
@@ -378,28 +450,14 @@ export function MapCanvas() {
         id: 'urban-perimeter',
         data: perimeterPaths,
         getPath: (d: { path: number[][] }) => d.path as never,
-        getColor: ADMIN_COLOR[7],
-        getWidth: 1.4, widthUnits: 'pixels',
+        getColor: annexRef === 'perimeter' ? [23, 24, 27, 255] : ADMIN_COLOR[7],
+        getWidth: annexRef === 'perimeter' ? 3 : 1.4, widthUnits: 'pixels',
+        updateTriggers: { getColor: [annexRef], getWidth: [annexRef] },
         getDashArray: [6, 4], dashJustified: true,
         extensions: [new PathStyleExtension({ dash: true })],
         pickable: false,
       } as never),
     ] : []),
-    /* Lo que este visor cubre, dicho en el mapa: el AOI de Copernicus EMS. */
-    ...(territory ? [
-      new PathLayer({
-        id: 'aoi-outline',
-        data: [{ path: bboxRing(territory.aoi.bbox) }],
-        getPath: (d: { path: number[][] }) => d.path as never,
-        getColor: [240, 180, 41, territorial ? 200 : 110],
-        getWidth: 1.2, widthUnits: 'pixels',
-        getDashArray: [3, 3],
-        extensions: [new PathStyleExtension({ dash: true })],
-        pickable: false,
-        updateTriggers: { getColor: [territorial] },
-      } as never),
-    ] : []),
-
     /* --- coropleta de población: la unidad areal medida --- */
     ...(def.populationChoropleth && gj('population') ? [
       new GeoJsonLayer({
@@ -420,8 +478,8 @@ export function MapCanvas() {
         id: 'green',
         data: gj('green') as never,
         filled: true, stroked: true,
-        getFillColor: [52, 211, 153, 60],
-        getLineColor: [52, 211, 153, 160],
+        getFillColor: [29, 107, 69, 46],
+        getLineColor: [29, 107, 69, 170],
         getLineWidth: 1, lineWidthUnits: 'pixels',
         pickable: true,
       }),
@@ -432,7 +490,7 @@ export function MapCanvas() {
         id: 'catchments',
         data: gj('catchments') as never,
         filled: false, stroked: true,
-        getLineColor: [107, 119, 135, 90],
+        getLineColor: [110, 115, 124, 120],
         getLineWidth: 1, lineWidthUnits: 'pixels',
         pickable: false,
       }),
@@ -444,24 +502,60 @@ export function MapCanvas() {
         data: gj('facilities') as never,
         pointType: 'circle',
         getPointRadius: 26, pointRadiusUnits: 'meters', pointRadiusMinPixels: 2.5,
-        getFillColor: [147, 197, 253, 210],
+        getFillColor: [37, 99, 160, 215],
         stroked: false,
         pickable: true,
       }),
     ] : []),
 
+    /* El límite, dibujado: fuera del área cubierta la ciudad queda velada y
+       tramada — sin evidencia, que no es lo mismo que sin daño. */
+    ...(territory ? [
+      new SolidPolygonLayer({
+        id: 'coverage-veil',
+        data: [{ polygon: [bboxRing(outerBBox(territory.aoi.bbox)), bboxRing(territory.aoi.bbox)] }],
+        getPolygon: (d: { polygon: number[][][] }) => d.polygon as never,
+        getFillColor: [255, 255, 255, annexRef === 'aoi' ? 190 : annexRef === 'outside' ? 175 : annexRef ? 150 : 120],
+        pickable: false,
+        updateTriggers: { getFillColor: [annexRef] },
+        transitions: { getFillColor: 320 },
+      }),
+      new PathLayer({
+        id: 'coverage-hatch',
+        data: hatch,
+        getPath: (d: { path: number[][] }) => d.path as never,
+        getColor: annexRef === 'outside' ? [72, 76, 84, 200] : [122, 127, 136, 125],
+        getWidth: 1, widthUnits: 'pixels',
+        pickable: false,
+        updateTriggers: { getColor: [annexRef] },
+        transitions: { getColor: 320 },
+      }),
+      /* Lo que este concepto cubre, certificado: el único trazo en tinta de sello. */
+      new PathLayer({
+        id: 'aoi-outline',
+        data: [{ path: bboxRing(territory.aoi.bbox) }],
+        getPath: (d: { path: number[][] }) => d.path as never,
+        getColor: [91, 58, 163, annexRef === 'aoi' ? 255 : 225],
+        getWidth: annexRef === 'aoi' ? 5 : 2, widthUnits: 'pixels',
+        pickable: false,
+        updateTriggers: { getColor: [annexRef], getWidth: [annexRef] },
+        transitions: { getWidth: 320, getColor: 320 },
+      }),
+    ] : []),
+
     /* --- evidencia de daño: observaciones crudas, no conclusiones --- */
-    ...(on('evidence') && gj('evidence') ? [
+    ...((on('evidence') || annexRef === 'evidence') && gj('evidence') ? [
       new GeoJsonLayer({
         id: 'evidence',
         data: gj('evidence') as never,
         pointType: 'circle',
-        getPointRadius: 12, pointRadiusUnits: 'meters', pointRadiusMinPixels: 2,
+        getPointRadius: annexRef === 'evidence' ? 20 : 12, pointRadiusUnits: 'meters', pointRadiusMinPixels: annexRef === 'evidence' ? 3.5 : 2,
         getFillColor: (f: { properties: Record<string, string> }) =>
-          f.properties.label === 'DESTROYED' ? [248, 113, 113, 225]
-            : f.properties.label === 'DAMAGED' ? [251, 146, 60, 205]
-            : [251, 191, 36, 175],
-        stroked: true, getLineColor: [7, 9, 12, 200], getLineWidth: 0.6,
+          f.properties.label === 'DESTROYED' ? [122, 28, 20, 235]
+            : f.properties.label === 'DAMAGED' ? [178, 58, 38, 220]
+            : [214, 128, 90, 205],
+        stroked: true, getLineColor: [255, 255, 255, 230], getLineWidth: 0.8,
+        updateTriggers: { getPointRadius: [annexRef], pointRadiusMinPixels: [annexRef] },
         lineWidthUnits: 'pixels',
         pickable: true,
       }),
@@ -475,8 +569,8 @@ export function MapCanvas() {
         pointType: 'circle',
         getPointRadius: 14, pointRadiusUnits: 'meters', pointRadiusMinPixels: 4, pointRadiusMaxPixels: 9,
         getFillColor: (f: { properties: Record<string, string> }) =>
-          f.properties.review_status === 'APROBADA' ? [255, 255, 255, 235] : [255, 255, 255, 150],
-        stroked: true, getLineColor: [7, 9, 12, 230], getLineWidth: 1.2, lineWidthUnits: 'pixels',
+          f.properties.review_status === 'APROBADA' ? [23, 24, 27, 235] : [23, 24, 27, 110],
+        stroked: true, getLineColor: [255, 255, 255, 240], getLineWidth: 1.4, lineWidthUnits: 'pixels',
         pickable: true,
         onClick: (info) => {
           const p = (info.object as { properties?: { site_id?: string | null } } | null)?.properties;
@@ -493,7 +587,7 @@ export function MapCanvas() {
         getPosition: pointOf,
         getRadius: (f: Feature) => (Number(f.properties.priority) <= 2 ? 4.2 : 3.2),
         radiusUnits: 'pixels',
-        stroked: true, getLineColor: [7, 9, 12, 220], getLineWidth: 1, lineWidthUnits: 'pixels',
+        stroked: true, getLineColor: [255, 255, 255, 235], getLineWidth: 1, lineWidthUnits: 'pixels',
         getFillColor: (f: Feature) => LANDMARK_COLOR[String(f.properties.label)] ?? [182, 192, 206, 200],
         pickable: true,
       }),
@@ -599,19 +693,19 @@ export function MapCanvas() {
       lineWidthUnits: 'pixels',
       getLineWidth: (d) => (d.site_id === selectedSiteId ? 2.4 : neutral ? 0.5 : 0.9),
       getLineColor: (d) =>
-        d.site_id === selectedSiteId ? [255, 255, 255, 255]
-          : d.site_id === hoverSiteId ? [233, 238, 245, 220]
-          : [7, 9, 12, 200],
+        d.site_id === selectedSiteId ? [23, 24, 27, 255]
+          : d.site_id === hoverSiteId ? [23, 24, 27, 235]
+          : [255, 255, 255, 225],
       getFillColor: (d) => {
         const opp = oppBySite.get(d.site_id);
         const dim = (selectedSiteId && d.site_id !== selectedSiteId) || !visibleIds.has(d.site_id);
         /* Sin evaluar no se pinta nada: gris neutro, el color de "esto es un sitio". */
-        if (neutral) return lightTheme ? [60, 70, 86, dim ? 90 : 190] : [142, 154, 171, dim ? 70 : 165];
+        if (neutral) return lightTheme ? [72, 80, 94, dim ? 90 : 200] : [142, 154, 171, dim ? 70 : 165];
         const raw = def.value(d, opp);
         /* Sin dato no se pinta un extremo de la rampa: se pinta "sin fuente". */
-        if (raw === null) return [107, 119, 135, dim ? 70 : 150];
+        if (raw === null) return [168, 173, 181, dim ? 70 : 170];
         if (context === 'OPORTUNIDADES' && opp) {
-          const c = INTERVENTION_COLOR[opp.intervention] ?? [240, 180, 41];
+          const c = INTERVENTION_COLOR[opp.intervention] ?? [23, 24, 27];
           return [c[0], c[1], c[2], dim ? 90 : 235];
         }
         const c = sample(ramp, stretch(raw));
@@ -628,6 +722,29 @@ export function MapCanvas() {
       },
       transitions: { getFillColor: 240 },
     }),
+    /* La referencia señalada: el numeral de la consideración, puesto en el anexo. */
+    ...(refMark ? [
+      new ScatterplotLayer({
+        id: 'annex-ref-dot',
+        data: [refMark],
+        getPosition: (d: { at: number[] }) => d.at as never,
+        getRadius: 15, radiusUnits: 'pixels',
+        getFillColor: refMark.stamp ? [91, 58, 163, 255] : [23, 24, 27, 255],
+        stroked: true, getLineColor: [255, 255, 255, 255], getLineWidth: 2.5, lineWidthUnits: 'pixels',
+        pickable: false,
+      }),
+      new TextLayer({
+        id: 'annex-ref-num',
+        data: [refMark],
+        getPosition: (d: { at: number[] }) => d.at as never,
+        getText: (d: { n: string }) => d.n,
+        getSize: 16, sizeUnits: 'pixels',
+        getColor: [255, 255, 255, 255],
+        fontFamily: '"Archivo Variable", Archivo, Arial, sans-serif', fontWeight: 700,
+        getTextAnchor: 'middle', getAlignmentBaseline: 'center',
+        pickable: false,
+      }),
+    ] : []),
   ];
 
   /* Encuadre progresivo: ciudad → comuna → sitio. */
@@ -647,9 +764,17 @@ export function MapCanvas() {
         padding: 60, maxZoom: 15.5, duration: 850, essential: true,
       });
     } else {
-      map.flyTo({ center: CENTER, zoom: HOME_ZOOM, duration: 750, essential: true });
+      const home = context === 'TERRITORIO' ? homeBBox(territory)
+        : territory ? pad(territory.aoi.bbox, 0.06) : null;
+      if (home) {
+        map.fitBounds([[home[0], home[1]], [home[2], home[3]]], {
+          padding: 28, bearing: HOME_BEARING, duration: 750, essential: true,
+        });
+      } else {
+        map.flyTo({ center: CENTER, zoom: HOME_ZOOM, bearing: HOME_BEARING, duration: 750, essential: true });
+      }
     }
-  }, [selected, highlightedComuna]);
+  }, [selected, highlightedComuna, territory, context]);
 
   /* Relieve real del terreno: capa opcional, declarada como tal. Cambiar de
      tipo de mapa reemplaza el estilo y se lleva las fuentes añadidas a mano,
@@ -715,15 +840,16 @@ export function MapCanvas() {
     const layer = info.layer;
     if (!object || !layer) return null;
     const style = {
-      background: 'rgba(11,14,19,.97)', color: '#e9eef5', fontSize: '11px',
-      padding: '8px 10px', borderRadius: '8px', border: '1px solid #2a3340',
+      background: '#ffffff', color: '#17181b', fontSize: '12px', fontFamily: 'var(--font-sans)',
+      padding: '8px 10px', borderRadius: '0', border: '1px solid #17181b',
+      boxShadow: '0 2px 10px -4px rgb(23 24 27 / .3)',
       maxWidth: '280px', lineHeight: '1.45',
     };
     const named = (kind: string, fallback?: string) => {
       const p = object.properties as Record<string, string | number | null>;
       const name = p.display_name ? String(p.display_name) : null;
       return {
-        html: `<b>${name ?? fallback ?? kind}</b><br/><span style="color:#8e9aab">${kind}${name ? '' : ' · sin nombre en OSM'}</span>`,
+        html: `<b>${name ?? fallback ?? kind}</b><br/><span style="color:#5c616a">${kind}${name ? '' : ' · sin nombre en OSM'}</span>`,
         style,
       };
     };
@@ -733,10 +859,10 @@ export function MapCanvas() {
       const place = opp?.place?.place_line ?? s.place_line;
       return {
         html: `<b>${opp?.intervention_label ?? s.top_intervention_label ?? s.site_id}</b><br/>
-          <span style="color:#8e9aab">${s.site_id}</span>
+          <span style="color:#5c616a">${s.site_id}</span>
           ${place ? `<div style="margin-top:4px;color:#b6c0ce">${place}</div>`
-            : '<div style="margin-top:4px;color:#8e9aab">ubicación sin fuente</div>'}
-          <hr style="border:0;border-top:1px solid #2a3340;margin:6px 0"/>
+            : '<div style="margin-top:4px;color:#5c616a">ubicación sin fuente</div>'}
+          <hr style="border:0;border-top:1px solid #dde0e5;margin:6px 0"/>
           ${def.readout(s, opp)}`,
         style,
       };
@@ -751,14 +877,14 @@ export function MapCanvas() {
       return {
         html: `<img src="${p.thumb_url}" alt="" style="display:block;width:220px;max-height:160px;object-fit:cover;border-radius:6px;margin-bottom:6px"/>
           <b>Foto de campo</b> · ${FIELD_CATEGORY[String(p.label)] ?? p.label}<br/>
-          <span style="color:#8e9aab">${when}${p.review_status === 'PENDIENTE' ? ' · sin revisar' : ''}${
+          <span style="color:#5c616a">${when}${p.review_status === 'PENDIENTE' ? ' · sin revisar' : ''}${
             p.site_id ? ` · a ${Math.round(Number(p.site_distance_m))} m del sitio ${p.site_id}` : ' · sin sitio a 75 m'}</span>`,
         style,
       };
     }
     if (layer.id === 'population') {
       const p = object.properties as Record<string, number>;
-      return { html: `<b>${Math.round(p.population)} personas</b><br/><span style="color:#8e9aab">celda derivada</span>`, style };
+      return { html: `<b>${Math.round(p.population)} personas</b><br/><span style="color:#5c616a">celda derivada</span>`, style };
     }
     if (layer.id === 'green') return named('espacio verde (OSM)', String((object.properties as Record<string, unknown>).label));
     if (layer.id === 'facilities') return named('equipamiento (OSM)', String((object.properties as Record<string, unknown>).label));
@@ -798,7 +924,7 @@ export function MapCanvas() {
   });
 
   const maxBounds = useMemo(
-    () => (territory ? padBBox(territory.aoi.bbox, 0.45) : undefined),
+    () => { const h = homeBBox(territory); return h ? padBBox(h, 0.35) : undefined; },
     [territory],
   );
 
@@ -821,7 +947,7 @@ export function MapCanvas() {
 
       <NorthIndicator
         bearing={bearing}
-        onClick={() => mapRef.current?.getMap().easeTo({ bearing: bearing === 0 ? HOME_BEARING : 0, duration: 500 })}
+        onClick={() => mapRef.current?.getMap().easeTo({ bearing: bearing === 0 ? TILT_BEARING : 0, duration: 500 })}
       />
 
       {sentinelOn && scenes && sentinel && (
@@ -836,15 +962,15 @@ export function MapCanvas() {
       )}
       {ortofoto && (
         <div data-uri="imagery-caption"
-             className="pointer-events-none absolute top-14 left-1/2 z-10 max-w-[420px] -translate-x-1/2 rounded-lg border border-ink-600 bg-ink-950/95 px-3 py-1.5 text-center text-[10px] leading-snug text-mute-200">
-          <b className="text-paper">{ortofoto.display_name}</b>
+             className="pointer-events-none absolute top-14 left-1/2 z-10 max-w-[420px] -translate-x-1/2 rounded-[3px] border border-rule-2 bg-sheet/95 px-3 py-1.5 text-center text-[10px] leading-snug text-graphite-700">
+          <b className="text-toner">{ortofoto.display_name}</b>
           {ortofoto.index?.acquisition && <> · {fecha(ortofoto.index.acquisition)}</>}
-          {ortofoto.attribution && <div className="text-mute-400">{ortofoto.attribution}</div>}
+          {ortofoto.attribution && <div className="text-graphite-500">{ortofoto.attribution}</div>}
         </div>
       )}
 
       <div data-uri="attribution"
-           className="pointer-events-none absolute right-1 bottom-0 z-10 max-w-[70%] px-2 py-1 text-right text-[9px] leading-tight text-mute-400">
+           className="pointer-events-none absolute bottom-0 left-0 z-10 max-w-full truncate bg-sheet/85 px-2 py-1 text-left text-[9px] leading-tight text-graphite-500 sm:max-w-[calc(100%-272px)] sm:whitespace-normal">
         {attribution}
         {sentinelOn && sentinel ? ` · ${sentinel.attribution}` : ''}
         {terrain?.attribution && showTerrain ? ` · ${terrain.attribution}` : ''}
@@ -859,13 +985,13 @@ function NorthIndicator({ bearing, onClick }: { bearing: number; onClick: () => 
     <button
       data-uri="north"
       onClick={onClick}
-      title={bearing === 0 ? 'Norte arriba · clic para volver a la vista inclinada' : `Girado ${Math.round(bearing)}° · clic para poner el norte arriba`}
-      className="absolute top-2 right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-ink-600 bg-ink-950/95 shadow-lg shadow-black/50 sm:top-3 sm:right-3"
+      title={bearing === 0 ? 'Norte arriba · clic para girar la vista' : `Girado ${Math.round(bearing)}° · clic para poner el norte arriba`}
+      className="absolute top-2 right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-rule-2 bg-sheet/95 shadow-lg shadow-toner/10 sm:top-3 sm:right-3"
     >
       <svg width="22" height="22" viewBox="0 0 22 22" style={{ transform: `rotate(${-bearing}deg)` }}>
-        <polygon points="11,2 14.2,12 11,10.4 7.8,12" fill="var(--color-accent)" />
-        <polygon points="11,20 14.2,10 11,11.6 7.8,10" fill="var(--color-mute-400)" />
-        <text x="11" y="7.6" textAnchor="middle" fontSize="5" fontWeight="700" fill="#07090c">N</text>
+        <polygon points="11,2 14.2,12 11,10.4 7.8,12" fill="var(--color-mark)" />
+        <polygon points="11,20 14.2,10 11,11.6 7.8,10" fill="var(--color-graphite-500)" />
+        <text x="11" y="7.6" textAnchor="middle" fontSize="5" fontWeight="700" fill="#ffffff">N</text>
       </svg>
     </button>
   );
@@ -892,7 +1018,7 @@ function SwipeHandle({ swipe, setSwipe, pre, post, limitation, attribution }: {
   return (
     <div data-uri="swipe" className="pointer-events-none absolute inset-0 z-10">
       <div
-        className="absolute top-0 bottom-0 w-px bg-paper/80"
+        className="absolute top-0 bottom-0 w-px bg-toner/80"
         style={{ left: `${swipe * 100}%` }}
       />
       <button
@@ -905,22 +1031,24 @@ function SwipeHandle({ swipe, setSwipe, pre, post, limitation, attribution }: {
           if (e.key === 'ArrowLeft') setSwipe(Math.max(0.02, swipe - 0.05));
           if (e.key === 'ArrowRight') setSwipe(Math.min(0.98, swipe + 0.05));
         }}
-        className="pointer-events-auto absolute top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-paper/60 bg-ink-950/95 text-[12px] text-paper shadow-lg shadow-black/50"
+        className="pointer-events-auto absolute top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-toner/60 bg-sheet/95 text-[12px] text-toner shadow-lg shadow-toner/10"
         style={{ left: `${swipe * 100}%` }}
       >
-        ◂▸
+        <svg width="16" height="10" viewBox="0 0 16 10" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 1.5 1.5 5 5 8.5M11 1.5 14.5 5 11 8.5" />
+        </svg>
       </button>
-      <div className="pointer-events-none absolute top-14 left-3 rounded-md border border-ink-600 bg-ink-950/95 px-2 py-1 text-[10px] text-mute-200">
-        <b className="text-paper">ANTES</b> · {fecha(pre.acquisition)}{clouds(pre)}
+      <div className="pointer-events-none absolute top-14 left-3 rounded-[3px] border border-rule-2 bg-sheet/95 px-2 py-1 text-[10px] text-graphite-700">
+        <b className="text-toner">ANTES</b> · {fecha(pre.acquisition)}{clouds(pre)}
       </div>
-      <div className="pointer-events-none absolute top-14 right-14 rounded-md border border-ink-600 bg-ink-950/95 px-2 py-1 text-right text-[10px] text-mute-200">
-        <b className="text-paper">DESPUÉS</b> · {fecha(post.acquisition)}{clouds(post)}
+      <div className="pointer-events-none absolute top-14 right-14 rounded-[3px] border border-rule-2 bg-sheet/95 px-2 py-1 text-right text-[10px] text-graphite-700">
+        <b className="text-toner">DESPUÉS</b> · {fecha(post.acquisition)}{clouds(post)}
       </div>
       <div data-uri="imagery-caption"
-           className="pointer-events-none absolute bottom-24 left-1/2 max-w-[460px] -translate-x-1/2 rounded-lg border border-ink-600 bg-ink-950/95 px-3 py-1.5 text-center text-[10px] leading-snug text-mute-300">
-        <b className="text-paper">{family}</b> · {attribution}
-        <div className="mt-0.5 text-mute-400">{limitation}</div>
-        <div className="mt-0.5 text-mute-500">antes: {pre.reason} · después: {post.reason}</div>
+           className="pointer-events-none absolute bottom-24 left-1/2 max-w-[460px] -translate-x-1/2 rounded-[3px] border border-rule-2 bg-sheet/95 px-3 py-1.5 text-center text-[10px] leading-snug text-graphite-600">
+        <b className="text-toner">{family}</b> · {attribution}
+        <div className="mt-0.5 text-graphite-500">{limitation}</div>
+        <div className="mt-0.5 text-graphite-400">antes: {pre.reason} · después: {post.reason}</div>
       </div>
     </div>
   );

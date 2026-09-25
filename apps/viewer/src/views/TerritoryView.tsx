@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { fecha, n, pct } from '../lib/format';
-import { useStore } from '../state/store';
+import { fecha, n, pct, dec, plainReason } from '../lib/format';
+import { useStore, type AnnexRef } from '../state/store';
 import type { GeoJSON, Territory } from '../types';
 import { ContextIntro } from '../components/ContextIntro';
-import { Empty, Note, Panel, SectionTitle, Stat } from '../components/ui';
+import { Consideration, Empty, Note, Panel, SectionTitle, Mark } from '../components/ui';
 
 /**
  * ¿Dónde estamos? (ADR-22)
@@ -18,13 +18,13 @@ export function TerritoryView() {
   const {
     territory, layers, setView, setContext, highlightedAdminId, setHighlightedAdminId,
     sentinel, imagery, setImagery, imageryCollection, setImageryCollection,
-    terrain, showTerrain, setShowTerrain, isStatic, context,
+    terrain, showTerrain, setShowTerrain, isStatic, context, annexRef, setAnnexRef,
   } = useStore();
 
   if (!territory) {
     return (
       <div className="p-3">
-        <Panel className="p-4">
+        <Panel className="py-4">
           <SectionTitle>¿Dónde estamos?</SectionTitle>
           <div className="mt-2.5"><Empty>Cargando el territorio…</Empty></div>
         </Panel>
@@ -36,70 +36,68 @@ export function TerritoryView() {
   const conSitios = comunas.filter((c) => c.sites > 0);
   const sinSitios = comunas.filter((c) => c.sites === 0);
 
+  const cityName = city?.display_name ?? 'Pereira';
+  const point = (r: AnnexRef) => (active: boolean) => setAnnexRef(active ? r : null);
+  const popSource = city?.population_source?.split(' (')[0] ?? 'sin fuente';
+
   return (
-    <div className="flex flex-col gap-3 p-3">
-      {/* El primer panel sigue al contexto del mapa (ADR-23): «¿Dónde estamos?»
-          es el de Territorio; cualquier otro contexto explica aquí sus variables. */}
-      {context !== 'TERRITORIO' ? <ContextIntro /> : (
-      <Panel data-uri="where-are-we" className="p-4">
-        <SectionTitle>¿Dónde estamos?</SectionTitle>
-        <p className="mt-2 text-[11px] tracking-wide text-mute-400">
-          {city?.country ?? 'Colombia'} › {city?.department ?? 'Risaralda'} › <b className="text-paper">{city?.display_name ?? 'Pereira'}</b>
+    <div className="flex flex-col gap-0 pb-6">
+      {/* El primer apartado sigue al contexto del mapa (ADR-23): en Territorio
+          son las consideraciones; en cualquier otro contexto, sus variables. */}
+      {context !== 'TERRITORIO' ? <div className="px-4 pt-4 sm:px-6"><ContextIntro /></div> : (
+      <section data-uri="where-are-we" className="px-4 pt-5 sm:px-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <h2 className="letterhead text-[11.5px] text-toner">Consideraciones</h2>
+          <span className="text-[11.5px] text-graphite-500">
+            {city?.country ?? 'Colombia'} › {city?.department ?? 'Risaralda'} › <b className="font-semibold text-toner">{cityName}</b>
+          </span>
+        </div>
+        <p className="mt-1.5 text-[12px] text-graphite-500">
+          Señale una consideración para ver su referencia en el anexo.
         </p>
-        <Locator territory={territory} regions={layers.reference_regions} admin={layers.admin_areas} />
-        <p className="mt-3 text-[13px] leading-relaxed text-mute-200">
-          <b className="text-paper">{city?.display_name ?? 'Pereira'}</b>
-          {city?.population && (
-            <> tiene <b className="text-paper">{n(city.population)}</b> habitantes</>
-          )}
-          {perimeter && (
-            <> en un perímetro urbano de <b className="text-paper">{perimeter.area_km2.toLocaleString('es-CO')} km²</b></>
-          )}.
-          {' '}Este visor cubre el rectángulo marcado: <b className="text-paper">{aoi.bbox_km2.toLocaleString('es-CO')} km²</b>
-          {aoi.share_of_perimeter !== null && <> ({pct(aoi.share_of_perimeter)} del perímetro)</>}, que es donde
-          Copernicus EMS apuntó el sensor tras el sismo. No es toda la ciudad.
-        </p>
+        <ol className="mt-1 divide-y divide-rule">
+          <Consideration n={1} sources={[popSource]} active={annexRef === 'perimeter'} onPoint={point('perimeter')}>
+            {cityName}
+            {city?.population ? <> tiene <b>{n(city.population)}</b> habitantes</> : null}
+            {perimeter ? <> en un perímetro urbano de <b>{perimeter.area_km2.toLocaleString('es-CO')} km²</b></> : null}.
+          </Consideration>
+          <Consideration n={2} stamp sources={['Copernicus EMS']} active={annexRef === 'aoi'} onPoint={point('aoi')}>
+            Este concepto cubre <b>{aoi.bbox_km2.toLocaleString('es-CO')} km²</b>
+            {aoi.share_of_perimeter !== null && <>, el <b>{pct(aoi.share_of_perimeter)}</b> del perímetro</>}:
+            {' '}el área donde Copernicus EMS apuntó el sensor tras el sismo. No es toda la ciudad.
+          </Consideration>
+          <Consideration n={3} sources={['Copernicus EMS']} active={annexRef === 'evidence'} onPoint={point('evidence')}>
+            La evidencia de daño son <b>{n(counts.evidence)}</b> observaciones de foto-interpretación
+            satelital, agrupadas en <b>{n(counts.sites)}</b> sitios. Ninguna está validada en campo.
+          </Consideration>
+          <Consideration n={4} sources={[event.source.split(' (')[0]]}>
+            El sismo, de magnitud <b>M{event.magnitude.toLocaleString('es-CO')}</b> y {event.depth_km.toLocaleString('es-CO')} km
+            de profundidad, ocurrió el {fecha(event.occurred_at.slice(0, 10))} a las {event.occurred_at.slice(11, 16)} UTC,
+            con epicentro {event.epicentre.label}
+            {event.distance_km !== null ? <>, a <b>{n(event.distance_km)} km</b> de {cityName}</> : <> (distancia a la ciudad sin fuente)</>}.
+            {' '}{cityName} es uno de {n(event.municipalities_affected)} municipios afectados.
+          </Consideration>
+          <Consideration n={5} sources={['Copernicus EMS']} active={annexRef === 'outside'} onPoint={point('outside')}>
+            Fuera del área cubierta el anexo va tramado: ahí no hay evidencia, lo que no equivale a
+            ausencia de daño. Las inspecciones de campo de la Alcaldía (EDAM, unos 7.700 registros)
+            cubrirían la ciudad, pero no se han incorporado: el ítem no declara licencia y contiene
+            datos personales que habría que suprimir antes.
+          </Consideration>
+        </ol>
         {city?.population && (
-          <Note>Población según {city.population_source}{city.wikidata ? ` (${city.wikidata})` : ''}. No es el censo.</Note>
+          <Note>Población según {city.population_source}. No es el censo.
+            {' '}Sismo: {event.source}; cartografía rápida de Copernicus EMS.</Note>
         )}
-      </Panel>
+        <figure className="mt-4 border-t border-rule pt-3">
+          <figcaption className="letterhead text-[10.5px] text-graphite-600">Localización</figcaption>
+          <Locator territory={territory} regions={layers.reference_regions} admin={layers.admin_areas} />
+        </figure>
+      </section>
       )}
 
-      <Panel className="p-4">
-        <SectionTitle>El sismo</SectionTitle>
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <Stat label="Magnitud" value={`M${event.magnitude.toLocaleString('es-CO')}`} size="lg" tone="accent"
-                sub={`${event.magnitude_type} · ${event.depth_km.toLocaleString('es-CO')} km de profundidad`} />
-          <Stat label="Fecha" value={fecha(event.occurred_at.slice(0, 10))} size="sm"
-                sub={`${event.occurred_at.slice(11, 16)} UTC`} />
-        </div>
-        <p className="mt-3 text-[12px] leading-relaxed text-mute-200">
-          Epicentro {event.epicentre.label}
-          {event.distance_km !== null
-            ? <>, a <b className="text-paper">{n(event.distance_km)} km</b> de {city?.display_name ?? 'Pereira'}.</>
-            : <>. Distancia a la ciudad <span className="text-mute-400">sin fuente</span>.</>}
-          {' '}{city?.display_name ?? 'Pereira'} es uno de <b className="text-paper">{n(event.municipalities_affected)}</b> municipios
-          afectados por un evento regional.
-        </p>
-        <Note>
-          {event.source} ({event.event_id}). Cartografía rápida: Copernicus EMS, activación {event.activation_id}.
-        </Note>
-      </Panel>
-
-      <div className="grid grid-cols-3 gap-3">
-        <Panel className="p-3">
-          <Stat size="sm" label="Observaciones" value={n(counts.evidence)} sub="de daño, Copernicus" />
-        </Panel>
-        <Panel className="p-3">
-          <Stat size="sm" label="Sitios" value={n(counts.sites)} sub={`${n(counts.candidates)} candidatos`} />
-        </Panel>
-        <Panel className="p-3">
-          <Stat size="sm" label="Personas" value={n(counts.population_measured)} sub="medidas en el AOI" />
-        </Panel>
-      </div>
-
-      <Panel className="p-4">
-        <SectionTitle right={<span className="text-[10px] text-mute-400">{comunas.length} en el AOI</span>}>
+      <div className="flex flex-col px-4 sm:px-6">
+      <Panel className="py-4">
+        <SectionTitle right={<span className="text-[10px] text-graphite-500">{comunas.length} en el AOI</span>}>
           Comunas
         </SectionTitle>
         <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -111,18 +109,18 @@ export function TerritoryView() {
                 data-uri="comuna"
                 onClick={() => setHighlightedAdminId(active ? null : c.osm_id)}
                 className={[
-                  'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors',
-                  active ? 'border-accent/60 bg-accent/10 text-paper' : 'border-ink-700 bg-ink-850 text-mute-200 hover:border-mute-400/50',
+                  'flex items-center gap-1.5 rounded-[3px] border px-2.5 py-1.5 text-[11px] transition-colors',
+                  active ? 'border-mark/60 bg-mark/10 text-toner' : 'border-rule bg-sheet-2 text-graphite-700 hover:border-graphite-500/50',
                 ].join(' ')}
               >
                 <span>{c.display_name}</span>
-                <span className="num text-[10px] text-mute-400">{c.sites}</span>
+                <span className="num text-[10px] text-graphite-500">{c.sites}</span>
               </button>
             );
           })}
         </div>
         {sinSitios.length > 0 && (
-          <p className="mt-2 text-[10px] leading-snug text-mute-500">
+          <p className="mt-2 text-[10px] leading-snug text-graphite-400">
             Sin sitios: {sinSitios.map((c) => c.display_name).join(', ')}.
           </p>
         )}
@@ -133,14 +131,14 @@ export function TerritoryView() {
       </Panel>
 
       {rivers.length > 0 && (
-        <Panel className="p-4">
+        <Panel className="py-4">
           <SectionTitle>Ríos</SectionTitle>
-          <p className="mt-2 text-[12px] leading-relaxed text-mute-200">
+          <p className="mt-2 text-[12px] leading-relaxed text-graphite-700">
             {rivers.map((r, i) => (
               <span key={r.display_name}>
                 {i > 0 && ' · '}
-                <b className="text-paper">{r.display_name}</b>
-                <span className="text-mute-400"> {(r.length_m / 1000).toFixed(1)} km</span>
+                <b className="text-toner">{r.display_name}</b>
+                <span className="text-graphite-500"> {dec(r.length_m / 1000, 1)} km</span>
               </span>
             ))}
           </p>
@@ -148,9 +146,9 @@ export function TerritoryView() {
         </Panel>
       )}
 
-      <Panel className="p-4">
+      <Panel className="py-4">
         <SectionTitle>Imagen del territorio</SectionTitle>
-        <div className="mt-2.5 flex flex-col gap-2">
+        <div className="mt-2 flex flex-col border-t border-rule">
           <ImageryToggle
             checked={imagery === 'sentinel'}
             disabled={!sentinel || !img.sentinel.available}
@@ -169,8 +167,8 @@ export function TerritoryView() {
                   data-uri="imagery-collection"
                   onClick={() => setImageryCollection(c)}
                   className={[
-                    'rounded-md border px-2 py-1 text-[10px]',
-                    imageryCollection === c ? 'border-accent/60 bg-accent/10 text-paper' : 'border-ink-700 text-mute-300',
+                    'rounded-[3px] border px-2 py-1 text-[10px]',
+                    imageryCollection === c ? 'border-mark/60 bg-mark/10 text-toner' : 'border-rule text-graphite-600',
                   ].join(' ')}
                 >
                   {c === 's2' ? 'Sentinel-2 óptico' : 'Sentinel-1 radar'}
@@ -188,7 +186,7 @@ export function TerritoryView() {
               badge={o.status === 'AVAILABLE' ? 'real' : 'sin fuente'}
               help={o.status === 'AVAILABLE'
                 ? `Teselas propias${o.index?.acquisition ? `, tomadas el ${fecha(o.index.acquisition)}` : ''}.`
-                : `No se publica: ${o.reason}. Disponible y permitido no son lo mismo.`}
+                : `No se publica: ${plainReason(o.reason)}. Disponible y permitido no son lo mismo.`}
             />
           ))}
           <ImageryToggle
@@ -198,7 +196,7 @@ export function TerritoryView() {
             label="Relieve real del terreno"
             badge="real"
             help={terrain
-              ? 'Teselas Terrain-RGB de Copernicus DEM versionadas en el repositorio.'
+              ? 'Relieve del modelo de elevación de Copernicus, archivado con el proyecto.'
               : 'Sin teselas versionadas en este despliegue: la capa no se publica.'}
           />
         </div>
@@ -207,17 +205,17 @@ export function TerritoryView() {
         )}
       </Panel>
 
-      <Panel className="p-4">
+      <Panel className="py-4">
         <SectionTitle>Qué cubre este visor</SectionTitle>
-        <p className="mt-2 text-[12px] leading-relaxed text-mute-200">
+        <p className="mt-2 text-[12px] leading-relaxed text-graphite-700">
           {aoi.evidence_km2 !== null && (
-            <>La evidencia de daño cubre <b className="text-paper">{aoi.evidence_km2.toLocaleString('es-CO')} km²</b> del rectángulo: </>
+            <>La evidencia de daño cubre <b className="text-toner">{aoi.evidence_km2.toLocaleString('es-CO')} km²</b> del rectángulo: </>
           )}
           {n(counts.evidence)} observaciones de foto-interpretación agrupadas en {n(counts.sites)} sitios,
           sobre {n(counts.buildings)} huellas de edificio y {n(counts.landmarks)} lugares con nombre.
           {' '}
           {counts.field_photos ? (
-            <>Y <b className="text-paper">{n(counts.field_photos)} fotos de campo</b> tomadas con pereiramap
+            <>Y <b className="text-toner">{n(counts.field_photos)} fotos de campo</b> tomadas con pereiramap
               ({n(counts.field_photos_linked ?? 0)} enlazadas a un sitio).</>
           ) : (
             <>Todavía sin fotos de campo: se toman con <b>pereiramap</b> y respaldan la ficha de cada sitio.</>
@@ -230,13 +228,15 @@ export function TerritoryView() {
         </Note>
       </Panel>
 
+      </div>
+
       <button
         data-uri="territory-cta"
         onClick={() => { setHighlightedAdminId(null); setContext('SITUACION'); setView('situacion'); }}
-        className="rounded-xl bg-accent px-4 py-3 text-left text-[13px] font-semibold text-ink-950 hover:bg-accent/85"
+        className="mx-4 mt-5 bg-toner px-4 py-3 text-left text-[14px] font-semibold text-sheet transition-colors hover:bg-graphite-700 sm:mx-6"
       >
-        Ver la situación →
-        <span className="block text-[11px] font-normal text-ink-900/80">¿Qué está pasando en el territorio?</span>
+        II · Situación →
+        <span className="block text-[12px] font-normal text-sheet/75">¿Qué está pasando en el territorio?</span>
       </button>
     </div>
   );
@@ -282,19 +282,19 @@ function Locator({ territory, regions, admin }: {
 
   return (
     <div data-uri="locator" className="mt-3 flex items-stretch gap-3">
-      <div className="flex-none rounded-lg border border-ink-700 bg-ink-950 p-1.5">
+      <div className="flex-none rounded-[3px] border border-rule bg-sheet p-1.5">
         {national ? (
           <svg width="150" height="150" viewBox="0 0 150 150" role="img" aria-label="Colombia, Risaralda y Pereira">
             {national.country.map((d, i) => (
-              <path key={`c${i}`} d={d} fill="var(--color-ink-800)" stroke="var(--color-ink-500)" strokeWidth="0.8" />
+              <path key={`c${i}`} d={d} fill="var(--color-rule)" stroke="var(--color-graphite-400)" strokeWidth="0.8" />
             ))}
             {national.state.map((d, i) => (
-              <path key={`s${i}`} d={d} fill="rgb(240 180 41 / .45)" stroke="var(--color-accent)" strokeWidth="0.8" />
+              <path key={`s${i}`} d={d} fill="rgb(91 58 163 / .35)" stroke="var(--color-stamp)" strokeWidth="0.8" />
             ))}
             {national.city && (
               <>
-                <circle cx={national.city[0]} cy={national.city[1]} r="3.2" fill="var(--color-accent)" />
-                <text x={national.city[0] + 6} y={national.city[1] + 3} fontSize="9" fill="var(--color-paper)">
+                <circle cx={national.city[0]} cy={national.city[1]} r="3.2" fill="var(--color-stamp)" />
+                <text x={national.city[0] + 6} y={national.city[1] + 3} fontSize="9" fill="var(--color-toner)">
                   {city?.display_name ?? 'Pereira'}
                 </text>
               </>
@@ -302,17 +302,17 @@ function Locator({ territory, regions, admin }: {
           </svg>
         ) : <div className="h-[150px] w-[150px]" />}
       </div>
-      <div className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 p-1.5">
+      <div className="min-w-0 flex-1 rounded-[3px] border border-rule bg-sheet p-1.5">
         {local ? (
           <svg width="100%" height="150" viewBox="0 0 200 150" preserveAspectRatio="xMidYMid meet" role="img"
                aria-label="Perímetro urbano de Pereira y el área que cubre el visor">
             {local.perimeter.map((d, i) => (
-              <path key={`p${i}`} d={d} fill="var(--color-ink-800)" stroke="var(--color-mute-400)" strokeWidth="0.8" />
+              <path key={`p${i}`} d={d} fill="var(--color-rule)" stroke="var(--color-graphite-500)" strokeWidth="0.8" />
             ))}
-            <path d={local.aoi} fill="rgb(240 180 41 / .18)" stroke="var(--color-accent)" strokeWidth="1.2" strokeDasharray="3 2" />
-            {local.city && <circle cx={local.city[0]} cy={local.city[1]} r="2.4" fill="var(--color-paper)" />}
-            <text x="4" y="146" fontSize="8" fill="var(--color-mute-400)">perímetro urbano</text>
-            <text x="196" y="146" fontSize="8" fill="var(--color-accent)" textAnchor="end">área del visor</text>
+            <path d={local.aoi} fill="rgb(91 58 163 / .12)" stroke="var(--color-stamp)" strokeWidth="1.2" strokeDasharray="3 2" />
+            {local.city && <circle cx={local.city[0]} cy={local.city[1]} r="2.4" fill="var(--color-toner)" />}
+            <text x="4" y="146" fontSize="8" fill="var(--color-graphite-500)">perímetro urbano</text>
+            <text x="196" y="146" fontSize="8" fill="var(--color-stamp)" textAnchor="end">área cubierta</text>
           </svg>
         ) : <div className="h-[150px]" />}
       </div>
@@ -361,33 +361,42 @@ function ImageryToggle({ checked, onChange, label, help, badge, disabled }: {
   checked: boolean; onChange: (v: boolean) => void; label: string; help: string;
   badge?: string; disabled?: boolean;
 }) {
+  const blocked = disabled && badge === 'sin fuente';
   return (
     <label data-uri="imagery-toggle" data-layer={label} className={[
-      'flex items-start gap-2.5 rounded-lg border px-2.5 py-2',
-      disabled ? 'cursor-not-allowed border-ink-800 opacity-60' : 'cursor-pointer border-ink-700 bg-ink-850 hover:border-mute-400/40',
+      'group flex items-start gap-2.5 border-b border-rule py-2.5',
+      disabled ? 'cursor-not-allowed' : 'cursor-pointer',
     ].join(' ')}>
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 accent-[var(--color-accent)]"
+        className="peer sr-only"
       />
-      <span className="min-w-0 flex-1">
-        <span className="flex items-baseline gap-2">
-          <span className="text-[12px] font-medium">{label}</span>
+      <span aria-hidden className={[
+        'mt-[2px] inline-flex h-4 w-4 shrink-0 items-center justify-center border transition-colors',
+        'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-toner',
+        checked ? 'border-toner bg-toner text-sheet'
+          : blocked ? 'border-dashed border-stamp text-stamp'
+          : disabled ? 'border-dashed border-graphite-400'
+          : 'border-graphite-500 group-hover:border-toner',
+      ].join(' ')}>
+        {checked ? <Mark kind="ok" size={10} /> : blocked ? <Mark kind="close" size={9} /> : null}
+      </span>
+      <span className={`min-w-0 flex-1 ${disabled && !blocked ? 'opacity-60' : ''}`}>
+        <span className="flex flex-wrap items-baseline gap-x-2">
+          <span className={`text-[13px] font-medium ${disabled ? 'text-graphite-600' : 'text-toner'}`}>{label}</span>
           {badge && (
             <span className={[
-              'rounded border px-1 py-0.5 text-[9px] uppercase',
-              badge === 'real' ? 'border-ok/35 text-ok'
-                : badge === 'sin fuente' ? 'border-dashed border-ink-500 text-mute-300'
-                : 'border-warn/35 text-warn',
+              'text-[10px] font-semibold tracking-[0.1em] uppercase',
+              badge === 'real' ? 'text-ok' : badge === 'sin fuente' ? 'text-stamp' : 'text-warn',
             ].join(' ')}>
-              {badge}
+              {badge === 'sin fuente' ? 'bloqueada por licencia' : badge}
             </span>
           )}
         </span>
-        <span className="mt-0.5 block text-[10px] leading-snug text-mute-400">{help}</span>
+        <span className="mt-0.5 block text-[12px] leading-snug text-graphite-500">{help}</span>
       </span>
     </label>
   );

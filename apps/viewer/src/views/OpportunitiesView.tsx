@@ -1,10 +1,10 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { FACTOR_LABEL, cop, n, pct } from '../lib/format';
+import { FACTOR_LABEL, cop, n, pct, dec } from '../lib/format';
 import { INTERVENTION_COLOR, rgbCss } from '../lib/palette';
 import { DEFAULT_MIN_SUITABILITY, useStore } from '../state/store';
 import type { Opportunity } from '../types';
 import { ContextIntro } from '../components/ContextIntro';
-import { Bar, Chip, Empty, Note, Panel, SectionTitle, StatusBadge } from '../components/ui';
+import { Bar, Chip, Empty, Note, Panel, SectionTitle, Mark } from '../components/ui';
 
 export function OpportunitiesView() {
   const {
@@ -35,7 +35,7 @@ export function OpportunitiesView() {
 
       <Panel data-uri="suitability-filter" className="p-3.5">
         <SectionTitle right={
-          <span className="num text-[10px] text-mute-400">{aboveThreshold} de {opportunities.length}</span>
+          <span className="num text-[10px] text-graphite-500">{aboveThreshold} de {opportunities.length}</span>
         }>
           Idoneidad mínima
         </SectionTitle>
@@ -46,9 +46,9 @@ export function OpportunitiesView() {
             value={minSuitability}
             onChange={(e) => setMinSuitability(Number(e.target.value))}
             aria-label="Idoneidad mínima visible"
-            className="w-full accent-[var(--color-accent)]"
+            className="w-full accent-[var(--color-mark)]"
           />
-          <span className="num w-10 shrink-0 text-right text-[15px] font-semibold text-accent">
+          <span className="num w-10 shrink-0 text-right text-[15px] font-semibold text-mark">
             {minSuitability}
           </span>
         </div>
@@ -77,32 +77,32 @@ export function OpportunitiesView() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Intervención, sitio o factor del problema…"
-          className="mt-2 w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-[13px] text-paper placeholder:text-mute-500 focus:border-accent/60 focus:outline-none"
+          className="mt-2 w-full rounded-[3px] border border-rule bg-sheet px-3 py-2.5 text-[13px] text-toner placeholder:text-graphite-400 focus:border-mark/60 focus:outline-none"
         />
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           <Chip active={onlyBuildable} onClick={() => setOnlyBuildable(!onlyBuildable)}
                 title="Oculta NO_BUILD y las excluidas por restricción dura">
             Solo construibles
           </Chip>
-          {query && <Chip onClick={() => setQuery('')}>limpiar «{query}» ✕</Chip>}
+          {query && <Chip onClick={() => setQuery('')} title="Quitar la búsqueda">limpiar «{query}» <Mark kind="close" size={9} /></Chip>}
         </div>
         {communes.length > 0 && (
           <div data-uri="commune-filter" className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] tracking-[0.12em] text-mute-500 uppercase">Comuna</span>
+            <span className="text-[10px] tracking-[0.12em] text-graphite-400 uppercase">Comuna</span>
             {communes.map(([c, k]) => (
               <Chip key={c} active={communeFilter === c} onClick={() => setCommuneFilter(communeFilter === c ? null : c)}
                     title={`${k} oportunidad${k === 1 ? '' : 'es'} en la comuna ${c}`}>
-                {c} <span className="num text-mute-500">{k}</span>
+                {c} <span className="num text-graphite-400">{k}</span>
               </Chip>
             ))}
             {sinComuna > 0 && (
-              <span className="text-[10px] text-mute-500">{sinComuna} sin comuna en OSM</span>
+              <span className="text-[10px] text-graphite-400">{sinComuna} sin comuna en OSM</span>
             )}
           </div>
         )}
         <Note>
-          Búsqueda léxica sobre lo que ya está cargado. La búsqueda semántica con pgvector no entra
-          todavía: no existe corpus documental que recuperar.
+          Búsqueda por palabras sobre lo que ya está cargado: barrio, comuna, intervención o
+          factor del problema.
         </Note>
       </Panel>
 
@@ -110,7 +110,7 @@ export function OpportunitiesView() {
         <Panel className="p-3.5">
           <SectionTitle right={
             <button onClick={() => setShowCompare(!showCompare)}
-                    className="text-[10px] text-mute-400 hover:text-paper">
+                    className="text-[10px] text-graphite-500 hover:text-toner">
               {showCompare ? 'ocultar' : 'mostrar'}
             </button>
           }>
@@ -118,7 +118,7 @@ export function OpportunitiesView() {
           </SectionTitle>
           {showCompare && <CompareTable opps={compared} />}
           <button onClick={clearCompare}
-                  className="mt-2 text-[10px] text-mute-400 underline hover:text-paper">
+                  className="mt-2 text-[10px] text-graphite-500 underline hover:text-toner">
             limpiar comparación
           </button>
         </Panel>
@@ -126,14 +126,14 @@ export function OpportunitiesView() {
 
       <Panel className="p-3.5">
         <SectionTitle right={
-          <span className="text-[10px] text-mute-400">
+          <span className="text-[10px] text-graphite-500">
             {visibleOpportunities.length} de {opportunities.length}
           </span>
         }>
           Oportunidades de recuperación
         </SectionTitle>
 
-        <div className="mt-2.5 flex flex-col gap-2">
+        <div className="mt-2.5 flex flex-col border-t border-rule">
           {visibleOpportunities.length === 0 && (
             <Empty>Ninguna oportunidad cumple los criterios actuales.</Empty>
           )}
@@ -185,7 +185,7 @@ function MethodPanel() {
       body: <>
         {evidence !== null ? `${n(evidence)} observaciones` : 'Las observaciones'} de daño de Copernicus EMS
         (foto-interpretación, sin validación de campo) se agrupan por cercanía en{' '}
-        <b className="text-paper">{n(sites.length)} sitios</b>. Un sitio no es un predio: es una
+        <b className="text-toner">{n(sites.length)} sitios</b>. Un sitio no es un predio: es una
         envolvente estimada de evidencia contigua, y así se marca.
       </>,
     },
@@ -194,7 +194,7 @@ function MethodPanel() {
       body: <>
         Área mínima, riesgo y compatibilidad normativa se evalúan primero y sin compensación: un
         sitio que no cumple queda fuera aunque el resto le favorezca. Hoy{' '}
-        <b className="text-paper">{n(excluded)} excluidos</b> y {n(candidates)} candidatos. Lo que no
+        <b className="text-toner">{n(excluded)} excluidos</b> y {n(candidates)} candidatos. Lo que no
         tiene fuente (riesgo sísmico, POT) no excluye ni aprueba: se declara.
       </>,
     },
@@ -213,11 +213,11 @@ function MethodPanel() {
         {provenance.scoring_version ? <> (<code className="text-[10px]">{provenance.scoring_version}</code>)</> : null}
         {weights && (
           <>: {Object.entries(weights).map(([k, v], i) => (
-            <span key={k}>{i > 0 && ', '}{FACTOR_LABEL[k] ?? k} <b className="num text-paper">{pct(v)}</b></span>
+            <span key={k}>{i > 0 && ', '}{FACTOR_LABEL[k] ?? k} <b className="num text-toner">{pct(v)}</b></span>
           ))}</>
         )}. La descomposición suma exactamente el puntaje —se puede abrir en cada ficha— y un
         contrafactual dice cuánto tendría que cambiar un factor para cambiar la recomendación.
-        <b className="text-mute-200"> El puntaje ordena; el problema titula.</b>
+        <b className="text-graphite-700"> El puntaje ordena; el problema titula.</b>
       </>,
     },
     {
@@ -225,9 +225,9 @@ function MethodPanel() {
       body: <>
         Se propone la intervención con mayor afinidad al problema —parque, plaza, espacio abierto,
         equipamiento— y se comprueban las condiciones de viabilidad una a una: cumple, con reservas,
-        bloquea o <b className="text-mute-200">sin fuente</b>. Hoy {n(buildable)} oportunidades proponen
+        bloquea o <b className="text-graphite-700">sin fuente</b>. Hoy {n(buildable)} oportunidades proponen
         construir algo{noBuild > 0 && <> y {n(noBuild)} responden que ahí no cabe nada</>}; cada una
-        declara en promedio {unknownsPerOpp.toFixed(1)} condiciones sin fuente. La confianza combina la
+        declara en promedio {dec(unknownsPerOpp, 1)} condiciones sin fuente. La confianza combina la
         evidencia, el método de captación y la antigüedad de la observación.
       </>,
     },
@@ -238,23 +238,23 @@ function MethodPanel() {
         más población <i>nueva</i> por peso invertido, sin doble conteo y midiendo el efecto sobre la
         equidad de acceso. Es el mismo modelo, con las prioridades cambiadas: sirve para ver qué
         oportunidades resisten un cambio de prioridades y cuáles no.
-        {scenario && <> El escenario actual selecciona <b className="text-paper">{scenario.items.length}</b> de {n(scenario.considered)} candidatos.</>}{' '}
-        <button className="underline hover:text-paper" onClick={() => setView('escenarios')}>Ver los escenarios</button>
+        {scenario && <> El escenario actual selecciona <b className="text-toner">{scenario.items.length}</b> de {n(scenario.considered)} candidatos.</>}{' '}
+        <button className="underline hover:text-toner" onClick={() => setView('escenarios')}>Ver los escenarios</button>
       </>,
     },
   ];
 
   return (
-    <Panel data-uri="method" className="border-accent/25 p-4">
+    <Panel data-uri="method" className="border-mark/25 p-4">
       <SectionTitle right={
-        <button data-uri="method-toggle" onClick={() => setOpen(!open)} className="text-[10px] text-mute-400 hover:text-paper">
+        <button data-uri="method-toggle" onClick={() => setOpen(!open)} className="text-[10px] text-graphite-500 hover:text-toner">
           {open ? 'ocultar' : 'mostrar'}
         </button>
       }>
         Cómo se identifican las oportunidades
       </SectionTitle>
-      <p className="mt-2 text-[13px] leading-relaxed text-mute-200">
-        Un <b className="text-paper">análisis espacial multicriterio, explicable y auditable</b>: dónde
+      <p className="mt-2 text-[13px] leading-relaxed text-graphite-700">
+        Un <b className="text-toner">análisis espacial multicriterio, explicable y auditable</b>: dónde
         hay evidencia de daño, qué falta alrededor y qué intervención pública respondería a eso con
         mayor beneficio para la población alcanzable. Cada número se puede rastrear hasta su fuente.
       </p>
@@ -262,12 +262,12 @@ function MethodPanel() {
         <ol className="mt-3 flex flex-col gap-2.5">
           {steps.map((step, i) => (
             <li key={step.title} className="flex gap-2.5">
-              <span className="num mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-accent/50 text-[10px] font-semibold text-accent">
+              <span className="num mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-mark/50 text-[10px] font-semibold text-mark">
                 {i + 1}
               </span>
               <div className="min-w-0">
-                <div className="text-[12px] font-medium text-paper">{step.title}</div>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-mute-300">{step.body}</p>
+                <div className="text-[12px] font-medium text-toner">{step.title}</div>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-graphite-600">{step.body}</p>
               </div>
             </li>
           ))}
@@ -286,7 +286,7 @@ function Card({ opp, confidence, selected, inCompare, onSelect, onCompare }: {
   opp: Opportunity; confidence: number; selected: boolean; inCompare: boolean;
   onSelect: () => void; onCompare: () => void;
 }) {
-  const color = rgbCss(INTERVENTION_COLOR[opp.intervention] ?? [240, 180, 41]);
+  const color = rgbCss(INTERVENTION_COLOR[opp.intervention] ?? [23, 24, 27]);
   const ok = opp.feasibility.filter((f) => f.status === 'OK').length;
   const unknown = opp.feasibility.filter((f) => f.status === 'UNKNOWN').length;
   const warn = opp.feasibility.filter((f) => f.status === 'WARNING').length;
@@ -294,8 +294,8 @@ function Card({ opp, confidence, selected, inCompare, onSelect, onCompare }: {
 
   return (
     <div data-uri="opportunity-card" className={[
-      'rounded-xl border p-3 transition-colors',
-      selected ? 'border-accent/50 bg-accent/5' : 'border-ink-700 bg-ink-850 hover:border-mute-400/40',
+      'border-b border-rule px-2 py-3 transition-colors',
+      selected ? 'bg-sheet-2 ring-1 ring-inset ring-toner' : 'hover:bg-sheet-2/70',
       opp.blocked ? 'opacity-60' : '',
     ].join(' ')}>
       <button onClick={onSelect} className="w-full text-left">
@@ -304,77 +304,71 @@ function Card({ opp, confidence, selected, inCompare, onSelect, onCompare }: {
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">
               <span className="truncate text-[13px] font-medium">{opp.intervention_label}</span>
-              <span className="num shrink-0 font-mono text-[10px] text-mute-500">
-                {opp.site_id.replace('site_', '#')}
+              <span className="num shrink-0 font-mono text-[10px] text-graphite-400">
+                
               </span>
             </div>
             {/* Dónde, antes del porqué (ADR-22). */}
-            <p data-uri="card-place" className="mt-0.5 truncate text-[11px] text-mute-200">
+            <p data-uri="card-place" className="mt-0.5 truncate text-[11px] text-graphite-700">
               {opp.place?.neighborhood || opp.place?.commune
                 ? [
                     opp.place.neighborhood ? `Barrio ${opp.place.neighborhood}` : null,
                     opp.place.commune ? `Comuna ${opp.place.commune}` : null,
                   ].filter(Boolean).join(' · ')
-                : <span className="text-mute-500">ubicación sin fuente</span>}
-              {opp.place?.corner_label && <span className="text-mute-400"> · {opp.place.corner_label}</span>}
+                : <span className="text-graphite-400">ubicación sin fuente</span>}
+              {opp.place?.corner_label && <span className="text-graphite-500"> · {opp.place.corner_label}</span>}
             </p>
             {/* El titular es la razón. El puntaje ordena, pero no titula. */}
-            <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-mute-300">
+            <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-graphite-600">
               {opp.problem.headline}
             </p>
           </div>
           <span className="num shrink-0 text-right">
-            <span className="block text-[13px] font-semibold text-accent">
-              {opp.suitability.toFixed(1)}
+            <span className="block text-[14px] font-bold text-toner">
+              {dec(opp.suitability, 1)}
             </span>
-            <span className="block text-[9px] text-mute-500">idoneidad</span>
+            <span className="block text-[9px] text-graphite-400">idoneidad</span>
           </span>
         </div>
 
-        <div className="mt-2.5 grid grid-cols-3 gap-2 text-[11px]">
-          <Metric label="Población" value={n(opp.impact.population_reached)} />
-          <Metric label="Costo" value={cop(opp.cost_cop)} />
-          <Metric label="Pers./MM COP"
-                  value={opp.impact.people_per_million_cop?.toFixed(1) ?? '—'} />
-        </div>
+        <p className="num mt-1.5 text-[12px] text-graphite-700">
+          <b className="font-semibold text-toner">{n(opp.impact.population_reached)}</b> personas
+          {' · '}{cop(opp.cost_cop)}
+          {' · '}{dec(opp.impact.people_per_million_cop, 1)} personas por millón
+        </p>
 
         <div className="mt-2">
           <Bar value={Math.min(1, opp.suitability / 100)} color={color} height={3} />
         </div>
       </button>
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        {blocked > 0 && <StatusBadge status="BLOCKED">{blocked} bloquea</StatusBadge>}
-        {warn > 0 && <StatusBadge status="WARNING">{warn} con reservas</StatusBadge>}
-        <StatusBadge status="OK">{ok} cumple</StatusBadge>
-        {unknown > 0 && <StatusBadge status="UNKNOWN">{unknown} sin fuente</StatusBadge>}
-        <Chip title="Confianza compuesta de la evidencia y el método de captación">
-          conf. <span className={
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px]">
+        {blocked > 0 && <span className="inline-flex items-center gap-1 text-bad"><Mark kind="bad" />{blocked} bloquea</span>}
+        {warn > 0 && <span className="inline-flex items-center gap-1 text-warn"><Mark kind="warn" />{warn} con reservas</span>}
+        <span className="inline-flex items-center gap-1 text-ok"><Mark kind="ok" />{ok} cumple</span>
+        {unknown > 0 && (
+          <span className="inline-flex items-center gap-1.5 text-graphite-600">
+            <span className="hatch inline-block h-2.5 w-2.5" aria-hidden />{unknown} sin fuente
+          </span>
+        )}
+        <span className="text-graphite-600" title="Confianza compuesta de la evidencia y el método de captación">
+          confianza <span className={
             confidence > 0.6 ? 'text-ok' : confidence > 0.35 ? 'text-warn' : 'text-bad'
           }>{pct(confidence)}</span>
-        </Chip>
+        </span>
         <button
           onClick={onCompare}
-          className={[
-            'ml-auto rounded-md border px-2 py-0.5 text-[10px] transition-colors',
-            inCompare ? 'border-accent/60 bg-accent/15 text-accent' : 'border-ink-700 text-mute-400 hover:text-paper',
-          ].join(' ')}
+          aria-pressed={inCompare}
+          className={['ml-auto underline decoration-rule-2 underline-offset-2 transition-colors',
+            inCompare ? 'font-semibold text-toner' : 'text-graphite-500 hover:text-toner'].join(' ')}
         >
-          {inCompare ? '✓ comparando' : '+ comparar'}
+          {inCompare ? 'comparando' : 'comparar'}
         </button>
       </div>
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[9px] tracking-wider text-mute-500 uppercase">{label}</div>
-      <div className="num mt-0.5 text-[12px] font-medium">{value}</div>
-    </div>
-  );
-}
 
 function CompareTable({ opps }: { opps: Opportunity[] }) {
   const rows: {
@@ -388,7 +382,7 @@ function CompareTable({ opps }: { opps: Opportunity[] }) {
     { label: 'Población alcanzada', get: (o) => n(o.impact.population_reached),
       raw: (o) => o.impact.population_reached, best: 'max' },
     { label: 'Costo', get: (o) => cop(o.cost_cop), raw: (o) => o.cost_cop, best: 'min' },
-    { label: 'Personas por MM COP', get: (o) => o.impact.people_per_million_cop?.toFixed(1) ?? '—',
+    { label: 'Personas por millón de pesos', get: (o) => dec(o.impact.people_per_million_cop, 1) ?? '—',
       raw: (o) => o.impact.people_per_million_cop, best: 'max' },
     { label: 'Reducción de déficit',
       get: (o) => (o.impact.deficit_reduction === null ? '—' : pct(o.impact.deficit_reduction, 2)),
@@ -398,7 +392,7 @@ function CompareTable({ opps }: { opps: Opportunity[] }) {
     { label: 'Condiciones sin fuente', get: (o) => String(o.unknowns.length),
       raw: (o) => o.unknowns.length, best: 'min' },
     { label: 'Confianza', get: (o) => pct(o.confidence), raw: (o) => o.confidence, best: 'max' },
-    { label: 'Idoneidad', get: (o) => o.suitability.toFixed(1), raw: (o) => o.suitability, best: 'max' },
+    { label: 'Idoneidad', get: (o) => dec(o.suitability, 1), raw: (o) => o.suitability, best: 'max' },
   ];
 
   return (
@@ -409,8 +403,8 @@ function CompareTable({ opps }: { opps: Opportunity[] }) {
             <th className="w-36" />
             {opps.map((o) => (
               <th key={o.opportunity_id} className="px-2 pb-2 text-left">
-                <div className="num font-mono text-[9px] text-mute-500">
-                  {o.site_id.replace('site_', '#')}
+                <div className="num font-mono text-[9px] text-graphite-400">
+                  {o.place?.neighborhood ?? o.intervention_label}
                 </div>
                 <div className="text-[11px] font-medium">{o.intervention_label}</div>
               </th>
@@ -424,8 +418,8 @@ function CompareTable({ opps }: { opps: Opportunity[] }) {
             const best = r.best && defined.length
               ? (r.best === 'max' ? Math.max(...defined) : Math.min(...defined)) : null;
             return (
-              <tr key={r.label} className="border-t border-ink-800">
-                <td className="py-1.5 pr-2 text-mute-400">{r.label}</td>
+              <tr key={r.label} className="border-t border-rule">
+                <td className="py-1.5 pr-2 text-graphite-500">{r.label}</td>
                 {opps.map((o, i) => (
                   <td key={o.opportunity_id} className={[
                     'num px-2 py-1.5',
