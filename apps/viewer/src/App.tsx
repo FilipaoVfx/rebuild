@@ -28,7 +28,12 @@ function Workspace() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && site && !panel && !overlay) selectSite(null);
+      /* Escape cierra lo que está encima: si hay un popover o un diálogo
+         abierto, es suyo; la tarjeta del lugar solo se cierra cuando es lo
+         último que queda. */
+      if (e.key !== 'Escape' || !site || panel || overlay) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      selectSite(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

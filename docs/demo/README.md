@@ -1,4 +1,65 @@
-# Demo para contraparte institucional
+# Demos
+
+## REBUILD · recorrido esencial (2026-09-25)
+
+**`rebuild-recorrido-demo.mp4`** · 0:58 · 1920×1080 · **sin voz, sin audio, sin subtítulos** · 16 MB
+
+El flujo que importa, sin nada más: los titulares de la propia interfaz cuentan
+el recorrido. Guion: [`rebuild-flow.mjs`](rebuild-flow.mjs).
+
+| # | Escena | Qué deja en evidencia |
+|---|---|---|
+| — | Portada | REBUILD · Pereira, tras el sismo del 10-08-2026 |
+| 1 | Capas | Inspección de datos: daño (Copernicus EMS) y población estimada sobre el mismo mapa |
+| 2 | Buscar | La barra inferior se vuelve buscador; «corocito» abre la tarjeta del lugar, unida al pin |
+| 3 | Evidencia | Observaciones, confianza y el cruce con Sentinel antes/después (óptica y radar) |
+| 4 | Entorno | Cruce con espacio público y equipamientos a 500 m, y el área caminable |
+| 5 | Comparar | «¿Qué aportaría más a Corocito?»: dos hipótesis, qué falta comprobar, por qué el sistema las propone |
+| 6 | Verificar | «¿Qué debemos comprobar?»: la lista sale de los huecos de datos de ese sitio |
+| 7 | Modo oscuro | Ajustes (Morphing Popover) → la interfaz y la cartografía cambian de tema |
+| — | Cierre | Evidencia, entorno e hipótesis — cada una con su procedencia |
+
+### Cómo regenerarlo
+
+Con [ultrademo](https://github.com/new-xp/ultrademo) y el paquete estático
+servido con rangos (`serve_ranges.py`, necesario para el PMTiles):
+
+```bash
+# 1. visor + datos en http://127.0.0.1:8816/index.html
+python3 docs/demo/serve_ranges.py <paquete-estatico> 8816
+
+# 2. captura (en el clon de ultrademo)
+mkdir -p projects/rebuild-recorrido && cp <repo>/docs/demo/rebuild-flow.mjs projects/rebuild-recorrido/flow.mjs
+npm run capture -- rebuild-recorrido
+
+# 3. síntesis: los clips se aceleran 1,6× antes de renderizar (el
+#    renderizador solo llega a 1,3×); duración y cursor se escalan igual
+python3 - <<'EOF'
+import json, subprocess, os
+F, d = 1.6, "projects/rebuild-recorrido/assets"
+sb = json.load(open(f"{d}/storyboard.json"))
+for s in sb["scenes"]:
+    if s.get("media") != "clip": continue
+    src = f"{d}/{s['clip']}"
+    subprocess.run(["ffmpeg", "-y", "-i", src, "-filter:v", f"setpts=PTS/{F}", "-r", "30", "-an", src + ".tmp.mp4"], check=True)
+    os.replace(src + ".tmp.mp4", src)
+    s["clipDuration"] /= F
+    for e in s.get("events", []): e["t"] /= F
+json.dump(sb, open(f"{d}/storyboard.json", "w"))
+EOF
+
+# 4. render sin subtítulos y sin pista de audio
+npm run render -- rebuild-recorrido --no-captions
+ffmpeg -i projects/rebuild-recorrido/out/rebuild-recorrido-nocaptions.mp4 -an -c:v libx264 -crf 24 -movflags +faststart rebuild-recorrido-demo.mp4
+```
+
+Sin TTS: la duración de cada escena la marca su clip. En este entorno la
+cartografía de noche tarda en repintarse, así que la escena 7 corta esa espera
+con `rec.skipWhile`.
+
+---
+
+## Recovery · demo para contraparte institucional (2026-09-23)
 
 **`recovery-pereira-demo.mp4`** · 2:03 · 1920×1080 · narración en español · 37 MB
 

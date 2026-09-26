@@ -292,6 +292,18 @@ async def main(base: str, prefix: str) -> int:
         await page.keyboard.press("Escape")
         await page.wait_for_timeout(600)
 
+        # Escape cierra lo que esta encima: el popover, no la tarjeta de debajo.
+        await page.goto(f"{base}#sitio={COROCITO}", wait_until="domcontentloaded")
+        await page.wait_for_selector('[data-uri="place-card"]', timeout=30000)
+        await page.locator('[data-uri="settings-open"]').click()
+        await page.wait_for_selector('[data-uri="settings"]', timeout=10000)
+        await page.keyboard.press("Escape")
+        await page.wait_for_timeout(700)
+        if await page.locator('[data-uri="settings"]').count():
+            errors.append("Escape no cierra los ajustes")
+        if not await page.locator('[data-uri="place-card"]').count():
+            errors.append("Escape en los ajustes cierra tambien la tarjeta del lugar")
+
         # ── Movil: tarjeta abajo, sin desborde lateral ───────────────────
         movil = await browser.new_page(viewport={"width": 390, "height": 844})
         movil.on("pageerror", lambda e: errors.append(f"pageerror (movil): {e}"))
