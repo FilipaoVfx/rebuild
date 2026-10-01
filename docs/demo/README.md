@@ -2,7 +2,7 @@
 
 ## REBUILD · recorrido esencial (2026-09-25)
 
-**`rebuild-recorrido-demo.mp4`** · 0:58 · 1920×1080 · **sin voz, sin audio, sin subtítulos** · 16 MB
+**`rebuild-recorrido-demo-1440p.mp4`** · 0:53 · 2560×1440 · **sin voz, sin audio, sin subtítulos** · 31 MB
 
 El flujo que importa, sin nada más: los titulares de la propia interfaz cuentan
 el recorrido. Guion: [`rebuild-flow.mjs`](rebuild-flow.mjs).
@@ -21,41 +21,28 @@ el recorrido. Guion: [`rebuild-flow.mjs`](rebuild-flow.mjs).
 
 ### Cómo regenerarlo
 
-Con [ultrademo](https://github.com/new-xp/ultrademo) y el paquete estático
-servido con rangos (`serve_ranges.py`, necesario para el PMTiles):
+Grabado con una ventana de 1440×810 y escalado a 2560×1440: la interfaz se ve
+1,33× más grande que en una grabación a 1920×1080, y el texto pequeño se lee.
+Requiere [ultrademo](https://github.com/new-xp/ultrademo) con dos opciones de
+entorno añadidas en nuestro clon (`ULTRADEMO_VIEWPORT`, `ULTRADEMO_CLIP_CRF`;
+sin ellas se comporta igual que el original) y el paquete estático servido con
+rangos (`serve_ranges.py`, necesario para el PMTiles).
 
 ```bash
-# 1. visor + datos en http://127.0.0.1:8816/index.html
 python3 docs/demo/serve_ranges.py <paquete-estatico> 8816
-
-# 2. captura (en el clon de ultrademo)
-mkdir -p projects/rebuild-recorrido && cp <repo>/docs/demo/rebuild-flow.mjs projects/rebuild-recorrido/flow.mjs
-npm run capture -- rebuild-recorrido
-
-# 3. síntesis: los clips se aceleran 1,6× antes de renderizar (el
-#    renderizador solo llega a 1,3×); duración y cursor se escalan igual
-python3 - <<'EOF'
-import json, subprocess, os
-F, d = 1.6, "projects/rebuild-recorrido/assets"
-sb = json.load(open(f"{d}/storyboard.json"))
-for s in sb["scenes"]:
-    if s.get("media") != "clip": continue
-    src = f"{d}/{s['clip']}"
-    subprocess.run(["ffmpeg", "-y", "-i", src, "-filter:v", f"setpts=PTS/{F}", "-r", "30", "-an", src + ".tmp.mp4"], check=True)
-    os.replace(src + ".tmp.mp4", src)
-    s["clipDuration"] /= F
-    for e in s.get("events", []): e["t"] /= F
-json.dump(sb, open(f"{d}/storyboard.json", "w"))
-EOF
-
-# 4. render sin subtítulos y sin pista de audio
-npm run render -- rebuild-recorrido --no-captions
-ffmpeg -i projects/rebuild-recorrido/out/rebuild-recorrido-nocaptions.mp4 -an -c:v libx264 -crf 24 -movflags +faststart rebuild-recorrido-demo.mp4
+# en el clon de ultrademo:
+cp <repo>/docs/demo/rebuild-flow.mjs projects/rebuild-recorrido/flow.mjs
+ULTRADEMO_VIEWPORT=1440x810 ULTRADEMO_CLIP_CRF=12 npm run capture -- rebuild-recorrido
+# clips + cursor a 1440p con ffmpeg (desde projects/rebuild-recorrido/assets):
+python3 <repo>/docs/demo/rebuild-componer-1440p.py
+# portada y cierre: npm run render con --frames de la portada/cierre;
+# se unen con ffmpeg (concat) y se codifica con CRF 18, sin pista de audio.
 ```
 
-Sin TTS: la duración de cada escena la marca su clip. En este entorno la
-cartografía de noche tarda en repintarse, así que la escena 7 corta esa espera
-con `rec.skipWhile`.
+Por qué no pasa por el render de Remotion: su compositor no lee clips de más
+de 1080p en este entorno, y una grabación de Playwright a 4K entrega la
+mayoría de los fotogramas a 1× con relleno gris. El 4K real necesitaría
+capturas fotograma a fotograma.
 
 ---
 
