@@ -192,6 +192,7 @@ cd apps/viewer && npm ci && npm run build
 
 | Documento | Qué define |
 |---|---|
+| [Manifiesto de producto](docs/product/manifiesto.md) | Por qué existe, qué problema resuelve y cómo presentarlo en un pitch institucional |
 | [PRD](docs/product/prd.md) | Qué es el producto y por qué |
 | [SRS](docs/product/srs.md) | Qué debe hacer el sistema, bajo qué restricciones, y cómo se demuestra cada requisito |
 | [ARD](docs/product/ard.md) | Cómo se construye y por qué, decisión por decisión |
