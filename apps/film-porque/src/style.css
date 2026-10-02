@@ -1,0 +1,89 @@
+/* REBUILD · por qué. Escenario fijo de 2560 × 1440. */
+:root {
+  --ivory: #f3efe4;
+  --ivory-2: rgba(243, 239, 228, 0.8);
+  --ivory-3: rgba(243, 239, 228, 0.55);
+  --navy: #090d18;
+  --amber: #f0a24b;
+  --sky: #7fb8ec;
+  --teal: #6fd3c4;
+  --red: #ff6a4d;
+  --serif: 'Source Serif 4 Variable', Georgia, serif;
+  --sans: 'Source Sans 3 Variable', system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--navy); overflow: hidden; }
+#stage { position: relative; width: 2560px; height: 1440px; overflow: hidden; }
+#stage canvas { position: absolute; inset: 0; display: block; }
+#overlay { position: absolute; inset: 0; pointer-events: none; font-family: var(--sans); color: var(--ivory); }
+#overlay::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse 80% 75% at 55% 45%, transparent 52%, rgba(4, 7, 14, 0.66) 100%);
+}
+
+.blk { position: absolute; }
+.blk::before {
+  content: ''; position: absolute; inset: -110px -180px -110px -200px; z-index: -1;
+  background: radial-gradient(ellipse at 30% 50%, rgba(5, 8, 16, 0.82), rgba(5, 8, 16, 0) 70%);
+}
+.kicker { margin: 0 0 22px; font: 650 26px var(--sans); letter-spacing: 0.22em; text-transform: uppercase; color: var(--amber); }
+.kicker.red { color: var(--red); }
+h1, h2 { font-family: var(--serif); font-weight: 600; margin: 0; color: var(--ivory); letter-spacing: -0.01em; }
+h1 { font-size: 104px; line-height: 1.04; }
+h2 { font-size: 76px; line-height: 1.08; }
+.big { font: 400 50px/1.3 var(--serif); color: var(--ivory-2); margin: 26px 0 0; }
+.big b { color: var(--ivory); font-weight: 600; }
+.sub { font: italic 400 42px/1.3 var(--serif); color: var(--ivory-3); margin: 22px 0 0; }
+
+.intro { left: 160px; bottom: 210px; width: 1700px; }
+
+.year { right: 150px; top: 120px; text-align: right; }
+.year::before { inset: -80px -140px -80px -240px; background: radial-gradient(ellipse at 70% 50%, rgba(5, 8, 16, 0.75), rgba(5, 8, 16, 0) 70%); }
+.year .cap { margin: 0; font: 600 28px var(--sans); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ivory-3); }
+.year .num { margin: 0; font: 600 210px/1 var(--serif); color: var(--ivory); font-variant-numeric: tabular-nums; }
+.ramp { display: flex; align-items: center; gap: 16px; justify-content: flex-end; font: 600 24px var(--sans); color: var(--ivory-3); margin-top: 18px; }
+.ramp i {
+  display: block; width: 340px; height: 10px; border-radius: 6px; position: relative;
+  background: linear-gradient(90deg, var(--amber), #e9dcc0 50%, var(--sky));
+}
+.ramp i::after {
+  content: ''; position: absolute; top: -9px; left: var(--p, 0%); width: 4px; height: 28px; margin-left: -2px; background: var(--ivory); border-radius: 2px;
+}
+
+.growth { left: 150px; bottom: 170px; width: 1350px; }
+
+.people { left: 150px; top: 110px; width: 1300px; }
+.people::before { inset: -110px -260px -200px -200px; background: radial-gradient(ellipse at 30% 40%, rgba(5, 8, 16, 0.92), rgba(5, 8, 16, 0) 72%); }
+.cmp { display: flex; gap: 80px; margin-top: 46px; }
+.cmp .c { width: 520px; }
+.cmp .n { margin: 0; font: 600 180px/0.95 var(--serif); }
+.cmp .n.old { color: var(--amber); }
+.cmp .n.young { color: var(--sky); }
+.cmp .d { margin: 14px 0 0; font: 400 34px/1.3 var(--serif); color: var(--ivory-2); }
+.key { margin-top: 40px; display: flex; align-items: center; gap: 14px; font: 600 26px var(--sans); color: var(--ivory-2); }
+.key .k { width: 26px; height: 26px; border-radius: 5px; display: inline-block; }
+.key .k.kids { background: var(--teal); }
+.key .k.elders { background: var(--amber); margin-left: 34px; }
+
+.quake { left: 150px; bottom: 170px; width: 1500px; }
+
+.insight { inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.insight::before { inset: 0; background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(5, 8, 16, 0.86), rgba(5, 8, 16, 0.25) 85%); }
+.insight .i1 { margin: 0; font: 600 92px/1.12 var(--serif); }
+.insight .i2 { margin: 44px 0 0; font: italic 400 60px var(--serif); color: var(--amber); }
+
+.close { inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.close::before { display: none; }
+.close .q { margin: 0; font: 600 110px/1.1 var(--serif); }
+.close .q em { color: var(--amber); font-style: italic; }
+.close .mark { margin: 70px 0 0; font: 650 36px var(--sans); letter-spacing: 0.4em; color: var(--ivory-3); padding-left: 0.4em; }
+
+.place {
+  position: absolute; transform: translate(-50%, -50%); font: 650 24px var(--sans); letter-spacing: 0.2em;
+  text-transform: uppercase; color: rgba(243, 239, 228, 0.82); text-shadow: 0 0 10px #090d18, 0 0 18px #090d18; white-space: nowrap;
+}
+.place[data-n='Río Otún'] { text-transform: none; letter-spacing: 0.04em; font-style: italic; color: #9fcbf5; }
+
+.credit { position: absolute; left: 40px; bottom: 26px; margin: 0; font-size: 19px; color: rgba(243, 239, 228, 0.5); }
+.legal { position: absolute; left: 0; right: 0; margin: 0 auto; bottom: 56px; width: 2050px; text-align: center; font-size: 18px; line-height: 1.5; color: rgba(243, 239, 228, 0.5); }
+.fade { position: absolute; inset: 0; background: #090d18; }

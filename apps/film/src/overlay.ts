@@ -9,7 +9,7 @@ import { STAGES, T, ease, env, layerStart, stageAt } from './timeline';
 
 const LAYER_TEXT = [
   { name: 'Relieve', meta: 'Copernicus DEM · celda de 30 m · medido', color: '#6d8bd0' },
-  { name: 'Edificios', meta: 'Microsoft · 15.024 huellas · sin altura', color: '#e8e2d4' },
+  { name: 'Edificios', meta: 'Microsoft · 6.386 huellas en el sector · sin altura', color: '#e8e2d4' },
   { name: 'Espacio público y equipamientos', meta: 'SIGPER · OSM · inventario declarado', color: '#58c483' },
   { name: 'Población', meta: 'estimación: 190.000 personas en celdas de 150 m', color: '#b79cff' },
   { name: 'Daño observado', meta: 'Copernicus EMS · 182 observaciones · 11 ago 2026 · sin validar', color: '#f08a3a' },

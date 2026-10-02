@@ -1,5 +1,17 @@
 # Demos
 
+## REBUILD · por qué (30 s, 2026-10-02)
+
+**`rebuild-por-que-30s.mp4`** · 0:30 · 2560×1440 · sin voz ni audio · 24 MB
+
+No muestra el software: cuenta por qué hace falta. Pereira se construyó para la
+gente de su tiempo: casi 6 de cada 10 edificios del sector están sobre suelo que ya
+era ciudad en 1985. Esa gente envejeció: donde la ciudad es de antes de 1985 viven
+13 mayores de 70 años por cada 10 niños, y donde es de después de 2000, 4. El sismo
+golpeó esa ciudad: 9 de cada 10 daños observados están en ella. Reconstruir lo
+mismo sería reconstruir una ciudad que ya no existe; hay que saber qué construir,
+y dónde. Cifras, fuentes y límites en [`apps/film-porque`](../../apps/film-porque/README.md).
+
 ## REBUILD · demo completo (2026-10-02)
 
 **`rebuild-demo-1440p.mp4`** · 1:23 · 2560×1440 · sin voz, sin audio · 48 MB

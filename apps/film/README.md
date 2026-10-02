@@ -13,7 +13,7 @@ Todo sale del paquete estático publicado (datos n.º 135); nada se inventa.
 | Elemento | Fuente | Nota |
 |---|---|---|
 | Relieve del sector de estudio | Copernicus DEM GLO-30, teselas z14 del paquete | Exageración vertical ×1,5, declarada en pantalla |
-| 15.024 edificios | Microsoft Building Footprints | Las huellas no traen altura: se extruyen con una **altura esquemática uniforme**, declarada en pantalla. No se inventa variación |
+| 6.386 edificios en el sector de estudio | Microsoft Building Footprints (el extracto completo tiene 15.024, y se sale del recuadro) | Las huellas no traen altura: se extruyen con una **altura esquemática uniforme**, declarada en pantalla. No se inventa variación |
 | Calles, ríos, quebradas, comunas | © OpenStreetMap contributors | |
 | Espacio público y equipamientos | SIGPER (Alcaldía de Pereira) · OSM | |
 | Población por celda de 150 m | Estimación: 190.000 personas repartidas sobre edificios | Se dice "estimación" |
