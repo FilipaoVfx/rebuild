@@ -1,5 +1,31 @@
 # Demos
 
+## REBUILD · demo completo (2026-10-02)
+
+**`rebuild-demo-1440p.mp4`** · 1:23 · 2560×1440 · sin voz, sin audio · 48 MB
+
+Dos partes, sin corte de sonido ni narración:
+
+1. **El problema y el pipeline** (0:00–0:30) — también suelto en
+   [`rebuild-problema-pipeline-30s.mp4`](rebuild-problema-pipeline-30s.mp4).
+   Animación en three.js sobre el terreno real del sector de estudio
+   ([`apps/film`](../../apps/film/README.md)):
+   - el sismo y la pregunta: dónde recuperar, y con qué;
+   - el problema: las fuentes se separan en capas, cada una con su fecha,
+     escala y certeza, y el POT aparece como hoja vacía porque no tiene
+     licencia;
+   - la tesis: no falta información, falta poder justificar una decisión;
+   - el pipeline en seis etapas (fuentes, cruce, evidencia, entorno,
+     hipótesis, verificación) hasta la oportunidad de Corocito;
+   - por qué REBUILD, con los créditos legales de las fuentes.
+2. **El recorrido por la interfaz** (0:30–1:23): el mismo de abajo.
+
+Datos: el paquete publicado n.º 135. El relieve está exagerado ×1,5 y los
+edificios llevan una altura esquemática uniforme (las huellas de Microsoft
+no traen altura); los dos se declaran en pantalla.
+
+---
+
 ## REBUILD · recorrido esencial (2026-09-25)
 
 **`rebuild-recorrido-demo-1440p.mp4`** · 0:53 · 2560×1440 · **sin voz, sin audio, sin subtítulos** · 31 MB

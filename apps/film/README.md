@@ -1,8 +1,10 @@
 # REBUILD · la película del problema y el pipeline
 
-Animación en [three.js](https://threejs.org) que abre y cierra el demo
-(`docs/demo/`): define el problema, muestra cómo REBUILD cruza las fuentes
-sobre el territorio y justifica por qué. Sin voz ni audio; 62 s a 2560×1440.
+Animación en [three.js](https://threejs.org) que abre el demo (`docs/demo/`):
+define el problema, muestra cómo REBUILD cruza las fuentes sobre el
+territorio y justifica por qué. Sin voz ni audio; **30 s** a 2560×1440. Su
+último fotograma es azul marino y empalma con la portada del recorrido por la
+interfaz.
 
 ## Qué muestra, y con qué datos
 
@@ -26,14 +28,11 @@ responsabilidad que exige la licencia del Copernicus DEM (art. 6b y 6c).
 
 | Tiempo | Bloque |
 |---|---|
-| 0–7 s | El sismo y la pregunta: dónde recuperar, y con qué |
-| 7–19 s | **El problema**: las fuentes se separan en capas, cada una con su fecha, escala y certeza |
-| 19–23 s | La tesis: no falta información; falta poder justificar una decisión |
-| 23–51 s | **El pipeline**, en seis etapas: fuentes → cruce → evidencia → entorno → hipótesis → verificación |
-| 51–62 s | **Por qué REBUILD** y cierre con créditos |
-
-Entre el pipeline y la justificación hay un fundido a negro en 51 s: es el
-punto donde el demo completo inserta el recorrido por la interfaz.
+| 0–3,7 s | El sismo y la pregunta: dónde recuperar, y con qué |
+| 3,7–9,4 s | **El problema**: las fuentes se separan en capas, cada una con su fecha, escala y certeza |
+| 9,4–12,4 s | La tesis: no falta información; falta poder justificar una decisión |
+| 12,4–25,4 s | **El pipeline**, en seis etapas: fuentes → cruce → evidencia → entorno → hipótesis → verificación, hasta Corocito |
+| 25,4–30 s | **Por qué REBUILD**, con los créditos legales de las fuentes |
 
 ## Cómo se renderiza
 
@@ -47,7 +46,9 @@ npm ci && npm run build
 # servir dist/ en film/ junto al paquete estático (data/), p. ej.:
 cp -r dist <paquete-estatico>/film
 python3 ../../docs/demo/serve_ranges.py <paquete-estatico> 8816
-python3 render_frames.py --url http://127.0.0.1:8816/film/index.html --out rebuild-pipeline-1440p.mp4
+python3 render_frames.py --url http://127.0.0.1:8816/film/index.html \
+    --frames /ruta/fotogramas --out rebuild-pipeline-30s-1440p.mp4 [--max 450]
+# si se corta, se relanza igual y continúa desde el último fotograma
 ```
 
 Para revisar un instante: `film/index.html?t=36.5`; en tiempo real: `?play`.

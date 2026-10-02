@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
   EXAGGERATION, HALF_D, HALF_W, baseElevation, densify, heightXZ, inRing, insideAoi, toXZ, type XZ,
 } from './geo';
-import { T, clamp01, ease, env } from './timeline';
+import { T, clamp01, ease, env, layerStart } from './timeline';
 
 type Feature = { geometry: { type: string; coordinates: any }; properties: Record<string, any> };
 export interface Data {
@@ -59,8 +59,9 @@ export const LAYERS = [
 /** Cuánto está separada la capa i en el instante t (0 = sobre el terreno). */
 export function explodeOf(i: number, t: number): number {
   if (i === 0) return 0;
-  const out = ease(t, T.explode + (i - 1) * 0.85, T.explode + (i - 1) * 0.85 + 2.1);
-  const back = ease(t, T.collapse[0] + (5 - i) * 0.3, T.collapse[0] + (5 - i) * 0.3 + 2.2);
+  const out = ease(t, layerStart(i), layerStart(i) + T.layerDur);
+  const c0 = T.collapse[0] + (5 - i) * T.collapseStagger;
+  const back = ease(t, c0, c0 + T.collapseDur);
   return out * (1 - back);
 }
 export const layerOffset = (i: number, t: number) => i * LAYER_GAP * explodeOf(i, t);
@@ -572,34 +573,36 @@ export function buildWorld(data: Data): World {
     pot.position.y = layerOffset(5, t);
 
     bU.uRise.value = ease(t, T.rise[0], T.rise[1]);
-    bU.uDamage.value = ease(t, T.evidence[0] + 0.2, T.evidence[0] + 1.6) * (1 - 0.55 * ease(t, T.justif[0], T.justif[0] + 2));
+    const dim = ease(t, T.justif[0], T.justif[0] + 1.2);
+    bU.uDamage.value = ease(t, T.evidence[0] + 0.1, T.evidence[0] + 0.9) * (1 - 0.55 * dim);
 
     /* Espacio público: aparece al separarse; tras el cruce queda tenue, y el
        cercano al sitio se enciende al leer el entorno. */
-    const spaceIn = ease(t, T.explode + 0.85, T.explode + 2.4);
-    const entorno = env(t, T.entorno[0] + 0.6, T.oportunidad[1], 1.2, 1.0);
-    (spaceFar.material as THREE.MeshBasicMaterial).opacity = spaceIn * (0.75 - 0.4 * ease(t, T.collapse[1], T.collapse[1] + 1)) * (1 - 0.6 * entorno);
-    (spaceNear.material as THREE.MeshBasicMaterial).opacity = spaceIn * (0.75 - 0.4 * ease(t, T.collapse[1], T.collapse[1] + 1)) + 0.25 * entorno;
+    const spaceIn = ease(t, layerStart(2), layerStart(2) + 0.9);
+    const settle = 0.75 - 0.4 * ease(t, T.collapse[1], T.collapse[1] + 0.6);
+    const entorno = env(t, T.entorno[0] + 0.3, T.oportunidad[1], 0.7, 0.6);
+    (spaceFar.material as THREE.MeshBasicMaterial).opacity = spaceIn * settle * (1 - 0.6 * entorno);
+    (spaceNear.material as THREE.MeshBasicMaterial).opacity = spaceIn * settle + 0.25 * entorno;
 
     /* Población: columnas en la vista explotada; en el entorno, solo las
        celdas que caen dentro del área caminable. */
-    const popIn = ease(t, T.explode + 1.7, T.explode + 3.6) * (1 - ease(t, T.collapse[0] + 0.3, T.collapse[0] + 2.0));
+    const popIn = ease(t, layerStart(3), layerStart(3) + 1.0) * (1 - ease(t, T.collapse[0] + 0.1, T.collapse[0] + 1.2));
     poblacion.visible = popIn > 0.001;
     setPop(popAll, cells, popIn);
-    const popC = env(t, T.entorno[0] + 1.2, T.verificacion[1], 1.6, 1.2);
+    const popC = env(t, T.entorno[0] + 0.4, T.verificacion[1], 0.9, 0.7);
     popCatch.visible = popC > 0.001;
     setPop(popCatch, catchCells, popC);
 
     /* Evidencia de daño. */
-    const evIn = ease(t, T.explode + 2.55, T.explode + 4.0);
-    const pulse = 0.5 + 0.5 * Math.sin(t * 5.5);
-    const evStage = env(t, T.evidence[0], T.evidence[1] + 0.5, 0.6, 1.2);
+    const evIn = ease(t, layerStart(4), layerStart(4) + 0.9);
+    const pulse = 0.5 + 0.5 * Math.sin(t * 6.5);
+    const evStage = env(t, T.evidence[0], T.evidence[1] + 0.3, 0.4, 0.8);
     (evMesh.material as THREE.MeshBasicMaterial).opacity = evIn;
-    haloMat.opacity = evIn * (0.35 + 0.65 * evStage * (0.55 + 0.45 * pulse)) * (1 - 0.6 * ease(t, T.justif[0], T.justif[0] + 2));
+    haloMat.opacity = evIn * (0.35 + 0.65 * evStage * (0.55 + 0.45 * pulse)) * (1 - 0.6 * dim);
     haloMat.size = 150 + 110 * evStage;
 
     /* POT: aparece como hoja vacía y, en "Fuentes", sale del cruce. */
-    const potIn = ease(t, T.explode + 3.4, T.explode + 5.0) * (1 - ease(t, 23.9, 25.0));
+    const potIn = ease(t, layerStart(5), layerStart(5) + 0.9) * (1 - ease(t, T.potOut[0], T.potOut[1]));
     potMat.opacity = 0.55 * potIn;
     (potEdge.material as THREE.LineBasicMaterial).opacity = 0.9 * potIn;
     pot.visible = potIn > 0.001;
@@ -611,9 +614,9 @@ export function buildWorld(data: Data): World {
     });
 
     /* Haces de los sitios. */
-    const grow = ease(t, T.evidence[0] + 1.0, T.evidence[0] + 3.0);
-    const fadeOthers = 1 - 0.8 * ease(t, T.entorno[0], T.entorno[0] + 1.5);
-    const back = ease(t, T.justif[0] + 0.5, T.justif[0] + 2.5);
+    const grow = ease(t, T.evidence[0] + 0.3, T.evidence[0] + 1.4);
+    const fadeOthers = 1 - 0.8 * ease(t, T.entorno[0], T.entorno[0] + 0.8);
+    const back = ease(t, T.justif[0] + 0.3, T.justif[0] + 1.5);
     const o = new THREE.Object3D();
     siteXZ.forEach((s, i) => {
       const [x, z] = s.xz;
@@ -624,17 +627,17 @@ export function buildWorld(data: Data): World {
     });
     beams.instanceMatrix.needsUpdate = true;
     beamMat.opacity = 0.55 * grow * Math.max(fadeOthers, 0.35 * back);
-    const fb = env(t, T.evidence[0] + 1.0, T.justif[1], 1.8, 1.0);
+    const fb = env(t, T.evidence[0] + 0.3, T.justif[1], 1.0, 0.8);
     focusBeam.position.copy(focus);
     focusBeam.scale.set(4.5, Math.max(0.01, 460 * fb), 4.5);
     focusBeamMat.opacity = 0.7 * fb;
 
-    const ringOn = env(t, T.entorno[0], T.verificacion[1] + 0.5, 1.0, 1.2);
-    const rp = (t * 0.6) % 1;
+    const ringOn = env(t, T.entorno[0], T.verificacion[1] + 0.3, 0.6, 0.8);
+    const rp = (t * 0.8) % 1;
     ring.scale.setScalar(40 + 140 * rp);
     ringMat.opacity = ringOn * (1 - rp) * 0.9;
 
-    terrainU.uCatch.value = env(t, T.entorno[0] + 0.4, T.verificacion[1] + 0.2, 1.4, 1.0);
+    terrainU.uCatch.value = env(t, T.entorno[0] + 0.2, T.verificacion[1] + 0.1, 0.8, 0.6);
     catchMat.opacity = terrainU.uCatch.value;
     bU.uCatchB.value = terrainU.uCatch.value;
   };

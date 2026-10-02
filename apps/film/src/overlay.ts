@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { STAGES, T, ease, env, stageAt } from './timeline';
+import { STAGES, T, ease, env, layerStart, stageAt } from './timeline';
 
 /**
  * Los textos de la película: HTML sobre el lienzo, nítidos a cualquier
@@ -38,16 +38,16 @@ export function buildOverlay(root: HTMLElement) {
     title: h(`<section class="blk title">
       <p class="kicker">Pereira · 10 de agosto de 2026</p>
       <h1>Un sismo de magnitud 7,4 sacude la ciudad.</h1>
-      <p class="lead">Epicentro a 59 km, en el Chocó. Ahora hay que decidir <em>dónde</em> recuperar primero, y <em>con qué</em>.</p>
+      <p class="lead">¿<em>Dónde</em> recuperar primero, y <em>con qué</em>?</p>
     </section>`),
     frag: h(`<section class="blk frag">
       <p class="kicker">El problema</p>
       <h2>La información existe, pero llega en piezas sueltas.</h2>
-      <p class="lead later">Cada pieza tiene su propia fecha, su escala y su grado de certeza. Ninguna, por sí sola, justifica dónde actuar.</p>
+      <p class="lead later">Cada una con su fecha, su escala y su certeza.</p>
     </section>`),
     thesis: h(`<section class="blk thesis">
-      <p class="t1">El problema no es la falta de datos.</p>
-      <p class="t2">Es la distancia entre <em>tener información</em> y <em>poder justificar una decisión</em>.</p>
+      <p class="t1">No falta información.</p>
+      <p class="t2">Falta poder <em>justificar una decisión</em>.</p>
     </section>`),
     pipe: h(`<section class="blk pipe">
       <p class="kicker">El pipeline de REBUILD</p>
@@ -81,9 +81,9 @@ export function buildOverlay(root: HTMLElement) {
     justif: h(`<section class="blk justif">
       <p class="kicker">Por qué REBUILD</p>
       <ul>
-        <li data-k="0"><b>Une la necesidad y las alternativas</b> en el mismo lugar.</li>
-        <li data-k="1"><b>Cada cifra lleva su fuente;</b> lo que falta, se ve.</li>
-        <li data-k="2"><b>La decisión sigue siendo de la institución</b>, con mejores argumentos.</li>
+        <li data-k="0"><b>Une necesidad y alternativas</b> en el mismo lugar.</li>
+        <li data-k="1"><b>Cada cifra con su fuente;</b> lo que falta, a la vista.</li>
+        <li data-k="2"><b>La decisión sigue siendo</b> de la institución.</li>
       </ul>
     </section>`),
     close: h(`<section class="blk close">
@@ -130,43 +130,42 @@ export function updateOverlay(
     places: { name: string; pos: THREE.Vector3 }[];
   },
 ) {
-  show(el.title, env(t, T.title[0], T.title[1], 0.9, 0.8));
+  show(el.title, env(t, T.title[0], T.title[1], 0.6, 0.5));
 
   /* Problema: las piezas y sus rótulos. */
-  show(el.frag, env(t, T.frag[0], T.frag[1], 0.8, 0.7));
-  (el.frag.querySelector('.later') as HTMLElement).style.opacity = ease(t, 12.6, 13.6).toFixed(3);
+  show(el.frag, env(t, T.frag[0], T.frag[1], 0.5, 0.5));
+  (el.frag.querySelector('.later') as HTMLElement).style.opacity = ease(t, T.fragLater, T.fragLater + 0.6).toFixed(3);
   el.labels.forEach((lab, i) => {
-    const appear = i === 0 ? ease(t, T.explode + 0.2, T.explode + 1.0) : ease(t, T.explode + (i - 1) * 0.85 + 0.9, T.explode + (i - 1) * 0.85 + 2.0);
-    const a = appear * (1 - ease(t, T.frag[1] - 0.6, T.frag[1]));
+    const s0 = i === 0 ? T.explode - 0.4 : layerStart(i) + 0.45;
+    const a = ease(t, s0, s0 + 0.6) * (1 - ease(t, T.frag[1] - 0.4, T.frag[1]));
     const p = project(anchors.layer(i));
     at(lab, p);
     show(lab, p.ok ? a : 0, 0);
   });
 
-  show(el.thesis, env(t, T.thesis[0], T.thesis[1], 0.9, 0.8), 10);
-  (el.thesis.querySelector('.t2') as HTMLElement).style.opacity = ease(t, T.thesis[0] + 1.3, T.thesis[0] + 2.2).toFixed(3);
+  show(el.thesis, env(t, T.thesis[0], T.thesis[1], 0.5, 0.5), 10);
+  (el.thesis.querySelector('.t2') as HTMLElement).style.opacity = ease(t, T.thesisSecond, T.thesisSecond + 0.6).toFixed(3);
 
   /* Pipeline: etapa activa, rótulo y riel. */
-  const pipeOn = env(t, STAGES[0].a, STAGES[STAGES.length - 1].b, 0.6, 0.6);
+  const pipeOn = env(t, STAGES[0].a, STAGES[STAGES.length - 1].b, 0.4, 0.4);
   const si = stageAt(t);
   show(el.rail, pipeOn, 12);
   if (si >= 0) {
     const s = STAGES[si];
-    const local = env(t, s.a, s.b, 0.45, 0.4);
     (el.pipe.querySelector('.ptitle') as HTMLElement).textContent = s.title;
     (el.pipe.querySelector('.psub') as HTMLElement).textContent = s.sub;
-    show(el.pipe, local * pipeOn, 10);
+    show(el.pipe, env(t, s.a, s.b, 0.3, 0.25) * pipeOn, 10);
   } else show(el.pipe, 0);
   el.rail.querySelectorAll<HTMLElement>('.node').forEach((n, i) => {
     n.dataset.state = i < si || (si < 0 && t > STAGES[STAGES.length - 1].b) ? 'done' : i === si ? 'on' : 'off';
   });
   el.rail.querySelectorAll<HTMLElement>('.bar i').forEach((b, i) => {
     const s = STAGES[i];
-    b.style.transform = `scaleX(${ease(t, s.b - 0.6, s.b + 0.2).toFixed(3)})`;
+    b.style.transform = `scaleX(${ease(t, s.b - 0.4, s.b + 0.1).toFixed(3)})`;
   });
 
   /* Lugares que orientan, en la apertura y al cruzar. */
-  const placeOn = Math.max(env(t, 2.4, 6.6, 1.0, 0.6), env(t, 25.4, T.entorno[0] + 0.3, 0.8, 0.8));
+  const placeOn = Math.max(env(t, T.places1[0], T.places1[1], 0.6, 0.4), env(t, T.places2[0], T.places2[1], 0.5, 0.5));
   el.places.forEach((pe) => {
     const pl = anchors.places.find((x) => x.name === pe.dataset.n);
     if (!pl) return show(pe, 0, 0);
@@ -176,41 +175,35 @@ export function updateOverlay(
   });
 
   /* Llamadas sobre el mapa en el entorno. */
-  const callOn = env(t, T.entorno[0] + 1.0, T.oportunidad[0] + 0.6, 0.8, 0.6);
   const ps = project(anchors.site);
   at(el.calloutSite, ps);
-  show(el.calloutSite, ps.ok ? callOn : 0, 0);
+  show(el.calloutSite, ps.ok ? env(t, T.entorno[0] + 0.5, T.oportunidad[0] + 0.3, 0.5, 0.4) : 0, 0);
   const pc = project(anchors.catchment);
   at(el.calloutCatch, pc);
-  show(el.calloutCatch, pc.ok ? env(t, T.entorno[0] + 2.2, T.oportunidad[0] + 0.6, 0.8, 0.6) : 0, 0);
+  show(el.calloutCatch, pc.ok ? env(t, T.entorno[0] + 1.0, T.oportunidad[0] + 0.3, 0.5, 0.4) : 0, 0);
 
   /* La oportunidad: tarjeta, filas en orden, y en verificación la lista. */
-  const cardOn = env(t, T.oportunidad[0] + 0.3, T.verificacion[1] + 0.2, 0.8, 0.7);
-  show(el.card, cardOn, 24);
+  show(el.card, env(t, T.oportunidad[0] + 0.15, T.verificacion[1] + 0.1, 0.5, 0.4), 24);
   el.card.querySelectorAll<HTMLElement>('.row').forEach((r, i) => {
-    r.style.opacity = ease(t, T.oportunidad[0] + 0.9 + i * 0.55, T.oportunidad[0] + 1.4 + i * 0.55).toFixed(3);
+    r.style.opacity = ease(t, T.oportunidad[0] + 0.4 + i * 0.25, T.oportunidad[0] + 0.7 + i * 0.25).toFixed(3);
     const unknownRow = i === 1 || i === 4 || i === 5;
     r.dataset.hl = t > T.verificacion[0] && unknownRow ? '1' : '0';
   });
   const ver = el.card.querySelector('.verify') as HTMLElement;
-  ver.style.maxHeight = `${(ease(t, T.verificacion[0] + 0.2, T.verificacion[0] + 1.2) * 420).toFixed(0)}px`;
+  ver.style.maxHeight = `${(ease(t, T.verificacion[0] + 0.1, T.verificacion[0] + 0.7) * 420).toFixed(0)}px`;
   ver.querySelectorAll('li').forEach((li, i) => {
-    (li as HTMLElement).style.opacity = ease(t, T.verificacion[0] + 0.6 + i * 0.22, T.verificacion[0] + 1.0 + i * 0.22).toFixed(3);
+    (li as HTMLElement).style.opacity = ease(t, T.verificacion[0] + 0.3 + i * 0.1, T.verificacion[0] + 0.6 + i * 0.1).toFixed(3);
   });
 
-  /* Justificación y cierre. */
-  show(el.justif, env(t, T.justif[0] + 0.6, 58.6, 0.8, 0.6));
+  /* Justificación; el cierre lo pone la portada del recorrido que sigue. */
+  show(el.justif, env(t, T.justif[0] + 0.3, T.fadeOut[1] + 0.2, 0.5, 0.4));
   el.justif.querySelectorAll<HTMLElement>('li').forEach((li, i) => {
-    const a = ease(t, T.justif[0] + 1.2 + i * 1.5, T.justif[0] + 1.9 + i * 1.5);
+    const a = ease(t, T.justif[0] + 0.6 + i * 0.8, T.justif[0] + 1.1 + i * 0.8);
     li.style.opacity = a.toFixed(3);
     li.style.transform = `translateX(${((1 - a) * -24).toFixed(1)}px)`;
   });
-  show(el.close, env(t, 58.4, 62.6, 0.8, 0.4), 10);
-  show(el.legal, env(t, 58.6, 62.6, 0.8, 0.4), 0);
-  show(el.credit, env(t, 1.0, 58.2, 1.0, 0.6), 0);
-  /* Fundidos: entrada, cambio de capítulo antes de la justificación (el
-     corte entre la primera parte y el recorrido por la interfaz) y fondo del
-     cierre. */
-  const chapter = env(t, 50.15, 51.95, 0.8, 0.8);
-  el.fade.style.opacity = Math.max(1 - ease(t, 0, 0.9), chapter, ease(t, 58.2, 59.4) * 0.82).toFixed(3);
+  show(el.close, 0, 0);
+  show(el.legal, env(t, T.justif[0] + 0.6, T.fadeOut[1] + 0.2, 0.5, 0.3), 0);
+  show(el.credit, env(t, 0.4, T.justif[0] + 0.3, 0.5, 0.4), 0);
+  el.fade.style.opacity = Math.max(1 - ease(t, 0, 0.5), ease(t, T.fadeOut[0], T.fadeOut[1])).toFixed(3);
 }
