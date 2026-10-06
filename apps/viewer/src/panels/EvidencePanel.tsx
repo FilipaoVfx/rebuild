@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FieldGallery } from '../components/FieldPhotos';
 import { Icon } from '../components/icons';
 import { DAMAGE_RGB } from '../components/MapWorkspace';
 import { AmberBadge, Crumbs, Kicker, Missing, Sheet } from '../components/ui';
@@ -98,12 +99,14 @@ export function EvidencePanel({ site }: { site: Site }) {
           </>
         )}
 
+        <FieldGallery site={site} />
+
         <SentinelPair site={site} />
 
         <h3 className="kicker mt-7 mb-2">Lo que esta evidencia no dice</h3>
         <ul className="list-disc space-y-1.5 pl-5 font-serif text-[15.5px] leading-snug text-ink-2">
           <li>No es una inspección estructural: dice qué se ve desde la vertical, no si el edificio es seguro.</li>
-          <li>Nadie la ha contrastado en campo. Las fotos de campo (ADR-24) no llegan todavía a este visor.</li>
+          <li>Una foto de campo enlazada muestra lo que vio alguien en la calle cerca del sitio; no valida la clase de daño ni sustituye una visita técnica.</li>
           <li>Cubre el recuadro de la activación EMSR916, un sector de Pereira. Fuera de él no hay evidencia, que no es lo mismo que no haya daño.</li>
         </ul>
       </div>

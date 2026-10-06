@@ -313,3 +313,65 @@ export interface OrtofotoIndex {
   acquisition?: string | null;
   tiles: number;
 }
+
+/* ── Fotos de campo (ADR-24 §6, regla campo-v2) ────────────────────── */
+
+export type FieldLinkStatus = 'LINKED' | 'AMBIGUOUS' | 'UNLINKED';
+export type FieldLinkReason =
+  | 'HEADING_CONFIRMED' | 'NEAREST_WITHIN_RANGE' | 'RUNNER_UP_WITHIN_MARGIN'
+  | 'NO_SITE_IN_VIEW' | 'NO_SITE_WITHIN_RANGE' | 'OUTSIDE_STUDY_AREA';
+
+/** Un sitio que la foto podría mostrar, con la distancia medida al polígono. */
+export interface FieldCandidate {
+  site_id: string;
+  distance_m: number;
+  /** El punto del polígono que da esa distancia. */
+  nearest: [number, number];
+  off_axis_deg?: number;
+  in_view?: boolean;
+}
+
+export interface FieldMatch {
+  method: string;
+  link_max_m: number;
+  uncertainty_m: number;
+  margin_m: number;
+  heading_deg: number | null;
+  status: FieldLinkStatus;
+  reason: FieldLinkReason;
+  site_id: string | null;
+  distance_m?: number;
+  runner_up_distance_m?: number | null;
+  candidates: FieldCandidate[];
+}
+
+export interface FieldPhoto {
+  observation_id: string;
+  captured_at: string;
+  category: string;
+  damage_visible: string | null;
+  observed_feature_type: string | null;
+  accessibility: string | null;
+  lon: number;
+  lat: number;
+  accuracy_m: number | null;
+  location_source: string | null;
+  exif_device_offset_m: number | null;
+  image: string;
+  thumb: string;
+  image_sha256: string;
+  width: number;
+  height: number;
+  match: FieldMatch;
+  nearest_evidence: { damage_class: string; distance_m: number } | null;
+}
+
+export interface FieldIndex {
+  source_id: string;
+  attribution: string;
+  method: string;
+  rule: { link_max_m: number; margin_min_m: number; fov_deg: number };
+  published: number;
+  status: Partial<Record<FieldLinkStatus, number>>;
+  photos: FieldPhoto[];
+}

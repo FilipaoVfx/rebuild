@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Legend, LayerBar, ProvenanceBar, StudyCard } from './components/MapChrome';
 import { MapWorkspace } from './components/MapWorkspace';
+import { PhotoViewer } from './components/FieldPhotos';
 import { PlaceCard } from './components/PlaceCard';
 import { Toolbar } from './components/Toolbar';
 import { EntornoPanel } from './panels/EntornoPanel';
@@ -74,6 +75,8 @@ function Workspace() {
       {site && panel === 'entorno' && <EntornoPanel site={site} />}
       {site && panel === 'intervenciones' && <InterventionsPanel site={site} />}
       {site && panel === 'verificacion' && <VerificationPanel site={site} />}
+
+      <PhotoViewer />
 
       <Toolbar />
     </main>

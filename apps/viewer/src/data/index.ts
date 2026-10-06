@@ -1,5 +1,5 @@
 import type {
-  Alert, Coverage, GeoJSON, Opportunity, Scenario, Site, SiteDetail, Source, Provenance,
+  Alert, Coverage, FieldIndex, GeoJSON, Opportunity, Scenario, Site, SiteDetail, Source, Provenance,
   Territory,
 } from '../types';
 
@@ -139,3 +139,14 @@ export function sentinelImageUrl(scene: SentinelScene): string {
 }
 
 export const loadTerritory = () => getJSON<Territory>('territory.json', '/territory');
+
+/** Fotos de campo de pereiramap, solo APROBADAS, ya enlazadas (ADR-24 §6).
+ *  Si el paquete no las trae, el visor dice que no hay fotos: no las inventa. */
+export async function loadField(): Promise<FieldIndex | null> {
+  try {
+    const res = await fetch(assetUrl('field_photos.json'));
+    if (!res.ok) return null;
+    const idx = (await res.json()) as FieldIndex;
+    return Array.isArray(idx.photos) ? idx : null;
+  } catch { return null; }
+}

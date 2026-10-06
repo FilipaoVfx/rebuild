@@ -3,13 +3,14 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  IS_STATIC, loadCore, loadDetail, loadDetails, loadLayer, loadSentinel, loadSources,
+  IS_STATIC, loadCore, loadDetail, loadDetails, loadField, loadLayer, loadSentinel, loadSources,
   loadTerritory, type LayerName, type SentinelIndex,
 } from '../data';
+import { photosBySite, type SitePhoto } from '../lib/field';
 import type { Theme } from '../lib/mapstyle';
 import type { BBox } from '../lib/place';
 import type {
-  GeoJSON, Opportunity, Provenance, Site, SiteDetail, Source, Territory,
+  FieldIndex, GeoJSON, Opportunity, Provenance, Site, SiteDetail, Source, Territory,
 } from '../types';
 
 /** La barra de capas del mockup: cinco maneras de mirar el mismo lugar. */
@@ -20,7 +21,7 @@ export type OverlayKey = 'fuentes' | 'ayuda' | 'guardadas';
 
 export type CameraTarget =
   | { kind: 'site'; siteId: string; zoom?: number }
-  | { kind: 'bbox'; bbox: BBox }
+  | { kind: 'bbox'; bbox: BBox; maxZoom?: number }
   | { kind: 'point'; lngLat: [number, number]; zoom: number }
   | { kind: 'home' };
 
@@ -104,6 +105,12 @@ interface Store {
   sources: Source[];
   territory: Territory | null;
   sentinel: SentinelIndex | null;
+  /** Fotos de campo publicadas (solo APROBADAS) y su enlace a los sitios. */
+  field: FieldIndex | null;
+  sitePhotos: Map<string, SitePhoto[]>;
+  /** La foto abierta a pantalla completa. */
+  photoId: string | null;
+  openPhoto: (id: string | null) => void;
   layers: Partial<Record<LayerName, GeoJSON>>;
   requestLayers: (names: LayerName[]) => void;
 
@@ -149,6 +156,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [sources, setSources] = useState<Source[]>([]);
   const [territory, setTerritory] = useState<Territory | null>(null);
   const [sentinel, setSentinel] = useState<SentinelIndex | null>(null);
+  const [field, setField] = useState<FieldIndex | null>(null);
+  const [photoId, setPhotoId] = useState<string | null>(null);
   const [layers, setLayers] = useState<Partial<Record<LayerName, GeoJSON>>>({});
 
   const [layer, setLayer] = useState<LayerKey>(
@@ -186,6 +195,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     loadTerritory().then(setTerritory).catch(() => setTerritory(null));
     loadSources().then(setSources).catch(() => {});
     loadSentinel().then(setSentinel).catch(() => {});
+    loadField().then(setField).catch(() => {});
     if (IS_STATIC) loadDetails().then(setDetails).catch(() => {});
   }, [core]);
 
@@ -260,6 +270,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const oppBySite = useMemo(
     () => new Map((core?.opportunities ?? []).map((o) => [o.site_id, o])), [core],
   );
+  const sitePhotos = useMemo(() => photosBySite(field), [field]);
   const siteById = useMemo(() => new Map((core?.sites ?? []).map((s) => [s.site_id, s])), [core]);
 
   if (error) return <Failure message={error} />;
@@ -271,6 +282,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     siteById,
     oppBySite,
     details, sources, territory, sentinel, layers, requestLayers,
+    field, sitePhotos, photoId, openPhoto: setPhotoId,
     layer, setLayer,
     selectedSiteId,
     selectSite: (id, opts) => {

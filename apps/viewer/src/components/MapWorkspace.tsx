@@ -1,7 +1,7 @@
 import type { PickingInfo } from '@deck.gl/core';
 import { PathStyleExtension } from '@deck.gl/extensions';
 import {
-  GeoJsonLayer, PathLayer, ScatterplotLayer, SolidPolygonLayer,
+  GeoJsonLayer, PathLayer, ScatterplotLayer, SolidPolygonLayer, TextLayer,
 } from '@deck.gl/layers';
 import { MapboxOverlay, type MapboxOverlayProps } from '@deck.gl/mapbox';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -13,7 +13,8 @@ import {
   evidenceLine, outerRings, placeName, type BBox, type Feature,
 } from '../lib/place';
 import { useStore } from '../state/store';
-import type { Site } from '../types';
+import { CATEGORY_LABEL, STATUS_LABEL } from '../lib/field';
+import type { FieldPhoto, Site } from '../types';
 import { Icon } from './icons';
 
 type RGBA = [number, number, number, number];
@@ -53,14 +54,43 @@ const ring = ([w, s, e, n]: BBox): [number, number][] => [[w, s], [e, s], [e, n]
 const isDesktop = () => window.matchMedia('(min-width: 768px)').matches;
 
 /** Espacio que ocupa la interfaz sobre el mapa, para que la cámara no esconda el sitio bajo una tarjeta. */
-function uiPadding(hasCard: boolean, panel: string | null) {
+function uiPadding(hasCard: boolean, panel: string | null, photo = false) {
   if (!isDesktop()) {
+    if (photo) return { top: Math.round(window.innerHeight * 0.55), left: 24, right: 24, bottom: 90 };
     const h = window.innerHeight;
     return { top: 90, left: 24, right: 24, bottom: hasCard || panel ? Math.round(h * 0.55) : 90 };
   }
   const wide = panel === 'intervenciones' || panel === 'verificacion';
   const right = panel ? (wide ? Math.min(1090, window.innerWidth - 260) : 570) : hasCard ? 470 : 60;
-  return { top: 90, left: 60, right, bottom: 100 };
+  return { top: 90, left: photo ? 520 : 60, right, bottom: 100 };
+}
+
+/** Desplaza un punto `m` metros hacia `deg` grados desde el norte. */
+function offset([lon, lat]: [number, number], deg: number, m: number): [number, number] {
+  const r = (deg * Math.PI) / 180;
+  return [lon + (m * Math.sin(r)) / (111_320 * Math.cos((lat * Math.PI) / 180)), lat + (m * Math.cos(r)) / 110_540];
+}
+
+/** El encuadre de la cámara: el campo de visión con que la regla decide. */
+function wedge(at: [number, number], heading: number, fov: number, m: number): [number, number][] {
+  const pts: [number, number][] = [at];
+  for (let a = -fov / 2; a <= fov / 2 + 0.01; a += fov / 12) pts.push(offset(at, heading + a, m));
+  pts.push(at);
+  return pts;
+}
+
+interface Measure { path: [number, number][]; kind: 'linked' | 'doubt' | 'other'; label: string }
+
+/** Las medidas de una foto: de la posición del teléfono al punto más cercano de cada sitio. */
+function measuresOf(p: FieldPhoto, onlySite?: string): Measure[] {
+  const m = p.match;
+  return m.candidates
+    .filter((c) => !onlySite || c.site_id === onlySite)
+    .map((c) => ({
+      path: [[p.lon, p.lat], c.nearest] as [number, number][],
+      kind: m.status === 'LINKED' && c.site_id === m.site_id ? 'linked' : m.status === 'AMBIGUOUS' ? 'doubt' : 'other',
+      label: c.distance_m === 0 ? 'dentro' : `${Math.max(1, Math.round(c.distance_m))} m`,
+    }));
 }
 
 interface Hover { x: number; y: number; title: string; sub: string }
@@ -68,7 +98,7 @@ interface Hover { x: number; y: number; title: string; sub: string }
 export function MapWorkspace() {
   const {
     sites, siteById, layers, layer, selectedSiteId, selectSite, panel, camera, territory, fly,
-    theme, settings,
+    theme, settings, field, sitePhotos, photoId, openPhoto, requestLayers,
   } = useStore();
   const ink = INK[theme];
   const halo = HALO[theme];
@@ -80,6 +110,7 @@ export function MapWorkspace() {
 
   const aoi: BBox = territory?.aoi.bbox ?? AOI_FALLBACK;
   const selected = selectedSiteId ? siteById.get(selectedSiteId) ?? null : null;
+  const photo = field?.photos.find((p) => p.observation_id === photoId) ?? null;
   const mapStyle = useMemo(() => (styleFailed ? plainStyle(theme) : baseStyle(theme)), [styleFailed, theme]);
 
   /* ── Cámara ─────────────────────────────────────────────────────── */
@@ -89,12 +120,12 @@ export function MapWorkspace() {
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map || !camera || !loaded) return;
-    const padding = uiPadding(Boolean(selectedSiteId), panel);
+    const padding = uiPadding(Boolean(selectedSiteId), panel, Boolean(photoId));
     if (camera.kind === 'home') {
       map.fitBounds([[aoi[0], aoi[1]], [aoi[2], aoi[3]]], { padding, duration: 900 });
     } else if (camera.kind === 'bbox') {
       const [w, s, e, n] = camera.bbox;
-      map.fitBounds([[w, s], [e, n]], { padding, duration: 900, maxZoom: 16 });
+      map.fitBounds([[w, s], [e, n]], { padding, duration: 900, maxZoom: camera.maxZoom ?? 16 });
     } else if (camera.kind === 'point') {
       map.flyTo({ center: camera.lngLat, zoom: camera.zoom, padding, duration: 900 });
     } else {
@@ -110,6 +141,21 @@ export function MapWorkspace() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera?.nonce, loaded]);
+
+  /* Al abrir una foto, el mapa encuadra el teléfono y todo lo que se midió. */
+  useEffect(() => {
+    if (!photo) return;
+    requestLayers(['sites']);
+    const pts: [number, number][] = [[photo.lon, photo.lat], ...photo.match.candidates.map((c) => c.nearest)];
+    const pad = 0.00025;
+    const lons = pts.map((q) => q[0]);
+    const lats = pts.map((q) => q[1]);
+    fly({ kind: 'bbox', bbox: [Math.min(...lons) - pad, Math.min(...lats) - pad, Math.max(...lons) + pad, Math.max(...lats) + pad], maxZoom: 18.2 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photoId]);
+  useEffect(() => {
+    if (selectedSiteId && sitePhotos.has(selectedSiteId)) requestLayers(['sites']);
+  }, [selectedSiteId, sitePhotos, requestLayers]);
 
   /* ── Datos de las capas ─────────────────────────────────────────── */
   const admin = layers.admin_areas;
@@ -131,6 +177,23 @@ export function MapWorkspace() {
     () => (layers.catchments?.features ?? []).filter((f) => f.properties.id === selectedSiteId),
     [layers.catchments, selectedSiteId],
   );
+
+  /* Fotos de campo: en Territorio y Daño, todas; en otra capa, solo la abierta. */
+  const showPhotos = layer === 'territorio' || layer === 'dano';
+  const photoMarkers = (field?.photos ?? []).filter((p) => showPhotos || p.observation_id === photoId);
+  const measures: Measure[] = photo
+    ? measuresOf(photo)
+    : selected
+      ? (sitePhotos.get(selected.site_id) ?? []).flatMap((sp) => measuresOf(sp.photo, selected.site_id))
+      : [];
+  /* Los polígonos contra los que se midió: la distancia es a su borde. */
+  const measuredIds = new Set(photo ? photo.match.candidates.map((c) => c.site_id) : measures.length && selected ? [selected.site_id] : []);
+  const measuredPolys = (layers.sites?.features ?? []).filter((f) => measuredIds.has(String(f.properties.site_id)));
+  const MEASURE_RGB: Record<Measure['kind'], RGBA> = {
+    linked: [...cobalt, 255] as RGBA,
+    doubt: [214, 150, 20, 255],
+    other: theme === 'dark' ? [139, 148, 171, 230] : [105, 113, 138, 230],
+  };
 
   const showCatchment = Boolean(selected) && (layer === 'poblacion' || panel === 'entorno');
   const showRadius = Boolean(selected) && (layer === 'espacio' || layer === 'equipamientos');
@@ -282,6 +345,63 @@ export function MapWorkspace() {
       onHover: (i: PickingInfo) => onHoverFeature(i, 'evidence'),
     })] : []),
 
+    ...(measuredPolys.length ? [new GeoJsonLayer({
+      id: 'measured-sites',
+      data: { type: 'FeatureCollection', features: measuredPolys } as never,
+      filled: true, stroked: true,
+      getFillColor: [...cobalt, 30],
+      getLineColor: [...cobalt, 220],
+      getLineWidth: 1.6, lineWidthUnits: 'pixels',
+      updateTriggers: { getFillColor: theme, getLineColor: theme },
+    })] : []),
+    ...(photo ? [
+      new ScatterplotLayer({
+        id: 'photo-uncertainty',
+        data: [photo],
+        getPosition: (p: FieldPhoto) => [p.lon, p.lat],
+        getRadius: photo.match.uncertainty_m, radiusUnits: 'meters',
+        filled: true, stroked: true,
+        getFillColor: [...cobalt, 18], getLineColor: [...cobalt, 150],
+        getLineWidth: 1, lineWidthUnits: 'pixels',
+        updateTriggers: { getFillColor: theme, getLineColor: theme },
+      }),
+      ...(photo.match.heading_deg !== null ? [new SolidPolygonLayer({
+        id: 'photo-wedge',
+        data: [{
+          polygon: wedge(
+            [photo.lon, photo.lat], photo.match.heading_deg, field?.rule.fov_deg ?? 70,
+            Math.max(40, ...photo.match.candidates.map((c) => c.distance_m + 15)),
+          ),
+        }],
+        getPolygon: (d: { polygon: [number, number][] }) => d.polygon,
+        getFillColor: [...cobalt, 40],
+        updateTriggers: { getFillColor: theme },
+      })] : []),
+    ] : []),
+    ...(measures.length ? [
+      new PathLayer({
+        id: 'photo-measures',
+        data: measures,
+        getPath: (d: Measure) => d.path,
+        getColor: (d: Measure) => MEASURE_RGB[d.kind],
+        getWidth: (d: Measure) => (d.kind === 'linked' ? 2.4 : 1.8), widthUnits: 'pixels',
+        getDashArray: (d: Measure) => (d.kind === 'linked' ? [0, 0] : [5, 4]),
+        updateTriggers: { getColor: theme },
+        ...dash,
+      } as never),
+      new TextLayer({
+        id: 'photo-measure-labels',
+        data: measures.filter((d) => d.label !== 'dentro'),
+        getPosition: (d: Measure) => [(d.path[0][0] + d.path[1][0]) / 2, (d.path[0][1] + d.path[1][1]) / 2],
+        getText: (d: Measure) => d.label,
+        getSize: 13, fontWeight: 700,
+        fontFamily: '"Source Sans 3 Variable", "Source Sans 3", system-ui, sans-serif',
+        getColor: (d: Measure) => MEASURE_RGB[d.kind],
+        outlineWidth: 3, outlineColor: halo, fontSettings: { sdf: true },
+        updateTriggers: { getColor: theme, outlineColor: theme },
+      }),
+    ] : []),
+
     new ScatterplotLayer({
       id: 'sites',
       data: sites.filter((s) => s.site_id !== selectedSiteId),
@@ -334,6 +454,11 @@ export function MapWorkspace() {
         style={{ position: 'absolute', inset: 0 }}
       >
         <DeckGLOverlay layers={deckLayers} interleaved={false} getCursor={({ isHovering }) => (isHovering ? 'pointer' : 'grab')} />
+        {photoMarkers.map((p) => (
+          <Marker key={p.observation_id} longitude={p.lon} latitude={p.lat} anchor="center" style={{ zIndex: p.observation_id === photoId ? 3 : 1 }}>
+            <PhotoMarker photo={p} open={p.observation_id === photoId} onOpen={() => openPhoto(p.observation_id)} />
+          </Marker>
+        ))}
         {selected && (
           <Marker longitude={selected.lon} latitude={selected.lat} anchor="bottom">
             <SitePin name={placeName(selected)} />
@@ -342,7 +467,7 @@ export function MapWorkspace() {
         <ScaleControl position="bottom-left" unit="metric" maxWidth={120} />
       </Map>
 
-      {selected && !panel && loaded && <LeaderLine mapRef={mapRef} site={selected} />}
+      {selected && !panel && !photo && loaded && <LeaderLine mapRef={mapRef} site={selected} />}
 
       {hover && (
         <div
@@ -382,6 +507,33 @@ export function MapWorkspace() {
         </span>
       </button>
     </div>
+  );
+}
+
+/**
+ * Dónde estaba el teléfono. El color dice el enlace: cobalto enlazada, ámbar
+ * ambigua, gris sin enlace (rayado si quedó fuera del sector de estudio).
+ */
+function PhotoMarker({ photo, open, onOpen }: { photo: FieldPhoto; open: boolean; onOpen: () => void }) {
+  const m = photo.match;
+  const tone = m.status === 'LINKED'
+    ? 'bg-cobalt text-on-cobalt'
+    : m.status === 'AMBIGUOUS' ? 'bg-amber text-[#1b1400]' : 'bg-card text-ink-2';
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onOpen(); }}
+      data-uri="photo-marker"
+      data-id={photo.observation_id}
+      data-status={m.status}
+      aria-label={`Foto de campo, ${CATEGORY_LABEL[photo.category] ?? photo.category}: ${STATUS_LABEL[m.status].toLowerCase()}`}
+      title={`Foto de campo · ${STATUS_LABEL[m.status]}`}
+      className={`grid size-[26px] place-items-center rounded-full border-2 shadow-[0_1px_3px_rgba(15,28,63,.35)] transition-transform hover:scale-110 ${tone} ${
+        open ? 'scale-125 border-ink' : m.status === 'UNLINKED' ? 'border-dashed border-ink-3' : 'border-card'
+      }`}
+    >
+      <Icon.Camera size={14} strokeWidth={2} />
+    </button>
   );
 }
 

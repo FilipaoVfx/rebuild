@@ -1,3 +1,4 @@
+import { fieldLine } from '../lib/field';
 import { dec, razon } from '../lib/format';
 import {
   evidenceLine, nearbyOf, peopleLine, placeName, reachOf, sitesInPlace,
@@ -14,7 +15,9 @@ import { AmberBadge, InfoRow } from './ui';
  * no es una instrucción para construir.
  */
 export function PlaceCard({ site }: { site: Site }) {
-  const { details, layers, sites, selectSite, openPanel, settings } = useStore();
+  const { details, layers, sites, selectSite, openPanel, settings, field, sitePhotos } = useStore();
+  const photos = sitePhotos.get(site.site_id);
+  const doubtful = photos?.some((p) => !p.linked) ?? false;
   const detail = details[site.site_id];
   const same = sitesInPlace(sites, site);
   const idx = same.findIndex((s) => s.site_id === site.site_id);
@@ -68,6 +71,15 @@ export function PlaceCard({ site }: { site: Site }) {
           title="Evidencia de daño"
           lines={['Copernicus EMS · foto-interpretación', evidenceLine(site)]}
           aside={!validated ? <AmberBadge>Sin validar en campo</AmberBadge> : undefined}
+        />
+        <InfoRow
+          icon={<Icon.Camera size={22} />}
+          title="Fotos de campo"
+          lines={[
+            field ? fieldLine(photos) : 'Este paquete no trae fotos de campo',
+            'pereiramap · revisadas antes de publicarse',
+          ]}
+          aside={doubtful ? <AmberBadge>Ambigua</AmberBadge> : undefined}
         />
         <InfoRow
           icon={<Icon.Map size={22} />}

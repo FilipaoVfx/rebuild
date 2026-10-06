@@ -243,7 +243,7 @@ src/uri/          contracts · ingestion · features · constraints · scoring
                   optimizer · reporting · api   (fronteras forzadas por CI)
 apps/viewer/      REBUILD, el espacio de análisis sobre el mapa (React + MapLibre + deck.gl + motion-primitives)
 db/migrations/    rebuild_core · rebuild_analytics · rebuild_osm_raw · rebuild_osm_derived
-scripts/          dev_db · migrate · run_pipeline · serve · build_static · checks
+scripts/          dev_db · migrate · run_pipeline · serve · build_static · build_field_photos · checks
 docs/             producto (PRD/SRS/ARD) · planificación · ADR
 ```
 

@@ -33,7 +33,11 @@ LAYERS = ("territorio", "dano", "poblacion", "espacio", "equipamientos")
 RETIRED = ("SERTIT", "SGC", "Servicio Geologico", "Servicio Geológico")
 
 #: Sitios de prueba con propiedades conocidas en los datos publicados.
-COROCITO = "site_0028"  # barrio con 3 sitios; captacion degenerada (1.680 m²)
+COROCITO = "site_0028"  # barrio con 3 sitios; captacion degenerada (1.680 m²); sin fotos
+#: Fotos de campo (ADR-24 §6), si el paquete las trae: un sitio con fotos
+#: enlazadas y uno donde solo hay ambiguas.
+CON_FOTOS = "site_0001"
+SOLO_AMBIGUAS = "site_0084"
 EXCLUDED = "site_0009"  # excluido por area minima: sin hipotesis que comparar
 
 ARGS = [
@@ -145,8 +149,9 @@ async def main(base: str, prefix: str) -> int:
         if "Corocito" not in tarjeta:
             errors.append("buscar 'corocito' no abre la tarjeta de Corocito")
         filas = await page.locator('[data-uri="place-card"] [data-uri="place-row"]').count()
-        if filas != 4:
-            errors.append(f"la tarjeta tiene {filas} filas y el diseño pide 4")
+        # Evidencia, fotos de campo (ADR-24 §6), entorno, poblacion y normativa.
+        if filas != 5:
+            errors.append(f"la tarjeta tiene {filas} filas y el diseño pide 5")
         for needed in (
             "Sin validar en campo",
             "POT sin dato publicable",
@@ -218,7 +223,7 @@ async def main(base: str, prefix: str) -> int:
             '[data-uri="evidence-chip"][data-available="true"]', has_text="Fotos de campo"
         ).count()
         if falsas:
-            errors.append("la comparacion anuncia fotos de campo que no existen en esta version")
+            errors.append("la comparacion anuncia fotos de campo en un sitio sin fotos enlazadas")
         await page.screenshot(path=f"/tmp/{prefix}_comparacion.png")
         await page.get_by_role("button", name="Guardar comparación").click()
         await page.wait_for_timeout(400)
@@ -303,6 +308,65 @@ async def main(base: str, prefix: str) -> int:
             errors.append("Escape no cierra los ajustes")
         if not await page.locator('[data-uri="place-card"]').count():
             errors.append("Escape en los ajustes cierra tambien la tarjeta del lugar")
+
+        # ── Fotos de campo: enlazadas, ambiguas y la regla a la vista ─────
+        hay_fotos = await page.evaluate(
+            "() => fetch((window.URI_STATIC_BASE ?? 'data') + '/field_photos.json')"
+            ".then(r => r.ok ? r.json() : null).catch(() => null)"
+        )
+        if not hay_fotos:
+            print("fotos de campo: el paquete no las trae — se comprueba que lo diga")
+            await page.goto(f"{base}#sitio={COROCITO}", wait_until="domcontentloaded")
+            await page.wait_for_selector('[data-uri="place-card"]', timeout=30000)
+            if "no trae fotos" not in await text(page, '[data-uri="place-card"]'):
+                errors.append("sin fotos en el paquete, la tarjeta no lo dice")
+        else:
+            await page.goto(f"{base}#capa=dano", wait_until="domcontentloaded")
+            await page.wait_for_timeout(3500)
+            marcas = await page.locator('[data-uri="photo-marker"]').count()
+            print("fotos de campo en el mapa:", marcas, "de", hay_fotos["published"])
+            if marcas != hay_fotos["published"]:
+                errors.append(
+                    f"el mapa pinta {marcas} fotos y el paquete publica {hay_fotos['published']}"
+                )
+
+            await page.goto(
+                f"{base}#sitio={CON_FOTOS}&panel=evidencia", wait_until="domcontentloaded"
+            )
+            await page.wait_for_selector('[data-uri="field-gallery"]', timeout=30000)
+            enlazadas = await page.locator('[data-uri="field-thumb"][data-status="LINKED"]').count()
+            if not enlazadas:
+                errors.append(f"{CON_FOTOS} no muestra sus fotos enlazadas")
+            await page.locator('[data-uri="field-thumb"]').first.click()
+            await page.wait_for_selector('[data-uri="photo-viewer"]', timeout=10000)
+            visor = await text(page, '[data-uri="photo-viewer"]')
+            for needed in ("¿Por qué está aquí?", "Incertidumbre usada", "campo-v2", "CC BY 4.0"):
+                if needed.lower() not in visor.lower():
+                    errors.append(f"el visor de la foto no dice '{needed}'")
+            await page.screenshot(path=f"/tmp/{prefix}_foto.png")
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(500)
+            if await page.locator('[data-uri="photo-viewer"]').count():
+                errors.append("Escape no cierra la foto")
+            if not await page.locator('[data-uri="panel"][data-panel="evidencia"]').count():
+                errors.append("Escape en la foto cierra tambien el panel de evidencia")
+
+            await page.goto(
+                f"{base}#sitio={SOLO_AMBIGUAS}&panel=evidencia", wait_until="domcontentloaded"
+            )
+            await page.wait_for_selector('[data-uri="field-gallery"]', timeout=30000)
+            if await page.locator('[data-uri="field-thumb"][data-status="LINKED"]').count():
+                errors.append(f"{SOLO_AMBIGUAS} muestra como enlazada una foto ambigua")
+            if not await page.locator('[data-uri="field-thumb"][data-status="AMBIGUOUS"]').count():
+                errors.append(f"{SOLO_AMBIGUAS} no muestra sus fotos ambiguas")
+            else:
+                await page.locator('[data-uri="field-thumb"]').first.click()
+                await page.wait_for_selector('[data-uri="photo-candidates"]', timeout=10000)
+                cands = await page.locator('[data-uri="photo-candidates"] li').count()
+                if cands < 2:
+                    errors.append("una foto ambigua no muestra a todos sus candidatos")
+                if "margen de duda" not in await text(page, '[data-uri="photo-reason"]'):
+                    errors.append("una foto ambigua no dice por que lo es")
 
         # ── Movil: tarjeta abajo, sin desborde lateral ───────────────────
         movil = await browser.new_page(viewport={"width": 390, "height": 844})

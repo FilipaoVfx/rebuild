@@ -121,9 +121,47 @@ Y §26 exige conservar `entity_id`, `distance_m`, `method`, `match_score`,
 
 Esto cumple ADR-25 §2: estado cerrado donde hoy hay una asignación implícita.
 
+### 7. La regla `campo-v2` y su llegada al visor (2026-10-06)
+
+El punto 6 se implementa en `scripts/build_field_photos.py`, que
+`build_static.py` llama al empaquetar. Lee **solo `APROBADA`** de la vista
+pública, comprueba el `image_sha256` de cada imagen antes de copiarla y escribe
+`field_photos.json` con el enlace y su rastro completo. La regla:
+
+- **Distancia al polígono del sitio**, no a su centro: 0 solo si el teléfono
+  está dentro; 4 cm fuera se escriben 0,1 m, no «dentro».
+- **Incertidumbre efectiva** = la mayor entre `accuracy_m` y
+  `exif_device_offset_m`. Si el GPS del teléfono y el de la foto discrepan
+  64 m, la precisión de 4 m que reporta el teléfono no es creíble.
+- **`LINKED`** exige el sitio a ≤ 75 m y ningún otro dentro del margen
+  `max(20 m, 2 × incertidumbre)`. El rival cuenta aunque pase de 75 m: si la
+  incertidumbre lo alcanza, es tan plausible como el ganador.
+- **Con rumbo**, solo cuenta lo que cae en el encuadre (70° horizontales más el
+  ángulo que abre la incertidumbre). Un sitio cercano pero a espaldas de la
+  cámara no es lo fotografiado: `UNLINKED` / `NO_SITE_IN_VIEW`.
+- **Fuera del sector de estudio** no hay observación satelital con qué cruzar:
+  `UNLINKED` / `OUTSIDE_STUDY_AREA`, nunca enlazada al sitio del borde.
+
+Cada candidato guarda el **punto del polígono que da la distancia**: el visor
+dibuja exactamente lo que se midió, no una línea al centro. Las pruebas de la
+regla están en `tests/test_field_link.py`, con geometrías de prueba.
+
+Primera corrida (17 fotos aprobadas): 4 enlazadas, 4 ambiguas y 9 sin enlace
+(2 fuera del sector, 6 sin sitio a 75 m y 1 con el sitio fuera del encuadre).
+Una regla que enlazara las 17 sería más vistosa y estaría equivocada.
+
+En el visor (ADR-27):
+- el mapa pinta la posición del teléfono, con un color por estado;
+- al abrir una foto, el mapa muestra el círculo de incertidumbre, el encuadre
+  y la línea medida a cada candidato;
+- la tarjeta del lugar cuenta las fotos enlazadas y las ambiguas;
+- el panel de evidencia muestra la galería, y una foto ambigua aparece en
+  cada sitio candidato, marcada como tal;
+- el visor de la foto responde a §26: «¿por qué está aquí?».
+
 ## Consecuencias
 
-**El visor puede decir por qué.** `PhotoStrip` muestra las fotos del sitio y la
+**El visor puede decir por qué.** La galería de evidencia (antes `PhotoStrip`) muestra las fotos del sitio y la
 ficha declara cuántas hay aunque sean cero. Con el punto 6, además, puede
 responder la pregunta que el manifiesto §26 pone como prueba: *«¿por qué se
 asoció esta fotografía a este edificio?»*.

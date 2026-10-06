@@ -115,8 +115,13 @@ function Item({ swatch, children }: { swatch: ReactNode; children: ReactNode }) 
   return <span className="flex shrink-0 items-center gap-2 whitespace-nowrap">{swatch}{children}</span>;
 }
 
+/** El marcador de cámara del mapa, en pequeño. */
+function PhotoSwatch({ tone }: { tone: string }) {
+  return <span className={`inline-block size-3.5 shrink-0 rounded-full border-2 border-card shadow-[0_0_0_1px_rgba(15,28,63,.25)] ${tone}`} aria-hidden="true" />;
+}
+
 export function Legend() {
-  const { layer, selectedSiteId, settings, theme } = useStore();
+  const { layer, selectedSiteId, settings, theme, field } = useStore();
   const ramp = theme === 'dark' ? POP_RAMP_DARK : POP_RAMP;
   const items: ReactNode[] = [];
   if (layer === 'territorio') {
@@ -127,6 +132,13 @@ export function Legend() {
       <Item key="p" swatch={<Swatch color={rgb(DAMAGE_RGB.POSSIBLY_DAMAGED)} round />}>Posiblemente dañado</Item>,
       <Item key="d" swatch={<Swatch color={rgb(DAMAGE_RGB.DAMAGED)} round />}>Dañado</Item>,
       <Item key="x" swatch={<Swatch color={rgb(DAMAGE_RGB.DESTROYED)} round />}>Destruido</Item>,
+    );
+  }
+  if ((layer === 'territorio' || layer === 'dano') && field) {
+    items.push(
+      <Item key="fl" swatch={<PhotoSwatch tone="bg-cobalt" />}>Foto enlazada</Item>,
+      <Item key="fa" swatch={<PhotoSwatch tone="bg-amber" />}>Foto ambigua</Item>,
+      <Item key="fu" swatch={<PhotoSwatch tone="bg-card border-dashed !border-ink-3" />}>Foto sin enlace</Item>,
     );
   }
   if (layer === 'poblacion') {

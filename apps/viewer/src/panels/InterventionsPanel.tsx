@@ -115,8 +115,9 @@ function Alternative({
   slot: number; rec: Recommendation; site: Site; isRecommended: boolean;
   options: Recommendation[]; onChange: (code: string) => void; hasImagery: boolean;
 }) {
-  const { details, oppBySite, openPanel } = useStore();
+  const { details, oppBySite, openPanel, sitePhotos } = useStore();
   const detail = details[site.site_id];
+  const linkedPhotos = sitePhotos.get(site.site_id)?.filter((p) => p.linked).length ?? 0;
   const reach = reachOf(site, detail);
   const opp = oppBySite.get(site.site_id);
   const meta = INTERVENTION[rec.intervention];
@@ -201,7 +202,7 @@ function Alternative({
       <div className="mt-2 flex flex-wrap gap-2">
         <Chip on label={`Copernicus EMS · ${site.evidence_count} ${site.evidence_count === 1 ? 'observación' : 'observaciones'}`} icon={<Icon.Doc size={17} />} />
         <Chip on={hasImagery} label="Imágenes antes y después" icon={<Icon.Image size={17} />} />
-        <Chip on={false} label="Fotos de campo" icon={<Icon.Image size={17} />} />
+        <Chip on={linkedPhotos > 0} label={linkedPhotos > 0 ? `Fotos de campo · ${linkedPhotos} ${linkedPhotos === 1 ? 'enlazada' : 'enlazadas'}` : 'Fotos de campo'} icon={<Icon.Camera size={17} />} />
         <Chip on={false} label="Notas de campo" icon={<Icon.Clipboard size={17} />} />
       </div>
       <button type="button" className="mt-4 flex items-center gap-2 self-start text-[15px]" onClick={() => openPanel('evidencia')}>

@@ -275,6 +275,17 @@ def main(profile: str) -> int:
         shutil.copy2(origen / "ortofoto.json", destino / "ortofoto.json")
         print(f"ortofoto {source.source_id}: {n} teselas")
 
+    # Fotos de campo (ADR-24 §6): solo APROBADA, con su enlace campo-v2 a los
+    # sitios. Sin URI_FIELD_URL/URI_FIELD_KEY el visor dice que no hay fotos.
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "build_field_photos", ROOT / "scripts" / "build_field_photos.py"
+    )
+    campo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(campo)
+    campo.main(argparse.Namespace(data=str(data)))
+
     total = sum(f.stat().st_size for f in DIST.rglob("*") if f.is_file())
     print(f"\ndist/ listo — {total / 1024 / 1024:.1f} MB")
     return 0

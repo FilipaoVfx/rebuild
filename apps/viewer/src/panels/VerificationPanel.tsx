@@ -29,8 +29,17 @@ const TAG_STYLE: Record<VerifyTag, string> = {
 };
 
 export function VerificationPanel({ site }: { site: Site }) {
-  const { details, oppBySite, pairFor, draftFor, setDraft, openPanel, requestLayers } = useStore();
+  const { details, oppBySite, pairFor, draftFor, setDraft, openPanel, requestLayers, field, sitePhotos } = useStore();
   const detail = details[site.site_id];
+  const photos = sitePhotos.get(site.site_id) ?? [];
+  const linked = photos.filter((p) => p.linked).length;
+  const fieldText = !field
+    ? 'Este paquete no trae fotos: la ficha impresa lleva espacio para anotarlas.'
+    : linked
+      ? `Este sitio tiene ${linked} ${linked === 1 ? 'foto enlazada' : 'fotos enlazadas'}${photos.length > linked ? ` y ${photos.length - linked} ambiguas` : ''}: véalas en Evidencia antes de ir.`
+      : photos.length
+        ? `Hay ${photos.length} ${photos.length === 1 ? 'foto ambigua' : 'fotos ambiguas'} cerca: en la visita, confirme cuál edificio muestran.`
+        : 'Ninguna foto aprobada cerca de este sitio: la visita sería la primera evidencia de campo.';
   const opp = oppBySite.get(site.site_id);
   const draft: VerificationDraft = draftFor(site.site_id) ?? {
     checked: [],
@@ -199,8 +208,8 @@ export function VerificationPanel({ site }: { site: Site }) {
             <div className="rounded-[4px] border border-dashed border-rule-2 px-4 py-3.5">
               <p className="flex items-center gap-2 font-semibold"><Icon.Image size={20} /> Evidencia de campo</p>
               <p className="mt-1.5 text-[13.5px] leading-snug text-ink-3">
-                Las fotos y notas de la visita entran por la aplicación de campo y pasan revisión humana antes de
-                aparecer (ADR-24). Este visor todavía no las recibe: la ficha impresa lleva espacio para anotarlas.
+                Las fotos de la visita entran por pereiramap y pasan revisión humana antes de aparecer (ADR-24).{' '}
+                {fieldText}
               </p>
             </div>
           </aside>
