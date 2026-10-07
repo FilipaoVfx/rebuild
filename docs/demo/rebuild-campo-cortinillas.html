@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><style>
+@font-face{font-family:S;src:url(serif.woff2);font-weight:200 900}
+@font-face{font-family:S;src:url(serif-i.woff2);font-style:italic;font-weight:200 900}
+@font-face{font-family:A;src:url(sans.woff2);font-weight:200 900}
+html,body{margin:0;width:2560px;height:1440px;background:#090d18;color:#f3efe4;overflow:hidden}
+body{background:radial-gradient(ellipse 70% 60% at 50% 48%,#111a2e,#090d18 75%)}
+.c{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:0 260px}
+.k{font:650 28px A;letter-spacing:.22em;text-transform:uppercase;color:#f0a24b;margin:0 0 30px}
+h1{font:600 100px/1.08 S;margin:0;letter-spacing:-.01em;max-width:1900px}
+h1 em{color:#f0a24b}
+p.s{font:400 46px/1.35 S;color:rgba(243,239,228,.78);margin:40px 0 0;max-width:1800px}
+.row{display:flex;gap:70px;margin-top:70px;font:600 30px A;color:rgba(243,239,228,.8)}
+.row span{display:flex;align-items:center;gap:18px}
+.row i{width:30px;height:30px;border-radius:50%;border:4px solid #f3efe4;display:inline-block}
+.mark{font:650 40px A;letter-spacing:.4em;color:rgba(243,239,228,.6);margin-top:80px}
+.legal{position:absolute;left:0;right:0;bottom:60px;text-align:center;font:400 22px/1.5 A;color:rgba(243,239,228,.5)}
+.center{align-items:center;text-align:center}
+</style>
+<div id="bridge" class="c">
+  <p class="k">El recorrido · fotos de campo</p>
+  <h1>Lo que vio el satélite,<br>y lo que vio alguien <em>en la calle</em>.</h1>
+  <p class="s">Fotos de pereiramap revisadas por una persona y enlazadas a los sitios de daño con una regla declarada: distancia al sitio, error del GPS y encuadre de la cámara.</p>
+  <div class="row"><span><i style="background:#1b45c4"></i>enlazada</span><span><i style="background:#c08b00"></i>ambigua</span><span><i style="background:#fff;border-style:dashed;border-color:#69718a"></i>sin enlace</span></div>
+</div>
+<div id="close" class="c center">
+  <h1>Si sabe dónde, lo mide.<br><em>Si duda, lo dice.</em></h1>
+  <p class="s">17 fotos aprobadas · 4 enlazadas · 4 ambiguas · 9 sin enlace</p>
+  <p class="mark">REBUILD</p>
+  <p class="legal">Fotos de campo — pereiramap (colaboradores), CC BY 4.0 · Copernicus EMS (EMSR916), © European Union · © OpenStreetMap contributors · SIGPER · Microsoft Building Footprints<br>Regla de enlace campo-v2 (ADR-24 §7): ≤ 75 m al polígono del sitio, margen máx(20 m, 2 × incertidumbre), encuadre de 70°</p>
+</div>
+<script>const id=new URLSearchParams(location.search).get("c");for(const d of document.querySelectorAll('.c'))d.style.display=d.id===id?'flex':'none'</script>

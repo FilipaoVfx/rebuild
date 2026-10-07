@@ -1,5 +1,33 @@
 # Demos
 
+## REBUILD · demo con fotos de campo (2:33, 2026-10-06)
+
+**`rebuild-demo-campo-1440p.mp4`** · 2:33 · 2560×1440 · 30 fps · sin voz ni audio · 82 MB ·
+en Drive (`REBUILD/demo/`), no en el repo.
+
+1. **Por qué** (0:00–0:30): la película `rebuild-por-que-30s.mp4`, entera.
+2. **Cortinilla** (0:30–0:35): lo que vio el satélite y lo que vio alguien en la calle.
+3. **Recorrido** (0:35–2:27), con las fotos de pereiramap ya enlazadas (ADR-24 §7):
+   - capa Daño con las fotos en el mapa y su leyenda;
+   - búsqueda de Los Alamos: la tarjeta cuenta 2 fotos enlazadas;
+   - galería en Evidencia; una foto dentro del polígono y otra a 41 m, con la
+     línea medida, la incertidumbre y por qué está ahí;
+   - una foto ambigua: tres candidatos dentro del margen de duda;
+   - una foto con rumbo: el sitio cae dentro del encuadre de la cámara;
+   - una foto sin enlace: daño que la observación satelital no registró;
+   - en Intervenciones, «Fotos de campo · 2 enlazadas»; en Verificación, el
+     aviso de verlas antes de ir.
+4. **Cierre** (2:27–2:33): «Si sabe dónde, lo mide. Si duda, lo dice», con las
+   cifras (17 aprobadas · 4 enlazadas · 4 ambiguas · 9 sin enlace) y las atribuciones.
+
+Regenerar: `rebuild-campo-flow.mjs` en ultrademo (`ULTRADEMO_VIEWPORT=1440x810
+ULTRADEMO_CLIP_CRF=12`); `rebuild-campo-recortar.py` quita las esperas con la
+pantalla quieta (el navegador sin GPU tarda en encontrar los marcadores) y
+reajusta el cursor; `rebuild-campo-componer.py` escala a 1440p, dibuja el
+cursor y da a cada escena su velocidad (1,3× las de fotos, para poder leerlas);
+las cortinillas salen de `rebuild-campo-cortinillas.html?c=bridge|close`. Se
+unen con ffmpeg concat (CRF 18, sin pista de audio).
+
 ## REBUILD · por qué (30 s, 2026-10-02)
 
 **`rebuild-por-que-30s.mp4`** · 0:30 · 2560×1440 · sin voz ni audio · 24 MB
